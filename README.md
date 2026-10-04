@@ -77,3 +77,17 @@ This is a private project repository. Original report/reference files, local sec
 ## AI assistance
 
 Codex agents assist with implementation and tests. The team must review generated code and document actual verification and learning for the course submission. No claim of production readiness or measured AI quality is implied by scaffolding or mocked tests.
+
+## What is still pending?
+
+See [product status and remaining work](docs/handoffs/PENDING.md) for the current feature gaps, local follow-ups and deliberately deferred AWS work. The design briefs describe the target application; they are not a claim that every planned capability has been implemented.
+
+The [feature list and report comparison](docs/FEATURES.md) records what is included, what still needs implementation, and what can stay out of the initial POC. It also explains autosave, revisions and PDF storage.
+
+For fictional SQL analyst and ML engineer resume test cases (creates missing samples only):
+
+```sh
+python3 scripts/seed_demo_resumes.py --user alice
+```
+
+These samples start unreviewed. Review them in Resume Studio before exporting or attaching them. They do not overwrite an existing resume or change your profile.

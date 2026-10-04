@@ -2,13 +2,13 @@
 
 **Current delivery scope:** [local application first; AWS-native services later](DELIVERY-SCOPE.md). This staging rule overrides earlier cloud requirements for the local milestone.
 
-Prepared 4 October 2026. Status: proposed implementation design, ready to use for POC development; no implementation or AWS deployment has been performed by preparing these documents.
+Prepared 4 October 2026. This is the target design, not an implementation checklist marked complete. A local application now exists; see [current status and gaps](../handoffs/PENDING.md) and [component handoffs](../handoffs/00-progress.md). No AWS deployment has been performed.
 
 ## 1. Start here
 
 This design is grounded in the group's completed [Preliminary.pdf](/Users/andrew_tjs/Downloads/Preliminary.pdf), particularly Sections 1.2–1.3, 2 and 4. It preserves Job Hunter's proposed user journey and simplifies the compute layer. It is not a replacement preliminary report or an assertion that the group has already adopted every implementation choice below.
 
-The workspace currently contains planning documents and figures, with no application source repository. Older review notes contain an unadopted “JobCheck SG” pivot: **do not implement that pivot**. The submitted preliminary report is the product baseline. This document defines new POC defaults where that report leaves implementation details open. Later explicit user decisions take precedence.
+The workspace contains the application source, tests, planning documents and figures; source is backed up to the private GitHub repository. Older review notes contain an unadopted “JobCheck SG” pivot: **do not implement that pivot**. The submitted preliminary report is the product baseline. This document defines new POC defaults where that report leaves implementation details open. Later explicit user decisions take precedence.
 
 Read this file and [shared contracts](CONTRACTS.md) before implementing a component. Each numbered component brief includes scope, implementation steps and acceptance criteria.
 

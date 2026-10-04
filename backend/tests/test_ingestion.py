@@ -65,6 +65,69 @@ def test_lever_normalization_maps_salary_and_millisecond_timestamp():
     assert job["expires_at"] is None
 
 
+def test_lever_normalization_preserves_section_headers_bullets_and_closing_text():
+    job = _normalise(
+        source="lever",
+        board="sample-site",
+        fetched_at="2026-10-05T00:00:00Z",
+        raw={
+            "id": "abc-2",
+            "text": "Data Analyst",
+            "hostedUrl": "https://jobs.lever.co/sample-site/abc-2",
+            "descriptionPlain": "Join our analytics team.\nYou will work with stakeholders.",
+            "lists": [
+                {
+                    "text": "Responsibilities",
+                    "content": "<ul><li>Build SQL dashboards</li><li>Review data quality</li></ul>",
+                },
+                {
+                    "text": "Requirements",
+                    "content": "<p>Strong SQL skills</p><p>Experience with reporting</p>",
+                },
+            ],
+            "additionalPlain": "We welcome applicants from varied backgrounds.",
+        },
+    )
+    assert job is not None
+    description = job["description"]
+    assert description.startswith("Join our analytics team.\nYou will work with stakeholders.")
+    assert "Responsibilities\n• Build SQL dashboards\n• Review data quality" in description
+    assert "Requirements\nStrong SQL skills\nExperience with reporting" in description
+    assert description.endswith("We welcome applicants from varied backgrounds.")
+
+
+def test_html_cleaner_keeps_readable_paragraph_and_list_breaks():
+    job = _normalise(
+        source="lever",
+        board="sample-site",
+        fetched_at="2026-10-05T00:00:00Z",
+        raw={
+            "id": "abc-3",
+            "text": "Engineer",
+            "hostedUrl": "https://jobs.lever.co/sample-site/abc-3",
+            "description": "<h2>About the role</h2><p>Build systems.</p><ul><li>Python</li><li>SQL</li></ul>",
+        },
+    )
+    assert job is not None
+    assert job["description"] == "About the role\nBuild systems.\n• Python\n• SQL"
+
+
+def test_lever_plain_text_bullets_are_joined_to_their_item_text():
+    job = _normalise(
+        source="lever",
+        board="sample-site",
+        fetched_at="2026-10-05T00:00:00Z",
+        raw={
+            "id": "abc-4",
+            "text": "Accountant",
+            "hostedUrl": "https://jobs.lever.co/sample-site/abc-4",
+            "descriptionPlain": "What You’ll Do\n•\nManage accounts\n•\nReview reconciliations",
+        },
+    )
+    assert job is not None
+    assert job["description"] == "What You’ll Do\n• Manage accounts\n• Review reconciliations"
+
+
 def test_smartrecruiters_normalization_maps_public_posting_fields():
     job = _normalise(
         source="smartrecruiters",

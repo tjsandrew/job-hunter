@@ -80,8 +80,33 @@ class _TextExtractor(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.parts: list[str] = []
 
+    def _break(self) -> None:
+        if self.parts and self.parts[-1] != "\n":
+            self.parts.append("\n")
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.casefold()
+        if tag == "br":
+            self._break()
+        elif tag == "li":
+            self._break()
+            self.parts.append("• ")
+        elif tag in {"p", "div", "ul", "ol", "section", "article", "h1", "h2", "h3", "h4", "h5", "h6"}:
+            self._break()
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        self.handle_endtag(tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.casefold() in {"p", "div", "li", "ul", "ol", "section", "article", "h1", "h2", "h3", "h4", "h5", "h6"}:
+            self._break()
+
     def handle_data(self, data: str) -> None:
-        text = " ".join(data.split())
+        # Keep author-provided plain-text line breaks while collapsing noisy
+        # indentation and repeated spaces within each line.
+        lines = [" ".join(line.split()) for line in data.splitlines()]
+        text = "\n".join(line for line in lines if line)
         if text:
             self.parts.append(text)
 
@@ -102,10 +127,52 @@ def _clean_description(value: Any) -> str | None:
     try:
         parser.feed(text)
         parser.close()
-        result = " ".join(parser.parts)
+        result = "".join(parser.parts)
     except Exception:
         result = " ".join(text.split())
+    normalized_lines = [" ".join(line.split()) for line in result.splitlines()]
+    normalized_lines = [line for line in normalized_lines if line]
+    readable_lines: list[str] = []
+    for index, line in enumerate(normalized_lines):
+        # Lever plain-text descriptions sometimes serialize a bullet marker
+        # and its item as separate lines. Rejoin those without flattening the
+        # boundaries between actual list items or paragraphs.
+        if line in {"•", "▪", "◦", "*", "-"} and index + 1 < len(normalized_lines):
+            readable_lines.append(line + " " + normalized_lines[index + 1])
+            continue
+        if index and normalized_lines[index - 1] in {"•", "▪", "◦", "*", "-"}:
+            continue
+        readable_lines.append(line)
+    result = "\n".join(readable_lines)
     return result or None
+
+
+def _lever_description(raw: Mapping[str, Any]) -> str | None:
+    """Combine Lever's documented description, extra lists, and closing text.
+
+    Lever's ``lists`` carries separately-labelled requirement/benefit sections;
+    these do not appear in ``descriptionPlain``. Preserve their headings and
+    list item boundaries so the saved description remains readable and useful.
+    """
+    opening = _clean_description(raw.get("descriptionPlain") or raw.get("description"))
+    sections: list[str] = [opening] if opening else []
+    lists = raw.get("lists")
+    if isinstance(lists, list):
+        for item in lists:
+            if not isinstance(item, Mapping):
+                continue
+            heading = _clean_description(item.get("text"))
+            content = _clean_description(item.get("contentPlain") or item.get("content"))
+            if heading and content:
+                sections.append(f"{heading}\n{content}")
+            elif heading:
+                sections.append(heading)
+            elif content:
+                sections.append(content)
+    additional = _clean_description(raw.get("additionalPlain") or raw.get("additional"))
+    if additional:
+        sections.append(additional)
+    return "\n\n".join(sections) or None
 
 
 def _iso_datetime(value: Any, *, milliseconds: bool = False) -> str | None:
@@ -180,7 +247,7 @@ def _normalise(
         title = raw.get("text")
         employer = raw.get("company") or board
         url = raw.get("hostedUrl") or raw.get("applyUrl")
-        description = raw.get("descriptionPlain") or raw.get("description")
+        description = _lever_description(raw)
         work_mode = raw.get("workplaceType")
         posted_at = _iso_datetime(raw.get("createdAt"), milliseconds=True)
         expires_at = None
@@ -219,7 +286,7 @@ def _normalise(
         "employer": str(employer).strip() if employer else None,
         "location": str(location).strip() if location else None,
         "work_mode": str(work_mode).strip() if work_mode else None,
-        "description": _clean_description(description),
+        "description": description if source == "lever" else _clean_description(description),
         "salary_min": salary_min,
         "salary_max": salary_max,
         "salary_currency": salary_currency,

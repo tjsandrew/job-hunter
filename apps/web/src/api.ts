@@ -48,15 +48,15 @@ export const api = {
   recommendations: (q = '', offset = 0, limit = 20) => {
     const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
     if (q.trim()) params.set('q', q.trim());
-    return request<{ items: Recommendation[]; total: number; next_offset: number | null; degraded_mode?: boolean }>(`/recommendations?${params}`);
+    return request<{ items: Recommendation[]; total: number; next_offset: number | null; degraded_mode?: boolean; ranking_status?: string; ranking_mode?: string }>(`/recommendations?${params}`);
   },
   reviewJob: (id: string, decision: 'saved' | 'dismissed' | 'none') => request(`/jobs/${encodeURIComponent(id)}/review`, json('PUT', { decision })),
   applications: () => request<{ items: Application[] }>('/applications'),
-  putApplication: (jobId: string, values: Partial<Application> & { expected_revision?: number }) => request<Application>(`/applications/${encodeURIComponent(jobId)}`, json('PUT', values)),
+  putApplication: (jobId: string, values: Partial<Application> & { expected_revision?: number; resume_document_id?: string; expected_resume_revision?: number; resume_export_id?: string | null; cover_letter_text?: string | null }) => request<Application>(`/applications/${encodeURIComponent(jobId)}`, json('PUT', values)),
   documents: () => request<{ items: Resume[] }>('/documents?kind=resume'),
-  createDocument: (values: { title: string; template: string; content: unknown; layout: unknown }) => request<Resume>('/documents', json('POST', values)),
+  createDocument: (values: { title: string; template: string; content: unknown; layout: unknown; job_id?: string }) => request<Resume>('/documents', json('POST', values)),
   patchDocument: (id: string, values: Partial<Resume> & { expected_revision: number }) => request<Resume>(`/documents/${encodeURIComponent(id)}`, json('PATCH', values)),
-  duplicateDocument: (id: string, title?: string) => request<Resume>(`/documents/${encodeURIComponent(id)}/duplicate`, json('POST', { title })),
+  duplicateDocument: (id: string, title?: string, job_id?: string) => request<Resume>(`/documents/${encodeURIComponent(id)}/duplicate`, json('POST', { title, job_id })),
   reviewDocument: (id: string, expected_revision: number) => request<Resume>(`/documents/${encodeURIComponent(id)}/review`, json('POST', { expected_revision })),
   exportDocument: (id: string) => request<{ export_id: string; revision: number; download_url: string }>(`/documents/${encodeURIComponent(id)}/exports`, json('POST')),
   previewDocument: (id: string) => request<Blob>(`/documents/${encodeURIComponent(id)}/preview.pdf`),

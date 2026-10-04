@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
-    Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint,
+    Boolean, DateTime, ForeignKey, ForeignKeyConstraint, Integer, JSON, String, Text, UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -96,13 +96,21 @@ class JobReview(Base):
 
 class Application(Base):
     __tablename__ = "applications"
-    __table_args__ = (UniqueConstraint("user_id", "job_id", name="uq_application_user_job"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "job_id", name="uq_application_user_job"),
+        ForeignKeyConstraint(["resume_export_id", "user_id"], ["document_exports.id", "document_exports.user_id"],
+                             name="fk_application_resume_export_owner"),
+    )
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     job_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("jobs.id"), nullable=False)
     status: Mapped[str] = mapped_column(String(24), default="saved", nullable=False)
     notes: Mapped[str] = mapped_column(Text, default="", nullable=False)
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resume_export_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    resume_title: Mapped[str | None] = mapped_column(String(240))
+    cover_letter_text: Mapped[str | None] = mapped_column(Text)
+    packet_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revision: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
@@ -124,6 +132,7 @@ class Document(Base):
 
 class DocumentExport(Base):
     __tablename__ = "document_exports"
+    __table_args__ = (UniqueConstraint("id", "user_id", name="uq_document_export_id_user"),)
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     document_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("documents.id"), nullable=False)
