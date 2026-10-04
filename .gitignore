@@ -37,3 +37,6 @@ coverage/
 .coverage
 playwright-report/
 test-results/
+
+*.tsbuildinfo
+backend/data/

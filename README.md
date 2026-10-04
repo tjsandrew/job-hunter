@@ -4,7 +4,7 @@ Local-first Job Hunter POC: live job discovery, profile-based browsing, applicat
 
 ## Current status
 
-Implementation in progress. See [handoffs](docs/handoffs) for verified features and test results. Development identity switching is for localhost only, not production authentication. AI features must be labelled unavailable or mocked until a real provider is configured.
+The first local slice includes Singapore job discovery/import, keyword-based browsing, profiles and preferences, application tracking, and a manual resume editor with PDF preview/export. See [handoffs](docs/handoffs) for verified features, test results and remaining work. Development identity switching is for localhost only. AI generation and semantic ranking are unavailable until a real provider is configured.
 
 ## Local development
 
@@ -24,6 +24,42 @@ docker compose stop
 ```
 
 Normal shutdown preserves data. `docker compose down --volumes` permanently deletes the local database and document volumes; use only when deliberately resetting development data.
+
+## Singapore job data
+
+The collection target is about 1,000 jobs explicitly located in Singapore, with 300–500 as an intermediate milestone. The first bounded import contains **70 source listings** across four employers and two ATS providers; it is not representative of the entire Singapore market. Overseas jobs, description-only Singapore mentions and worldwide-remote eligibility do not count. Synthetic seed jobs are labelled separately. See the [ingestion handoff](docs/handoffs/04-ingestion.md) for actual imported counts and source limitations.
+
+Live discovery is a manual, one-shot local command. Do not run it on every app launch:
+
+```sh
+docker compose exec api python -m job_hunter.import_jobs --greenhouse stripe --greenhouse cloudflare --greenhouse coinbase --lever lalamove --location Singapore
+```
+
+The importer saves a normalized snapshot in the local document volume. Reuse it without contacting job sources:
+
+```sh
+docker compose exec api python -m job_hunter.import_jobs --snapshot-in /data/job-import-snapshots/latest.json --location Singapore
+```
+
+JustPostedJobs returned HTTP 429 during a limited review; collection from that source is paused. Scheduled cloud discovery, source credentials, expiry reconciliation and broader source coverage remain subsequent work.
+
+## Checks
+
+```sh
+cd apps/web
+npm ci
+npm test
+npm run build
+```
+
+From the repository root with Compose running:
+
+```sh
+python3 scripts/smoke.py
+docker compose run --rm --no-deps -e RUN_DB_INTEGRATION=1 -v "$PWD/backend/tests:/app/tests:ro" api sh -c 'pip install -c requirements.lock ".[test]" && pytest /app/tests -q'
+```
+
+The smoke test creates synthetic documents and uploads in the local database. GitHub Actions runs the checks against a disposable PostgreSQL database. Unit tests check small isolated behaviours; the PostgreSQL and HTTP checks exercise real persistence, isolation and document flows.
 
 ## Design and implementation scope
 

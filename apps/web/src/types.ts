@@ -1,0 +1,12 @@
+export type Template = 'classic' | 'modern';
+export type ResumeEntry = { id: string; heading: string; subheading: string; dates: string; bullets: string[] };
+export type ResumeSection = { id: string; title: string; entries: ResumeEntry[] };
+export type ResumeContent = { name: string; email: string; phone: string; location: string; summary: string; sections: ResumeSection[] };
+export type ResumeLayout = { font_size: number; margin: number };
+export type Resume = { id: string; title: string; kind: 'resume'; revision: number; template: Template; content: ResumeContent; layout: ResumeLayout; reviewed_revision: number | null; updated_at?: string };
+export type Job = { id: string; title: string; company: string; location: string | null; work_mode?: string | null; employment_type?: string; description?: string; url?: string; source_url?: string; source?: string; source_board?: string | null; posted_at?: string | null; fetched_at?: string | null; salary_min?: number | null; salary_max?: number | null; salary_currency?: string | null; salary_period?: string | null };
+export type Recommendation = { job: Job; score?: number; reasons?: string[]; review?: string | null };
+export type Application = { id: string; job_id: string; status: string; notes: string; applied_at: string | null; revision: number; job?: Job };
+export type ProfileDraft = Record<string, unknown>;
+export type Me = { user_id: string; display_name: string; plan: string; allowance: { limit: number; used: number; remaining: number; period: string }; ai_available: boolean };
+export type ApiError = Error & { status?: number; code?: string };

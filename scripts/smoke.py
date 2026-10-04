@@ -7,8 +7,9 @@ from urllib.request import Request, urlopen
 BASE = os.environ.get('API_URL', 'http://localhost:8000/v1')
 
 def call(path, method='GET', body=None, user='alice', expected=200):
-    req = Request(BASE + path, data=None if body is None else json.dumps(body).encode(),
-                  headers={'X-Dev-User': user, 'Content-Type': 'application/json'}, method=method)
+    binary = isinstance(body, bytes)
+    req = Request(BASE + path, data=body if binary else None if body is None else json.dumps(body).encode(),
+                  headers={'X-Dev-User': user, 'Content-Type': 'application/pdf' if binary else 'application/json'}, method=method)
     try:
         response = urlopen(req, timeout=20)
     except HTTPError as error:
@@ -40,11 +41,23 @@ def main():
     call(path, 'PATCH', {'title': 'Should conflict', 'expected_revision': 0}, expected=409)
     preview = call(path + '/preview.pdf')
     assert preview.startswith(b'%PDF')
+    call(path + '/exports', 'POST', expected=409)
     call(path + '/review', 'POST', {'expected_revision': doc['revision']})
-    export = call(path + '/exports', 'POST')
+    export = call(path + '/exports', 'POST', expected=201)
     assert export['export_id']
+    assert call('/exports/' + export['export_id']).startswith(b'%PDF')
     call('/exports/' + export['export_id'], user='bob', expected=404)
-    print('PASS: health, identities, recommendations, persistence, owner isolation, revision conflict, PDF preview and reviewed export')
+    upload = call('/uploads', 'POST', {'filename': 'synthetic-resume.pdf',
+                  'content_type': 'application/pdf', 'size_bytes': len(preview)}, expected=201)
+    upload_path = '/uploads/' + upload['upload_id']
+    call(upload_path + '/content', 'PUT', preview, user='bob', expected=404)
+    parsed = call(upload_path + '/content', 'PUT', preview)
+    assert parsed['status'] == 'ready_for_review', parsed
+    candidate = call(upload_path)
+    assert 'Synthetic Applicant' in candidate['extracted_text']
+    call(upload_path, user='bob', expected=404)
+    call(upload_path + '/content', 'PUT', preview, expected=409)
+    print('PASS: health, identities, recommendations, persistence, owner isolation, revision conflict, PDF preview, review-gated export, immutable upload and candidate text extraction')
 
 if __name__ == '__main__':
     main()

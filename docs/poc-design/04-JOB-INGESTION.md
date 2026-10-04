@@ -69,3 +69,7 @@ No unit test should call a live job API. Live retrieval and scheduled ingestion 
 - Produce a labelled deduplication set with true duplicate and nonduplicate pairs for 08.
 
 Handoff includes source access status, seeded commands, enabled sources, cursor semantics, limits and known coverage gaps.
+
+## Collection sizing agreed during implementation
+
+Target approximately 1,000 live Singapore-location listings across employers and role categories. First useful milestone is 300–500; report the actual achieved count and any shortfall. Count only records whose source location explicitly includes Singapore. Multi-location jobs including Singapore are labelled; description mentions, employer headquarters and worldwide-remote eligibility alone do not qualify. Use bounded documented public feeds, reuse recent retrieved data, stop a source on rate limiting, and do not pad the collection with global jobs or fixtures. Separate synthetic 5,000–10,000-record datasets may be used for load tests and never counted as live coverage. JustPostedJobs returned 429 during its limited review; no further requests in this collection pass.
