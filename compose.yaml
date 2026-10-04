@@ -1,0 +1,48 @@
+name: job-hunter
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: jobhunter
+      POSTGRES_USER: jobhunter
+      POSTGRES_PASSWORD: jobhunter
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/local/init-db.sql:/docker-entrypoint-initdb.d/01-roles.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U jobhunter -d jobhunter']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  api:
+    build: ./backend
+    environment:
+      APP_ENV: local
+      AUTH_MODE: local
+      DATABASE_URL: postgresql+psycopg://jobhunter_app:jobhunter_app@db:5432/jobhunter
+      MIGRATION_DATABASE_URL: postgresql+psycopg://jobhunter:jobhunter@db:5432/jobhunter
+      STORAGE_ROOT: /data
+      PDF_STORAGE_DIR: /data/exports
+    command: >-
+      sh -c 'alembic upgrade head &&
+      DATABASE_URL=$$MIGRATION_DATABASE_URL python -m job_hunter.seed &&
+      uvicorn job_hunter.api.main:app --host 0.0.0.0 --port 8000'
+    ports:
+      - '127.0.0.1:8000:8000'
+    volumes:
+      - document_data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+  web:
+    build: ./apps/web
+    ports:
+      - '127.0.0.1:5173:5173'
+    environment:
+      VITE_API_BASE_URL: /v1
+      API_PROXY_TARGET: http://api:8000
+    depends_on:
+      - api
+volumes:
+  postgres_data:
+  document_data:

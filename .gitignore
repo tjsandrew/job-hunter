@@ -1,0 +1,39 @@
+# Private/reference material and prior report artefacts
+/References/
+/tmp/
+/figures/
+/IMPLEMENTATION_PHASE_DETAILS.md
+/IMPLEMENTATION_PLAN.md
+/PROJECT_REQUIREMENTS_AND_REVIEW.md
+/REPORT_REVIEW_NOTES.md
+/REVIEW_HANDOVER.md
+/create_editable_gantt.py
+/create_implementation_gantt.py
+# Secrets and local state
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.aws/
+.codex/
+.agents/
+.local/
+uploads/
+exports/
+*.db
+# Build and tooling
+.DS_Store
+.Rhistory
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+node_modules/
+dist/
+coverage/
+.coverage
+playwright-report/
+test-results/
