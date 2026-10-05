@@ -79,3 +79,7 @@ Deploying to AWS and pushing to a remote Git repository follow the user's actual
 ## Required component handoff statement
 
 Every implementation agent must report: which code is shared; which local adapters it implemented; which AWS adapters/entry points exist; unit/integration test results; and the exact remaining cloud checks. Mark AWS portability as partially verified until the relevant real-service checks pass.
+
+## Current implementation and deployment runbook
+
+See [Cloud deployment handoff](CLOUD-DEPLOYMENT-HANDOFF.md) for the 5 October 2026 inventory of implemented local features, unbuilt cloud components, adapter changes, deployment sequence and cloud acceptance gates. The portability requirements above are target contracts, not evidence those adapters or distributed workers already exist.
