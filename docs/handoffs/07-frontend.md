@@ -37,3 +37,6 @@ AI generation and automated applications are unavailable in this local POC. Sala
 
 ### Tracker resume navigation correction — 5 October
 Prepare resume now opens the selected application's attached/job-linked draft when available, rather than always dropping into the general library. Applications without a draft retain the create/tailor flow. Return and successful attachment reopen that exact application's details. Opening an unrelated standalone resume clears stale application context. Regression coverage includes two applications with the same title but different job IDs, plus review/attach return. Production build and 16 tests pass; browser verified Backend Engineer → Alex Tan resume → same application dialog without creating new demo records.
+
+### Template font override correction — 5 October
+Selecting Classic serif or Modern sans now resets the explicit typeface override to Template default. Previously a persisted sans-serif override made Classic look sans-serif in both preview and PDF. Users may still choose a custom typeface after selecting a template. Build and 16 frontend tests pass; local web container rebuilt.
