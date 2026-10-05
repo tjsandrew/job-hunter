@@ -155,8 +155,8 @@ def validate_document(template: str, content: dict, layout: dict) -> None:
         raise HTTPException(422, detail={"code": "INVALID_LAYOUT", "message": "font_size must be 8–16 and margin 10–35 mm"})
     if not numeric_ok(spacing) or not 1 <= spacing <= 1.8:
         raise HTTPException(422, detail={"code": "INVALID_LAYOUT", "message": "line_spacing must be between 1.0 and 1.8"})
-    if not isinstance(family, str) or family not in {"auto", "serif", "sans", "mono"}:
-        raise HTTPException(422, detail={"code": "INVALID_LAYOUT", "message": "font_family must be auto, serif, sans, or mono"})
+    if not isinstance(family, str) or family not in {"auto", "serif", "sans", "mono", "latex"}:
+        raise HTTPException(422, detail={"code": "INVALID_LAYOUT", "message": "font_family must be auto, serif, sans, mono, or latex"})
     page_size = layout.get("page_size", "A4")
     if not isinstance(page_size, str) or page_size not in {"A4", "letter"}:
         raise HTTPException(422, detail={"code": "INVALID_LAYOUT", "message": "page_size must be A4 or letter"})

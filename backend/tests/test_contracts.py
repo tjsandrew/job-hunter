@@ -100,6 +100,7 @@ def pdf_font_names(data):
     ("serif", "Times-Roman"),
     ("sans", "BitstreamVeraSans-Roman"),
     ("mono", "Courier"),
+    ("latex", "LMRoman"),
 ])
 def test_pdf_renderer_embeds_selected_font_family(family, expected):
     data = pdf_bytes(make_resume_document(font_family=family))

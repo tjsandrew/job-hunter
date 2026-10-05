@@ -31,3 +31,6 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
+
+[tool.setuptools.package-data]
+"job_hunter.preparation" = ["fonts/*.ttf", "fonts/*.md", "fonts/*.txt"]

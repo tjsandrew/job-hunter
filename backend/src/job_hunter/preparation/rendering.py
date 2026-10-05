@@ -47,7 +47,14 @@ def pdf_bytes(doc: Document) -> bytes:
     family = layout.get("font_family", "auto")
     if family == "auto":
         family = "serif" if doc.template == "classic" else "sans"
-    if family == "serif":
+    if family == "latex":
+        bundled = Path(__file__).parent / "fonts"
+        for name, filename in [("JobHunterLatinModern", "lmroman-regular.ttf"), ("JobHunterLatinModernBold", "lmroman-bold.ttf")]:
+            if name not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(TTFont(name, str(bundled / filename)))
+        pdfmetrics.registerFontFamily("JobHunterLatinModern", normal="JobHunterLatinModern", bold="JobHunterLatinModernBold")
+        body_font, bold_font = "JobHunterLatinModern", "JobHunterLatinModernBold"
+    elif family == "serif":
         body_font, bold_font = "Times-Roman", "Times-Bold"
     elif family == "mono":
         body_font, bold_font = "Courier", "Courier-Bold"

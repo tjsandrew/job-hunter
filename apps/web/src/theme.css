@@ -265,3 +265,9 @@ button, a { transition: background-color 160ms, color 160ms, border-color 160ms,
 }
 .panel>.form-grid { margin-bottom: 18px; }
 .sidebar :where(button,select):focus-visible { outline-color: #c7f0d8; }
+
+@font-face { font-family: 'Latin Modern Roman'; src: url('/fonts/lmroman-regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Latin Modern Roman'; src: url('/fonts/lmroman-bold.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+.resume-paper.font-latex,.resume-paper.font-latex .paper-header div { font-family: 'Latin Modern Roman', Georgia, serif; }
+.editor-head { flex-wrap: wrap; }
+.active-prepare-banner { flex-basis: 100%; }

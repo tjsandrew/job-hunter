@@ -40,3 +40,6 @@ Prepare resume now opens the selected application's attached/job-linked draft wh
 
 ### Template font override correction — 5 October
 Selecting Classic serif or Modern sans now resets the explicit typeface override to Template default. Previously a persisted sans-serif override made Classic look sans-serif in both preview and PDF. Users may still choose a custom typeface after selecting a template. Build and 16 frontend tests pass; local web container rebuilt.
+
+### LaTeX typography — 5 October
+LaTeX classic selects the classic layout with font_family=latex. Latin Modern Roman regular/bold are bundled locally from lalten/lmweb, with upstream BSD/GUST/LPPL license notices. Browser preview and PDF embed the same font files. API accepts the additive latex value; setuptools includes the font resources for deployment. Existing saved font choices remain unchanged until selected. PDF font embedding contract suite: 27 passed. Application preparation banner now wraps onto its own editor-header row.
