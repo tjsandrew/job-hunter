@@ -34,3 +34,6 @@ AI generation and automated applications are unavailable in this local POC. Sala
 
 - `npm test -- --reporter=dot` — 15 tests pass, covering API-backed Discover and pagination, upload extraction review, profile save gating, resume creation/editing, autosave conflicts and slow saves, identity guard, reviewed export gating, immutable packet attachment and cover-letter storage, preservation of existing packet data, and job-specific preparation through review/attach.
 - `npm run build` — TypeScript check and Vite production build pass.
+
+### Tracker resume navigation correction — 5 October
+Prepare resume now opens the selected application's attached/job-linked draft when available, rather than always dropping into the general library. Applications without a draft retain the create/tailor flow. Return and successful attachment reopen that exact application's details. Opening an unrelated standalone resume clears stale application context. Regression coverage includes two applications with the same title but different job IDs, plus review/attach return. Production build and 16 tests pass; browser verified Backend Engineer → Alex Tan resume → same application dialog without creating new demo records.

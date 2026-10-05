@@ -200,7 +200,24 @@ export default function App() {
     catch (error) { announce((error as Error).message); }
     finally { setBusyResumeAction(false); }
   };
-  const openResume = (resume: Resume) => { const linkedApp = resume.job_id ? apps.find((application) => application.job_id === resume.job_id) : undefined; if (linkedApp) setResumeAttachTarget({ job_id: linkedApp.job_id, title: linkedApp.job?.title || 'this opportunity', revision: linkedApp.revision }); setActiveResume(structuredClone(resume)); setHistory([]); setFuture([]); setStudioTab('edit'); setSaveLabel('Saved'); setPage('studio'); };
+  const openResume = (resume: Resume) => { const linkedApp = resume.job_id ? apps.find((application) => application.job_id === resume.job_id) : undefined; setResumeAttachTarget(linkedApp ? { job_id: linkedApp.job_id, title: linkedApp.job?.title || 'this opportunity', revision: linkedApp.revision } : null); setActiveResume(structuredClone(resume)); setHistory([]); setFuture([]); setStudioTab('edit'); setSaveLabel('Saved'); setPage('studio'); };
+  const prepareApplicationResume = (application: Application) => {
+    const attached = resumes.find((resume) => resume.id === application.resume_packet?.document_id);
+    // Reopen this application's draft; never reuse a document linked to another job.
+    const existing = attached?.job_id === application.job_id ? attached
+      : resumes.find((resume) => resume.job_id === application.job_id);
+    if (existing) openResume(existing);
+    else { setActiveResume(null); setPage('studio'); }
+    setResumeAttachTarget({ job_id: application.job_id, title: application.job?.title || 'this opportunity', revision: application.revision });
+    setTrackerEdit(null);
+  };
+  const returnToApplication = () => {
+    if (saving || saveLabel !== 'Saved') { announce('Wait for changes to save before returning.'); return; }
+    const application = apps.find((item) => item.job_id === resumeAttachTarget?.job_id);
+    setResumeAttachTarget(null); setActiveResume(null); setPage('tracker');
+    setTrackerEdit(application || null);
+  };
+
   const pushContent = (content: ResumeContent) => {
     if (!activeResume) return;
     setHistory((items) => [...items.slice(-49), activeResume.content]); setFuture([]); setActiveResume({ ...activeResume, content, reviewed_revision: null }); setSaveLabel('Unsaved');
@@ -266,6 +283,7 @@ export default function App() {
       const updated = await api.putApplication(resumeAttachTarget.job_id, { resume_document_id: activeResume.id, expected_resume_revision: activeResume.revision, expected_revision: resumeAttachTarget.revision });
       setApps((items) => items.map((item) => item.job_id === updated.job_id ? { ...item, ...updated } : item));
       setResumeAttachTarget(null); setActiveResume(null); setPage('tracker');
+      setTrackerEdit({ ...apps.find((item) => item.job_id === updated.job_id), ...updated });
       announce(`Reviewed revision ${activeResume.revision} attached as a stored PDF snapshot. It has not been sent to the employer.`);
     } catch (error) { announce((error as Error).message); }
     finally { setBusyResumeAction(false); }
@@ -305,14 +323,14 @@ export default function App() {
           {page === 'discover' && <Discover jobs={jobs} loading={recommendationLoading} total={recommendationTotal} hasMore={nextJobOffset !== null} loadingMore={loadingMoreJobs} onLoadMore={loadMoreJobs} query={query} setQuery={setQuery} busyJob={busyJob} onReview={review} onDetails={setJobDetail} degraded={recommendationsDegraded} rankingStatus={rankingStatus} />}
           {page === 'profile' && <ProfileView profile={profile} setProfile={(value) => { setProfile(value); setProfileSaved(false); }} revision={profileRevision} confirmed={confirmed} saved={profileSaved} saving={prefSaving || uploading} onSave={saveProfile} onConfirm={confirmProfile} preferences={preferences} setPreferences={setPreferences} savePreferences={savePreferences} uploading={uploading} uploadMessage={uploadMessage} extractedResumeText={extractedResumeText} onUpload={uploadProfileResume} />}
           {page === 'tracker' && <Tracker apps={filteredApps} loading={recordsLoading} query={trackerQuery} setQuery={setTrackerQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onEdit={setTrackerEdit} />}
-          {page === 'studio' && <Studio resumes={resumes} loading={recordsLoading} active={activeResume} attachTarget={resumeAttachTarget} tab={studioTab} setTab={setStudioTab} busy={busyResumeAction} saving={saving} saveLabel={saveLabel} history={history} future={future} onCreate={createResume} onOpen={openResume} onCreateTailoredCopy={createTailoredCopy} onAttach={attachResumeToApplication} onReturn={() => { if (saveLabel !== 'Saved') { announce('Wait for changes to save before returning.'); return; } setResumeAttachTarget(null); setActiveResume(null); setPage('tracker'); }} onBack={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before leaving the editor.'); return; } setActiveResume(null); }} onUpdate={updateResume} onContent={pushContent} onUndo={undo} onRedo={redo} onDuplicate={duplicateResume} onReview={reviewResume} onExport={exportResume} onPreview={previewResume} onReload={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before reloading.'); return; } reloadResume(); }} />}
+          {page === 'studio' && <Studio resumes={resumes} loading={recordsLoading} active={activeResume} attachTarget={resumeAttachTarget} tab={studioTab} setTab={setStudioTab} busy={busyResumeAction} saving={saving} saveLabel={saveLabel} history={history} future={future} onCreate={createResume} onOpen={openResume} onCreateTailoredCopy={createTailoredCopy} onAttach={attachResumeToApplication} onReturn={returnToApplication} onBack={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before leaving the editor.'); return; } setActiveResume(null); }} onUpdate={updateResume} onContent={pushContent} onUndo={undo} onRedo={redo} onDuplicate={duplicateResume} onReview={reviewResume} onExport={exportResume} onPreview={previewResume} onReload={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before reloading.'); return; } reloadResume(); }} />}
         </>}
       </div>
     </main>
     {toast && <div className="toast" role="status">{toast}<button onClick={() => setToast('')} aria-label="Dismiss notification"><Icon name="close" /></button></div>}
     {previewUrl && <div className="modal-backdrop pdf-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) { URL.revokeObjectURL(previewUrl); setPreviewUrl(''); } }}><section className="pdf-modal" role="dialog" aria-modal="true" aria-label="PDF resume preview"><div className="pdf-modal-head"><strong>PDF preview · server rendered</strong><button className="icon-button" aria-label="Close PDF preview" onClick={() => { URL.revokeObjectURL(previewUrl); setPreviewUrl(''); }}><Icon name="close" /></button></div><iframe title="Resume PDF preview" src={previewUrl} /></section></div>}
     {jobDetail && <JobDetailModal job={jobDetail} onClose={() => setJobDetail(null)} onReview={review} />}
-    {trackerEdit && <TrackerModal application={trackerEdit} resumes={resumes} saving={trackerSaving} onClose={() => setTrackerEdit(null)} onPrepare={() => { setResumeAttachTarget({ job_id: trackerEdit.job_id, title: trackerEdit.job?.title || 'this opportunity', revision: trackerEdit.revision }); setTrackerEdit(null); setActiveResume(null); setPage('studio'); }} onDownload={async (exportId) => { try { const blob = await api.downloadExport(exportId); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `${trackerEdit.resume_packet?.title || 'resume'}-revision-${trackerEdit.resume_packet?.revision || ''}.pdf`; document.body.append(anchor); anchor.click(); anchor.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1500); } catch (error) { announce((error as Error).message); } }} onSave={async (changes) => { setTrackerSaving(true); try { const result = await api.putApplication(trackerEdit.job_id, { ...changes, expected_revision: trackerEdit.revision }); setApps((items) => items.map((item) => item.job_id === result.job_id ? { ...item, ...result } : item)); setTrackerEdit(null); announce('Application record updated. The packet is stored locally; it has not been sent to the employer.'); } catch (error) { announce((error as Error).message); } finally { setTrackerSaving(false); } }} />}
+    {trackerEdit && <TrackerModal application={trackerEdit} resumes={resumes} saving={trackerSaving} onClose={() => setTrackerEdit(null)} onPrepare={() => prepareApplicationResume(trackerEdit)} onDownload={async (exportId) => { try { const blob = await api.downloadExport(exportId); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `${trackerEdit.resume_packet?.title || 'resume'}-revision-${trackerEdit.resume_packet?.revision || ''}.pdf`; document.body.append(anchor); anchor.click(); anchor.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1500); } catch (error) { announce((error as Error).message); } }} onSave={async (changes) => { setTrackerSaving(true); try { const result = await api.putApplication(trackerEdit.job_id, { ...changes, expected_revision: trackerEdit.revision }); setApps((items) => items.map((item) => item.job_id === result.job_id ? { ...item, ...result } : item)); setTrackerEdit(null); announce('Application record updated. The packet is stored locally; it has not been sent to the employer.'); } catch (error) { announce((error as Error).message); } finally { setTrackerSaving(false); } }} />}
   </div>;
 }
 

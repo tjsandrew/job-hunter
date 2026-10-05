@@ -193,7 +193,7 @@ describe('Job Hunter user journey', () => {
     const user = userEvent.setup();
     const application = { id: 'app-3', job_id: 'role-3', status: 'saved', notes: '', applied_at: null, revision: 1, job: { id: 'role-3', title: 'UX Designer', company: 'Harbor', location: null } };
     const original = { id: 'resume-base', title: 'My resume', kind: 'resume' as const, revision: 2, template: 'modern' as const, content: { name: 'Alice Tan', email: 'alice@example.com', phone: '', location: 'Singapore', summary: '', sections: [] }, layout: { font_size: 11, margin: 18 }, reviewed_revision: 2 };
-    const copy = { ...original, id: 'resume-role', title: 'My resume — UX Designer', revision: 1, reviewed_revision: null };
+    const copy = { ...original, id: 'resume-role', job_id: 'role-3', title: 'My resume — UX Designer', revision: 1, reviewed_revision: null };
     mockApi.applications.mockResolvedValue({ items: [application] }); mockApi.documents.mockResolvedValue({ items: [original] });
     mockApi.duplicateDocument.mockResolvedValue(copy); mockApi.reviewDocument.mockResolvedValue({ ...copy, reviewed_revision: 1 });
     mockApi.putApplication.mockResolvedValue({ ...application, revision: 2, resume_packet: { export_id: 'export-role', document_id: copy.id, title: copy.title, revision: 1, download_url: '/v1/exports/export-role' } });
@@ -207,6 +207,23 @@ describe('Job Hunter user journey', () => {
     await user.click(await screen.findByRole('button', { name: 'Mark as reviewed' }));
     await user.click(await screen.findByRole('button', { name: 'Attach reviewed revision' }));
     await waitFor(() => expect(mockApi.putApplication).toHaveBeenCalledWith('role-3', { resume_document_id: copy.id, expected_resume_revision: 1, expected_revision: 1 }));
-    expect((await screen.findAllByRole('button', { name: 'Edit application: UX Designer' })).length).toBeGreaterThan(0);
+    expect(await screen.findByRole('dialog', { name: 'UX Designer' })).toBeInTheDocument();
   });
+  it('reopens the selected application resume and returns to that application, even with identical job titles', async () => {
+    const user = userEvent.setup();
+    const resume = { id: 'linked-resume', job_id: 'job-b', title: 'Resume for company B', kind: 'resume' as const, revision: 1, template: 'modern' as const, content: { name: 'Alex', email: '', phone: '', location: '', summary: '', sections: [] }, layout: { font_size: 11, margin: 18 }, reviewed_revision: 1 };
+    const applications = ['a', 'b'].map((suffix) => ({ id: 'app-' + suffix, job_id: 'job-' + suffix, status: 'saved', notes: '', applied_at: null, revision: 1, job: { id: 'job-' + suffix, title: 'Engineer', location: null, company: 'Company ' + suffix }, resume_packet: suffix === 'b' ? { document_id: resume.id, export_id: 'export-b', title: resume.title, revision: 1, download_url: '/v1/exports/export-b' } : null }));
+    mockApi.applications.mockResolvedValue({ items: applications });
+    mockApi.documents.mockResolvedValue({ items: [resume] });
+    render(<App />); await screen.findByText('Product Designer');
+    await user.click(within(screen.getByRole('navigation')).getByRole('button', { name: 'Application tracker' }));
+    await user.click(screen.getAllByRole('button', { name: 'Edit application: Engineer' })[1]);
+    expect(within(screen.getByRole('dialog')).getByText('Company b')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Prepare resume' }));
+    expect(await screen.findByRole('textbox', { name: 'Resume title' })).toHaveValue(resume.title);
+    expect(mockApi.duplicateDocument).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Return to tracker' }));
+    expect(within(await screen.findByRole('dialog')).getByText('Company b')).toBeInTheDocument();
+  });
+
 });
