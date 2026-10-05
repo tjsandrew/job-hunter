@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from job_hunter.config import settings
 from job_hunter.domain.models import Base, User, Profile, Preference, Job
 from job_hunter.domain.identity import DEV_USERS
+from job_hunter.demo import PROFILE
 
 def seed():
     url = os.getenv("MIGRATION_DATABASE_URL") or settings.database_url
@@ -19,7 +20,7 @@ def seed():
                 db.add(User(id=user_id, auth_subject=key, display_name=name,
                             plan="premium" if key == "bob" else "free"))
                 db.flush()
-                db.add(Profile(user_id=user_id, draft={"display_name": name, "skills": [],
+                db.add(Profile(user_id=user_id, draft=PROFILE if key == "alice" else {"display_name": name, "skills": [],
                     "experience": [], "education": [], "projects": []}, revision=1))
                 db.add(Preference(user_id=user_id, data={"roles": [], "locations": ["Singapore"],
                     "work_modes": [], "seniority": None, "salary_min": None,

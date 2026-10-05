@@ -96,16 +96,15 @@ describe('Job Hunter user journey', () => {
     await waitFor(() => expect(mockApi.putProfile).toHaveBeenCalled());
   });
 
-  it('loads fictional sample profile data as an unsaved draft and refreshes local recommendations after save', async () => {
+  it('shows the saved profile without a sample chooser and refreshes recommendations after save', async () => {
     const user = userEvent.setup(); render(<App />);
     await screen.findByText('Product Designer');
     await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Profile' }));
-    await user.click(screen.getByRole('button', { name: 'SQL analyst' }));
-    expect(screen.getByPlaceholderText('e.g. Alex Tan')).toHaveValue('Alex Example');
-    expect(screen.getByText('Unsaved profile changes')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /confirm profile/i })).toBeDisabled();
+    expect(screen.queryByText('Try a sample profile')).not.toBeInTheDocument();
+    await user.clear(screen.getByPlaceholderText('e.g. Alex Tan'));
+    await user.type(screen.getByPlaceholderText('e.g. Alex Tan'), 'Alex Tan');
     await user.click(screen.getByRole('button', { name: 'Save profile' }));
-    await waitFor(() => expect(mockApi.putProfile).toHaveBeenCalledWith(expect.objectContaining({ name: 'Alex Example' }), 0));
+    await waitFor(() => expect(mockApi.putProfile).toHaveBeenCalledWith(expect.objectContaining({ name: 'Alex Tan' }), 0));
     await waitFor(() => expect(mockApi.recommendations).toHaveBeenCalledTimes(2));
   });
 

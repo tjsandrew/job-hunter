@@ -84,10 +84,12 @@ See [product status and remaining work](docs/handoffs/PENDING.md) for the curren
 
 The [feature list and report comparison](docs/FEATURES.md) records what is included, what still needs implementation, and what can stay out of the initial POC. It also explains autosave, revisions and PDF storage.
 
-For fictional SQL analyst and ML engineer resume test cases (creates missing samples only):
+Alice now starts with a populated fictional Alex Tan profile. The current demo workspace contains a complete Backend Engineer resume, its reviewed PDF attachment, and a sample cover letter. No employer submission occurred.
+
+To explicitly reset Alice's profile and demo application and archive named QA resumes (backs up current records in the document volume first):
 
 ```sh
-python3 scripts/seed_demo_resumes.py --user alice
+docker compose run --rm --no-deps -v "$PWD/backend/src:/app/src:ro" -v "$PWD/scripts/setup_demo_workspace.py:/app/setup_demo_workspace.py:ro" -e PYTHONPATH=/app/src api python /app/setup_demo_workspace.py
 ```
 
-These samples start unreviewed. Review them in Resume Studio before exporting or attaching them. They do not overwrite an existing resume or change your profile.
+Run database integration tests against a disposable test database, not the demo workspace: test fixtures can otherwise clutter the library.

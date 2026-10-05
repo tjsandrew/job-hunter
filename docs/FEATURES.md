@@ -10,7 +10,7 @@ Updated 5 October 2026 (Singapore). Baseline: the group's `Preliminary.pdf`, Sec
 | Job reading and shortlisting | Search/pagination, full source description view, role-focused excerpt, source links, Save/Pass |
 | Personal profile | Editable contact, headline, summary, skills and preferences; explicit save and confirmation; PDF text extraction as a review candidate |
 | Local recommendation baseline | Explainable content similarity and explicit skills/role relevance, location eligibility, cold-start fallback; no large-model runtime needed |
-| Synthetic demo cases | Clearly fictional SQL analyst and ML engineer profiles/resumes for testing; never claim these are real applicants |
+| Synthetic demo cases | One populated fictional Alex Tan profile and complete application resume; no sample chooser. QA resumes are archived out of the library. |
 | Resume Studio | Manual creation, job-specific copies, sections/entries/bullets, autosave, revision checks, undo/redo, two templates |
 | Resume customization | Font family and size, margins, line spacing, A4/Letter; honored by server PDF output |
 | PDF lifecycle | Approximate live HTML preview plus authoritative server PDF preview; review current revision; export/download immutable PDF |
