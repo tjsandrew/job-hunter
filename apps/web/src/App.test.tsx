@@ -125,7 +125,7 @@ describe('Job Hunter user journey', () => {
     await waitFor(() => expect(mockApi.patchDocument).toHaveBeenCalled());
     expect(screen.getByRole('textbox', { name: 'Professional summary' })).toHaveValue('My latest local draft');
     expect(screen.getAllByText('Conflict')).toHaveLength(2);
-    expect(screen.getByRole('button', { name: /export pdf/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /download pdf/i })).toBeDisabled();
   });
 
   it('rebases typing made during a slow save and autosaves it against the accepted revision', async () => {

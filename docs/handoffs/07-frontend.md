@@ -43,3 +43,6 @@ Selecting Classic serif or Modern sans now resets the explicit typeface override
 
 ### LaTeX typography — 5 October
 LaTeX classic selects the classic layout with font_family=latex. Latin Modern Roman regular/bold are bundled locally from lalten/lmweb, with upstream BSD/GUST/LPPL license notices. Browser preview and PDF embed the same font files. API accepts the additive latex value; setuptools includes the font resources for deployment. Existing saved font choices remain unchanged until selected. PDF font embedding contract suite: 27 passed. Application preparation banner now wraps onto its own editor-header row.
+
+### Resume editor usability review — 5 October
+Reduced toolbar clutter with expandable layout settings; kept templates visible. Desktop now clearly uses side-by-side editing/preview, with the view toggle reserved for mobile. Consolidated duplicate PDF exports into one footer Download PDF action and clarified review-before-export status. Editor writing/preview panes use the available viewport height with separately scrolling content. Mobile header/banner is tighter and the settings panel is constrained to the toolbar width. PDF preview retains an accessible name when displayed as an icon. Production build and 16 frontend tests pass; desktop/mobile visual checks covered populated content and settings.

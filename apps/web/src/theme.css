@@ -271,3 +271,71 @@ button, a { transition: background-color 160ms, color 160ms, border-color 160ms,
 .resume-paper.font-latex,.resume-paper.font-latex .paper-header div { font-family: 'Latin Modern Roman', Georgia, serif; }
 .editor-head { flex-wrap: wrap; }
 .active-prepare-banner { flex-basis: 100%; }
+
+/* Resume Studio: keep the writing surface dominant and actions predictable. */
+.editor-page { height: calc(100dvh - 116px); min-height: 540px; }
+.editor-main { flex: 1 1 auto; height: auto; min-height: 0; }
+.editor-head,.editor-toolbar { flex: none; }
+.editor-title { flex: 1 1 200px; }
+.editor-title input { width: 100%; max-width: 360px; min-width: 0; }
+.editor-actions { flex: none; }
+.editor-view-toggle { display: none; }
+.layout-controls { flex: 0 1 auto; }
+.resume-layout-settings { position: relative; font-size: 12px; color: #33455e; }
+.resume-layout-settings>summary { padding: 10px 12px; border: 1px solid #c7d2e1; background: white; border-radius: 8px; cursor: pointer; font-weight: 600; }
+.resume-layout-settings>summary:focus-visible { outline: 3px solid #3157ce; outline-offset: 3px; }
+.resume-layout-fields { position: absolute; right: 0; top: calc(100% + 8px); width: 320px; max-width: calc(100vw - 100px); display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 18px; border: 1px solid #dce3ed; border-radius: 12px; background: #fff; box-shadow: 0 10px 30px #14243b24; z-index: 6; }
+.resume-layout-fields label { flex-direction: column; align-items: flex-start; gap: 7px; }
+.resume-layout-fields select { width: 100%; margin: 0; }
+.resume-layout-fields label:nth-child(3) { grid-column: 1 / -1; }
+.editor-toolbar { gap: 10px; }
+.editor-footer .button { margin-left: auto; }
+.editor-footer .link-button { padding: 8px; }
+.paper-stage { flex: 1; min-height: 0; }
+@media(max-width:760px) {
+ .editor-page { height: calc(100dvh - 102px); min-height: 560px; }
+ .editor-view-toggle { display: inline-flex; }
+ .layout-controls { width: 100%; display: flex; justify-content: space-between; }
+ .resume-layout-fields { right: auto; left: 0; }
+ .template-select { width: 100%; }
+ .editor-pane,.preview-pane { min-height: 0; }
+ .editor-main { height: auto; min-height: 0; }
+}
+@media(max-width:520px) {
+ .editor-page { min-height: 600px; }
+ .editor-title { order: 1; flex-basis: 100%; flex-direction: row; align-items: center; }
+ .editor-title input { flex: 1; }
+ .editor-actions { width: auto; order: 2; margin-left: auto; }
+ .editor-pane-head span { display: none; }
+ .editor-footer>span:first-child { width: auto; margin-right: auto; }
+ .editor-footer .button { min-height: 40px; }
+ .editor-toolbar .preview-button { margin: 0; }
+ .resume-layout-fields { width: 260px; }
+}
+@media(max-width:760px) {
+ .resume-layout-fields { left: auto; right: 0; }
+}
+@media(max-width:520px) {
+ .active-prepare-banner { gap: 5px; padding: 8px; }
+ .active-prepare-banner>span { font-size: 12px; }
+ .active-prepare-banner .button { font-size: 10px; min-height: 32px; padding-inline: 6px; }
+ .editor-title { order: 0; }
+ .back-link { order: 1; }
+ .editor-actions { order: 1; }
+ .editor-head { gap: 6px; }
+ .layout-controls { flex-wrap: nowrap; gap: 5px; }
+ .editor-view-toggle button { font-size: 11px; padding-inline: 6px; }
+ .resume-layout-settings>summary { padding-inline: 7px; font-size: 11px; }
+ .editor-toolbar .preview-button { font-size: 0; padding: 8px; min-width: 34px; }
+ .editor-toolbar .preview-button .icon { width: 18px; height: 18px; }
+ .editor-toolbar .preview-button { position: relative; }
+ .editor-toolbar { gap: 6px; }
+ .template-select>span { display: none; }
+ .template-select { flex-wrap: nowrap; }
+ .template-select button { flex: 1; padding-inline: 3px; font-size: 10px; }
+}
+@media(max-width:760px) {
+ .layout-controls { position: relative; }
+ .resume-layout-settings { position: static; }
+ .resume-layout-fields { width: 100%; max-width: 100%; right: 0; left: auto; }
+}
