@@ -6,6 +6,8 @@ Prepared 4 October 2026. This is the target design, not an implementation checkl
 
 **Cloud implementation handoff:** [current local inventory, remaining AWS work and per-component deployment steps](CLOUD-DEPLOYMENT-HANDOFF.md).
 
+**Team planning:** [six-person work split, dependencies and acceptance checks](SIX-PERSON-WORK-SPLIT.md).
+
 ## 1. Start here
 
 This design is grounded in the group's completed [Preliminary.pdf](/Users/andrew_tjs/Downloads/Preliminary.pdf), particularly Sections 1.2–1.3, 2 and 4. It preserves Job Hunter's proposed user journey and simplifies the compute layer. It is not a replacement preliminary report or an assertion that the group has already adopted every implementation choice below.
