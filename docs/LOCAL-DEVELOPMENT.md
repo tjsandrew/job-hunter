@@ -1,6 +1,6 @@
 # Local development
 
-Start the stack first with `docker compose up --build -d` (see the [README](../README.md)).
+Start the stack first with `make up` (see the [README](../README.md)). Most commands below also have a `make` shortcut; run `make` to list them.
 
 ## Local stack
 

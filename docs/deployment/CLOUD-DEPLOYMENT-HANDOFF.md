@@ -1,7 +1,6 @@
 # Local POC → AWS deployment handoff
 
-Updated 5 October 2026. **No AWS deployment has been performed.** This is an implementation inventory and deployment plan, not evidence that cloud components exist. Read with [delivery scope](DELIVERY-SCOPE.md), [shared contracts](../design/CONTRACTS.md), [portability rules](LOCAL-TO-AWS.md) and [current outstanding work](../status/PENDING.md). Cloud work begins only when assigned; this note does not authorize provisioning or spending.
-
+Updated 5 October 2026. **No AWS deployment has been performed.** This is an implementation inventory and deployment plan, not evidence that cloud components exist. Read with [Lambda notes](LAMBDA-NOTES.md), [delivery scope](DELIVERY-SCOPE.md), [shared contracts](../design/CONTRACTS.md), [portability rules](LOCAL-TO-AWS.md) and [current outstanding work](../status/PENDING.md).
 ## What can be reused, and what still needs building
 
 | Component | Actually built locally | Cloud destination | Work still required |

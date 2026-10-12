@@ -6,7 +6,7 @@ Prepared 4 October 2026. This is the target design, not an implementation checkl
 
 **Cloud implementation handoff:** [current local inventory, remaining AWS work and per-component deployment steps](../deployment/CLOUD-DEPLOYMENT-HANDOFF.md).
 
-**Team planning:** [six-person work split, dependencies and acceptance checks](../deployment/SIX-PERSON-WORK-SPLIT.md).
+**Team planning:** [work split](../WORK-SPLIT.md).
 
 ## 1. Start here
 

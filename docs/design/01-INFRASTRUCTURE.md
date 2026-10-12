@@ -8,7 +8,7 @@ Read [README](README.md) and [contracts](CONTRACTS.md). Own `infra/`, build/depl
 
 ## Current assignment boundary
 
-For the local milestone, provide Dockerfiles/Compose, persistent development volumes, environment examples and local startup/test commands. The CDK, AWS resources, Lambda packaging and cloud acceptance criteria below are deferred until cloud integration is assigned. Do not emulate these services locally.
+For the local milestone, provide Dockerfiles/Compose, persistent development volumes, environment examples and local startup/test commands. The CDK, AWS resources, Lambda packaging and cloud acceptance criteria below make up the cloud milestone. Do not emulate these services locally.
 
 ## Resources and connections
 

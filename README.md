@@ -20,7 +20,7 @@ Prerequisites: [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 ```sh
 git clone https://github.com/tjsandrew/job-hunter.git
 cd job-hunter
-docker compose up --build -d
+make up          # or: docker compose up --build -d
 ```
 
 - App: http://localhost:5173
@@ -28,14 +28,21 @@ docker compose up --build -d
 
 The first start runs database migrations and seeds two fictional development users (Alice and Bob). Switch between them in the app header. Alice has a populated demo profile, resume and application.
 
-```sh
-docker compose logs --tail=100 api web   # view logs
-docker compose stop                      # stop, keeping data
-```
+Run `make` to list every command (`make logs`, `make down`, `make test`, `make import-jobs`, `make reset-demo`, …). `make reset` **permanently deletes** the local database and documents. More detail: [docs/LOCAL-DEVELOPMENT.md](docs/LOCAL-DEVELOPMENT.md).
 
-`docker compose down --volumes` **permanently deletes** the local database and documents.
+## Resume editor
 
-Importing live jobs, resetting the demo workspace and other tasks: [docs/LOCAL-DEVELOPMENT.md](docs/LOCAL-DEVELOPMENT.md).
+The resume editor is the most complete part of the app and a good place to start building:
+
+| Piece | Where |
+|---|---|
+| Editor UI (Resume Studio, preview, layout controls) | [apps/web/src/App.tsx](apps/web/src/App.tsx), [styles.css](apps/web/src/styles.css) |
+| Pure editing helpers (sections, entries, bullets), with tests | [apps/web/src/editor.ts](apps/web/src/editor.ts), [editor.test.ts](apps/web/src/editor.test.ts) |
+| API: `/v1/documents` CRUD, duplicate, review, `preview.pdf`, exports | [backend/src/job_hunter/api/main.py](backend/src/job_hunter/api/main.py) |
+| PDF rendering (ReportLab, Latin Modern fonts, templates) | [backend/src/job_hunter/preparation/rendering.py](backend/src/job_hunter/preparation/rendering.py) |
+| Design and behaviour spec | [docs/design/09-RESUME-EDITOR.md](docs/design/09-RESUME-EDITOR.md) |
+
+Documents autosave with revision checks. A PDF is exported from a reviewed revision and stays immutable, so an application keeps the exact resume that was attached.
 
 ## Repository layout
 
@@ -43,24 +50,20 @@ Importing live jobs, resetting the demo workspace and other tasks: [docs/LOCAL-D
 apps/web/          React + TypeScript + Vite frontend
 backend/           FastAPI API, domain logic, Alembic migrations, tests
   src/job_hunter/    api/, adapters/, domain/, ingestion/, preparation/, recommendations.py
-infra/local/       Local PostgreSQL role setup (not AWS infrastructure)
+infra/local/       Local PostgreSQL role setup (AWS infrastructure goes in infra/aws, not yet created)
 scripts/           HTTP smoke test and demo-workspace reset
 docs/              Design, deployment plan and status (see docs/README.md)
 compose.yaml       Local stack: PostgreSQL/pgvector, API, web
+Makefile           Shortcuts for common tasks (run `make`)
 ```
 
 ## Running the checks
 
 ```sh
-cd apps/web && npm ci && npm test && npm run build
+make test        # frontend tests + build, backend tests, HTTP smoke (stack must be running)
 ```
 
-With the stack running, from the repository root:
-
-```sh
-python3 scripts/smoke.py
-docker compose run --rm --no-deps -e RUN_DB_INTEGRATION=1 -v "$PWD/backend/tests:/app/tests:ro" api sh -c 'pip install -c requirements.lock ".[test]" && pytest /app/tests -q'
-```
+Or run them separately with `make test-web`, `make test-backend` and `make smoke`.
 
 GitHub Actions runs the same checks on every push and pull request ([.github/workflows/checks.yml](.github/workflows/checks.yml)).
 
@@ -68,13 +71,17 @@ GitHub Actions runs the same checks on every push and pull request ([.github/wor
 
 No AWS infrastructure code exists yet. The application was built so its business logic, schema and API can be reused behind Lambda handlers. Start here:
 
-1. [Cloud deployment handoff](docs/deployment/CLOUD-DEPLOYMENT-HANDOFF.md): what exists locally, the AWS target for each component, and the remaining work
-2. [Six-person work split](docs/deployment/SIX-PERSON-WORK-SPLIT.md): who owns what, with dependencies and acceptance checks
-3. [Local-to-AWS portability rules](docs/deployment/LOCAL-TO-AWS.md) and [delivery scope](docs/deployment/DELIVERY-SCOPE.md)
+1. [Deployment start page](docs/deployment/README.md): the target architecture and a suggested order of work
+2. [Cloud deployment handoff](docs/deployment/CLOUD-DEPLOYMENT-HANDOFF.md): what exists locally, the AWS target for each component, and the remaining work
+3. [Lambda notes](docs/deployment/LAMBDA-NOTES.md): suggested functions, entry point, packaging and code changes for Lambda
+4. [Local-to-AWS portability rules](docs/deployment/LOCAL-TO-AWS.md) and [delivery scope](docs/deployment/DELIVERY-SCOPE.md)
 
 Passing local tests does not verify AWS permissions, event delivery or deployment.
 
 ## Contributing
+
+The team is split into six areas: see [docs/WORK-SPLIT.md](docs/WORK-SPLIT.md).
+
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch and pull-request workflow and the rules on private data.
 
