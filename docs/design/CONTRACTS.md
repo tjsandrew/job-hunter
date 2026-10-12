@@ -2,11 +2,11 @@
 
 **Resume editor requirement:** [09-RESUME-EDITOR.md](09-RESUME-EDITOR.md) adds a core local resume editor, manual resume creation, template/layout controls, preview, autosave and PDF export. Its document/API extensions supersede assumptions that every resume requires AI generation or a job.
 
-**Current delivery scope:** [local application first; AWS-native services later](DELIVERY-SCOPE.md). This staging rule overrides earlier cloud requirements for the local milestone.
+**Current delivery scope:** [local application first; AWS-native services later](../deployment/DELIVERY-SCOPE.md). This staging rule overrides earlier cloud requirements for the local milestone.
 
 Read [the main design](README.md) first. These are normative POC defaults. Change them deliberately and update dependent briefs/tests together.
 
-All components must follow [LOCAL-TO-AWS.md](LOCAL-TO-AWS.md): share domain logic across local Docker and AWS, and switch infrastructure through explicit adapters.
+All components must follow [LOCAL-TO-AWS.md](../deployment/LOCAL-TO-AWS.md): share domain logic across local Docker and AWS, and switch infrastructure through explicit adapters.
 
 ## 1. Repository layout and ownership
 
@@ -157,4 +157,4 @@ Resume/job text is untrusted data, including instructions embedded in documents.
 
 ## 9. Source references
 
-The group's report is the scope source: [completed preliminary report](/Users/andrew_tjs/Downloads/Preliminary.pdf). [Course specification](../../References/Project%20Specification.pdf) requires a working web service, system/user evaluation, cloud/on-premise cost comparison and documentation of AI use. Defaults here fill implementation gaps; they are not quotations from those documents.
+The group's submitted preliminary report is the scope source. The course specification requires a working web service, system/user evaluation, cloud/on-premise cost comparison and documentation of AI use. Defaults here fill implementation gaps; they are not quotations from those documents.

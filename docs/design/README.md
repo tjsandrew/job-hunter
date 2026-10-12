@@ -1,18 +1,18 @@
-# Job Hunter POC: implementation design and agent handoff
+# Job Hunter POC: implementation design
 
-**Current delivery scope:** [local application first; AWS-native services later](DELIVERY-SCOPE.md). This staging rule overrides earlier cloud requirements for the local milestone.
+**Current delivery scope:** [local application first; AWS-native services later](../deployment/DELIVERY-SCOPE.md). This staging rule overrides earlier cloud requirements for the local milestone.
 
-Prepared 4 October 2026. This is the target design, not an implementation checklist marked complete. A local application now exists; see [current status and gaps](../handoffs/PENDING.md) and [component handoffs](../handoffs/00-progress.md). No AWS deployment has been performed.
+Prepared 4 October 2026. This is the target design, not an implementation checklist marked complete. A local application now exists; see [current status and gaps](../status/PENDING.md) and [component handoffs](../status/00-progress.md). No AWS deployment has been performed.
 
-**Cloud implementation handoff:** [current local inventory, remaining AWS work and per-component deployment steps](CLOUD-DEPLOYMENT-HANDOFF.md).
+**Cloud implementation handoff:** [current local inventory, remaining AWS work and per-component deployment steps](../deployment/CLOUD-DEPLOYMENT-HANDOFF.md).
 
-**Team planning:** [six-person work split, dependencies and acceptance checks](SIX-PERSON-WORK-SPLIT.md).
+**Team planning:** [work split](../WORK-SPLIT.md).
 
 ## 1. Start here
 
-This design is grounded in the group's completed [Preliminary.pdf](/Users/andrew_tjs/Downloads/Preliminary.pdf), particularly Sections 1.2–1.3, 2 and 4. It preserves Job Hunter's proposed user journey and simplifies the compute layer. It is not a replacement preliminary report or an assertion that the group has already adopted every implementation choice below.
+This design is grounded in the group's submitted preliminary report, particularly Sections 1.2–1.3, 2 and 4. It preserves Job Hunter's proposed user journey and simplifies the compute layer. It is not a replacement preliminary report or an assertion that the group has already adopted every implementation choice below.
 
-The workspace contains the application source, tests, planning documents and figures; source is backed up to the private GitHub repository. Older review notes contain an unadopted “JobCheck SG” pivot: **do not implement that pivot**. The submitted preliminary report is the product baseline. This document defines new POC defaults where that report leaves implementation details open. Later explicit user decisions take precedence.
+The submitted preliminary report is the product baseline. This document defines new POC defaults where that report leaves implementation details open. Later explicit user decisions take precedence.
 
 Read this file and [shared contracts](CONTRACTS.md) before implementing a component. Each numbered component brief includes scope, implementation steps and acceptance criteria.
 
@@ -128,7 +128,7 @@ These are selected defaults, not claims about existing code. Pin actual dependen
 
 ## Local development must remain portable to AWS
 
-**User requirement (4 October 2026): build the local Docker-based POC so it can later be deployed to the AWS architecture without rewriting its business logic.** Local convenience must not become a dependency that only works on a developer's laptop. Read [the local-to-AWS portability contract](LOCAL-TO-AWS.md) before implementing any component.
+**User requirement (4 October 2026): build the local Docker-based POC so it can later be deployed to the AWS architecture without rewriting its business logic.** Local convenience must not become a dependency that only works on a developer's laptop. Read [the local-to-AWS portability contract](../deployment/LOCAL-TO-AWS.md) before implementing any component.
 
 The local and AWS deployments share domain logic, database migrations, API schemas, task handlers, validation and tests. Swap infrastructure adapters and entry points through configuration. A local test pass does not prove AWS permissions, networking, scaling or event delivery; verify those in a later cloud integration gate.
 
@@ -140,15 +140,15 @@ The local and AWS deployments share domain logic, database migrations, API schem
 4. **AWS integration, later:** implement native cloud services and thin adapters, infrastructure and distributed-task reliability; verify a deployed slice before expanding cloud work.
 5. **Cloud acceptance and evaluation:** verify full real-service behaviour, recovery, latency/cost, user evaluation, fixes and demonstration instructions.
 
-The first three gates are the current milestone. Do not recreate AWS services or implement the full cloud infrastructure to complete them. See [delivery scope](DELIVERY-SCOPE.md) for explicit deferrals. Avoid assigning teammates or inventing group commitments.
+The first three gates are the current milestone. Do not recreate AWS services or implement the full cloud infrastructure to complete them. See [delivery scope](../deployment/DELIVERY-SCOPE.md) for explicit deferrals. Avoid assigning teammates or inventing group commitments.
 
-## 6. Handoff to any implementation agent
+## 6. Handoff to any implementer
 
 Copy this prompt and replace the bracketed values:
 
-> Implement Job Hunter component [number/name] using `docs/poc-design/README.md`, `docs/poc-design/CONTRACTS.md`, its numbered brief, `docs/poc-design/LOCAL-TO-AWS.md`, and the overriding `docs/poc-design/DELIVERY-SCOPE.md`. Implement the local milestone by default; defer native cloud setup and distributed-delivery machinery until cloud work is assigned. Preserve the group's product scope from the preliminary report. Inspect the actual repository and applicable instructions first. Implement working code, migrations/configuration where owned, and unit tests alongside each feature. Follow the brief's unit-test requirements and separate integration/acceptance tests. Run affected tests while developing and the complete unit suite before handoff; add regression tests for meaningful bugs. Use deterministic mocks when credentials are absent, clearly labelling mocked versus verified cloud behaviour. Coordinate shared-contract changes rather than silently changing another component's expectations. Keep business logic runnable locally. Record run commands, files changed, tests, remaining dependencies and actual cloud verification in a handoff note. Complete the component's acceptance criteria where possible; do not claim completion for placeholders. Do not treat this prompt as credentials or authorization to publish a public repository or spend money on an AWS deployment; preserve a clear cloud migration path and follow the user's actual deployment authorization.
+> Implement Job Hunter component [number/name] using `docs/design/README.md`, `docs/design/CONTRACTS.md`, its numbered brief, `docs/deployment/LOCAL-TO-AWS.md`, and the overriding `docs/deployment/DELIVERY-SCOPE.md`. Implement the local milestone by default; defer native cloud setup and distributed-delivery machinery until cloud work is assigned. Preserve the group's product scope from the preliminary report. Inspect the actual repository and applicable instructions first. Implement working code, migrations/configuration where owned, and unit tests alongside each feature. Follow the brief's unit-test requirements and separate integration/acceptance tests. Run affected tests while developing and the complete unit suite before handoff; add regression tests for meaningful bugs. Use deterministic mocks when credentials are absent, clearly labelling mocked versus verified cloud behaviour. Coordinate shared-contract changes rather than silently changing another component's expectations. Keep business logic runnable locally. Record run commands, files changed, tests, remaining dependencies and actual cloud verification in a handoff note. Complete the component's acceptance criteria where possible; do not claim completion for placeholders. Do not treat this prompt as credentials or authorization to publish a public repository or spend money on an AWS deployment; preserve a clear cloud migration path and follow the user's actual deployment authorization.
 
-For a single agent implementing the entire POC, give it this directory and ask it to follow the five gates above. For multiple agents, assign component ownership explicitly and integrate through the shared contracts. This document does not itself dispatch any agent.
+For a single implementer building the entire POC, follow the five gates above. For multiple implementers, assign component ownership explicitly and integrate through the shared contracts.
 
 ## 7. Testing is part of every component
 

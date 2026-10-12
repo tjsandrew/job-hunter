@@ -10,11 +10,10 @@ Updated 5 October 2026 (Singapore).
 - Manual resume editor: structured sections, two templates, autosave, undo/redo, revision review, server PDF preview/export. PDF uploads expose extracted text as a candidate for manual review.
 - Live ingestion/import: 70 Singapore-location source identities across Stripe (52), Cloudflare (1), Coinbase (7), Lalamove (10). Four employers, two providers (Greenhouse/Lever). This is below the 300–500 intermediate / 1,000 target and excludes synthetic seeds. No comprehensive category coverage or cross-provider opening deduplication claim.
 - Local normalized snapshot in the document volume; offline replay created no duplicates. JustPostedJobs collection stopped after 429.
-- A 90-minute heartbeat was verified ACTIVE earlier in this session. It can revisit unfinished work when execution is available; it does not bypass quota or keep the machine awake.
 
 ## Verification
 
-Backend agent ran 75 passing tests against current source and real PostgreSQL, including direct nonowner SQL RLS, revision/ownership, PDF upload/extraction and multipage PDF rendering. A separate empty database applied migrations 0001–0009 and seed successfully. Parent HTTP smoke passed upload/extraction, immutable uploads, owner isolation, review gating, PDF generation and downloads. Frontend agent ran 15 passing tests and a successful production build. See component handoffs for exact checks.
+Backend checks: 75 passing tests against current source and real PostgreSQL, including direct nonowner SQL RLS, revision/ownership, PDF upload/extraction and multipage PDF rendering. A separate empty database applied migrations 0001–0009 and seed successfully. HTTP smoke passed upload/extraction, immutable uploads, owner isolation, review gating, PDF generation and downloads. Frontend checks: 15 passing tests and a successful production build. See component handoffs for exact checks.
 
 ## Next bounded work
 
@@ -26,7 +25,7 @@ Backend agent ran 75 passing tests against current source and real PostgreSQL, i
 
 See component handoffs for contracts and limits. The broader preliminary-report design remains a roadmap; this runnable slice does not implement every feature.
 
-## Parent runtime check
+## Runtime check
 
 Final rebuilt API health and HTTP smoke passed. Browser verification confirmed live employer search (Lalamove returned 10 source listings before review), saving Accountant into Alice's tracker, opening the persisted resume editor, and the server PDF preview dialog. Desktop job cards received a final readability adjustment: larger description text and a three-line preview with the source link for full details. The local demo database retains synthetic documents created by tests; they are not personal resumes. PDF bytes/download endpoints were verified; a browser file-save event was not independently verified because the in-app browser download-event wait timed out earlier.
 

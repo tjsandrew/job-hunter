@@ -1,95 +1,90 @@
 # Job Hunter
 
-Local-first Job Hunter POC: live job discovery, profile-based browsing, application tracking and a resume editor. The eventual cloud design uses AWS Lambda; cloud-native setup is deferred while the local application is built.
+Job Hunter helps job seekers in Singapore discover openings, shortlist them against their profile, prepare a tailored resume and track applications. This repository holds the working local proof of concept (React + FastAPI + PostgreSQL in Docker) and the plan for deploying it to AWS (API Gateway + Lambda, RDS, S3/CloudFront, Cognito).
 
-## Current status
+> **Status:** the local application runs end to end. **AWS deployment has not been built yet.** See [Deploying to AWS](#deploying-to-aws).
 
-The first local slice includes Singapore job discovery/import, keyword-based browsing, profiles and preferences, application tracking, and a manual resume editor with PDF preview/export. See [handoffs](docs/handoffs) for verified features, test results and remaining work. Development identity switching is for localhost only. AI generation and semantic ranking are unavailable until a real provider is configured.
+## Features (local)
 
-## Local development
+- Singapore job discovery from public employer feeds (Greenhouse, Lever), with search, save and pass
+- Profiles and preferences, with explainable keyword/skill/role ranking
+- Resume Studio: structured editor, autosave, undo/redo, two templates, server-rendered PDF export
+- Application tracker with an attached reviewed resume PDF and cover letter
 
-Prerequisites: Docker Desktop with Compose, and Git.
+AI generation and semantic ranking are not connected yet. The full list and its gaps are in [docs/status/FEATURES.md](docs/status/FEATURES.md).
 
-```sh
-docker compose up --build -d
-```
+## Quick start
 
-Frontend: http://localhost:5173. API documentation: http://localhost:8000/docs.
-
-The stack uses PostgreSQL/pgvector, a migration/seed step and a non-superuser API database role. Database and exported documents use named volumes. API/frontend ports bind to localhost. The database is not exposed on a host port.
-
-```sh
-docker compose logs --tail=100 api web
-docker compose stop
-```
-
-Normal shutdown preserves data. `docker compose down --volumes` permanently deletes the local database and document volumes; use only when deliberately resetting development data.
-
-## Singapore job data
-
-The collection target is about 1,000 jobs explicitly located in Singapore, with 300–500 as an intermediate milestone. The first bounded import contains **70 source listings** across four employers and two ATS providers; it is not representative of the entire Singapore market. Overseas jobs, description-only Singapore mentions and worldwide-remote eligibility do not count. Synthetic seed jobs are labelled separately. See the [ingestion handoff](docs/handoffs/04-ingestion.md) for actual imported counts and source limitations.
-
-Live discovery is a manual, one-shot local command. Do not run it on every app launch:
+Prerequisites: [Docker Desktop](https://www.docker.com/products/docker-desktop/) (with Compose) and Git.
 
 ```sh
-docker compose exec api python -m job_hunter.import_jobs --greenhouse stripe --greenhouse cloudflare --greenhouse coinbase --lever lalamove --location Singapore
+git clone https://github.com/tjsandrew/job-hunter.git
+cd job-hunter
+make up          # or: docker compose up --build -d
 ```
 
-The importer saves a normalized snapshot in the local document volume. Reuse it without contacting job sources:
+- App: http://localhost:5173
+- API docs: http://localhost:8000/docs
+
+The first start runs database migrations and seeds two fictional development users (Alice and Bob). Switch between them in the app header. Alice has a populated demo profile, resume and application.
+
+Run `make` to list every command (`make logs`, `make down`, `make test`, `make import-jobs`, `make reset-demo`, …). `make reset` **permanently deletes** the local database and documents. More detail: [docs/LOCAL-DEVELOPMENT.md](docs/LOCAL-DEVELOPMENT.md).
+
+## Resume editor
+
+The resume editor is the most complete part of the app and a good place to start building:
+
+| Piece | Where |
+|---|---|
+| Editor UI (Resume Studio, preview, layout controls) | [apps/web/src/App.tsx](apps/web/src/App.tsx), [styles.css](apps/web/src/styles.css) |
+| Pure editing helpers (sections, entries, bullets), with tests | [apps/web/src/editor.ts](apps/web/src/editor.ts), [editor.test.ts](apps/web/src/editor.test.ts) |
+| API: `/v1/documents` CRUD, duplicate, review, `preview.pdf`, exports | [backend/src/job_hunter/api/main.py](backend/src/job_hunter/api/main.py) |
+| PDF rendering (ReportLab, Latin Modern fonts, templates) | [backend/src/job_hunter/preparation/rendering.py](backend/src/job_hunter/preparation/rendering.py) |
+| Design and behaviour spec | [docs/design/09-RESUME-EDITOR.md](docs/design/09-RESUME-EDITOR.md) |
+
+Documents autosave with revision checks. A PDF is exported from a reviewed revision and stays immutable, so an application keeps the exact resume that was attached.
+
+## Repository layout
+
+```
+apps/web/          React + TypeScript + Vite frontend
+backend/           FastAPI API, domain logic, Alembic migrations, tests
+  src/job_hunter/    api/, adapters/, domain/, ingestion/, preparation/, recommendations.py
+infra/local/       Local PostgreSQL role setup (AWS infrastructure goes in infra/aws, not yet created)
+scripts/           HTTP smoke test and demo-workspace reset
+docs/              Design, deployment plan and status (see docs/README.md)
+compose.yaml       Local stack: PostgreSQL/pgvector, API, web
+Makefile           Shortcuts for common tasks (run `make`)
+```
+
+## Running the checks
 
 ```sh
-docker compose exec api python -m job_hunter.import_jobs --snapshot-in /data/job-import-snapshots/latest.json --location Singapore
+make test        # frontend tests + build, backend tests, HTTP smoke (stack must be running)
 ```
 
-JustPostedJobs returned HTTP 429 during a limited review; collection from that source is paused. Scheduled cloud discovery, source credentials, expiry reconciliation and broader source coverage remain subsequent work.
+Or run them separately with `make test-web`, `make test-backend` and `make smoke`.
 
-## Checks
+GitHub Actions runs the same checks on every push and pull request ([.github/workflows/checks.yml](.github/workflows/checks.yml)).
 
-```sh
-cd apps/web
-npm ci
-npm test
-npm run build
-```
+## Deploying to AWS
 
-From the repository root with Compose running:
+No AWS infrastructure code exists yet. The application was built so its business logic, schema and API can be reused behind Lambda handlers. Start here:
 
-```sh
-python3 scripts/smoke.py
-docker compose run --rm --no-deps -e RUN_DB_INTEGRATION=1 -v "$PWD/backend/tests:/app/tests:ro" api sh -c 'pip install -c requirements.lock ".[test]" && pytest /app/tests -q'
-```
+1. [Deployment start page](docs/deployment/README.md): the target architecture and a suggested order of work
+2. [Cloud deployment handoff](docs/deployment/CLOUD-DEPLOYMENT-HANDOFF.md): what exists locally, the AWS target for each component, and the remaining work
+3. [Lambda notes](docs/deployment/LAMBDA-NOTES.md): suggested functions, entry point, packaging and code changes for Lambda
+4. [Local-to-AWS portability rules](docs/deployment/LOCAL-TO-AWS.md) and [delivery scope](docs/deployment/DELIVERY-SCOPE.md)
 
-The smoke test creates synthetic documents and uploads in the local database. GitHub Actions runs the checks against a disposable PostgreSQL database. Unit tests check small isolated behaviours; the PostgreSQL and HTTP checks exercise real persistence, isolation and document flows.
+Passing local tests does not verify AWS permissions, event delivery or deployment.
 
-## Design and implementation scope
+## Contributing
 
-- [Design and component briefs](docs/poc-design/README.md)
-- [Local now, cloud later](docs/poc-design/DELIVERY-SCOPE.md)
-- [Local-to-AWS portability](docs/poc-design/LOCAL-TO-AWS.md)
-- [Resume editor](docs/poc-design/09-RESUME-EDITOR.md)
+The team is split into six areas: see [docs/WORK-SPLIT.md](docs/WORK-SPLIT.md).
 
-Local business logic, schema and interfaces are intended to be shared with later Lambda handlers. Passing local tests does not verify AWS permissions, event delivery or deployment.
 
-## Source control and private data
-
-This is a private project repository. Original report/reference files, local secrets, uploaded resumes, generated private documents and database volumes are excluded from Git. Only synthetic fixtures should be committed. Git backs up source history; data volumes need separate backups.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch and pull-request workflow and the rules on private data.
 
 ## AI assistance
 
-Codex agents assist with implementation and tests. The team must review generated code and document actual verification and learning for the course submission. No claim of production readiness or measured AI quality is implied by scaffolding or mocked tests.
-
-## What is still pending?
-
-See [product status and remaining work](docs/handoffs/PENDING.md) for the current feature gaps, local follow-ups and deliberately deferred AWS work. The design briefs describe the target application; they are not a claim that every planned capability has been implemented.
-
-The [feature list and report comparison](docs/FEATURES.md) records what is included, what still needs implementation, and what can stay out of the initial POC. It also explains autosave, revisions and PDF storage.
-
-Alice now starts with a populated fictional Alex Tan profile. The current demo workspace contains a complete Backend Engineer resume, its reviewed PDF attachment, and a sample cover letter. No employer submission occurred.
-
-To explicitly reset Alice's profile and demo application and archive named QA resumes (backs up current records in the document volume first):
-
-```sh
-docker compose run --rm --no-deps -v "$PWD/backend/src:/app/src:ro" -v "$PWD/scripts/setup_demo_workspace.py:/app/setup_demo_workspace.py:ro" -e PYTHONPATH=/app/src api python /app/setup_demo_workspace.py
-```
-
-Run database integration tests against a disposable test database, not the demo workspace: test fixtures can otherwise clutter the library.
+AI coding assistants helped with implementation and tests. The team reviews generated code and records actual verification. Scaffolding and mocked tests are not claims of production readiness or AI quality.

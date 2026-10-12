@@ -1,7 +1,6 @@
 # Local POC → AWS deployment handoff
 
-Updated 5 October 2026. **No AWS deployment has been performed.** This is an implementation inventory and deployment plan, not evidence that cloud components exist. Read with [delivery scope](DELIVERY-SCOPE.md), [shared contracts](CONTRACTS.md), [portability rules](LOCAL-TO-AWS.md) and [current outstanding work](../handoffs/PENDING.md). Cloud work begins only when assigned; this note does not authorize provisioning or spending.
-
+Updated 5 October 2026. **No AWS deployment has been performed.** This is an implementation inventory and deployment plan, not evidence that cloud components exist. Read with [Lambda notes](LAMBDA-NOTES.md), [delivery scope](DELIVERY-SCOPE.md), [shared contracts](../design/CONTRACTS.md), [portability rules](LOCAL-TO-AWS.md) and [current outstanding work](../status/PENDING.md).
 ## What can be reused, and what still needs building
 
 | Component | Actually built locally | Cloud destination | Work still required |
@@ -83,7 +82,7 @@ For embeddings, record model ID, dimension, text-format version and source conte
 7. **Async/AI milestone:** implement task/outbox/quota machinery, then add real embeddings and generation. Exercise failures and duplicates before enabling these for users.
 8. **Acceptance:** run cloud integration/load checks, record latency/cost/user feedback, and publish actual deployment/rollback/cleanup commands in the release handoff.
 
-There is no executable CDK deployment command yet because AWS infrastructure code has not been written. The implementing agent must supply reproducible bootstrap/deploy commands and environment prerequisites after building it, rather than treating this plan as a runnable release.
+There is no executable CDK deployment command yet because AWS infrastructure code has not been written. The cloud implementer must supply reproducible bootstrap/deploy commands and environment prerequisites after building it, rather than treating this plan as a runnable release.
 
 ## Tests and release gates
 
@@ -102,7 +101,7 @@ Configure alarms for API/worker errors, queue age/DLQ messages, throttling, data
 
 Use GitHub Actions with AWS OIDC and narrowly scoped environment roles rather than long-lived AWS keys. Keep Secrets Manager access in server roles. Separate migration and app releases; use backward-compatible schema changes where needed. Record rollback strategy without deleting existing document objects or export references.
 
-## Handoff checklist for the cloud implementation agent
+## Handoff checklist for cloud implementers
 
 - [ ] Inspect actual source and latest handoffs; do not mark planned components as implemented.
 - [ ] Implement IaC, runtime/configuration, identity and S3 boundaries.
@@ -111,4 +110,4 @@ Use GitHub Actions with AWS OIDC and narrowly scoped environment roles rather th
 - [ ] Run unit, disposable-PostgreSQL and cloud integration tests; distinguish each result.
 - [ ] Record deployed commit, resource/environment outputs, commands, costs, failures, remaining gaps, rollback and cleanup steps.
 
-Do not reintroduce test-resume clutter, restart the stopped Codex ping, deploy cloud resources merely from this document, or claim external applications were submitted by the tracker.
+Do not reintroduce test-resume clutter, deploy cloud resources merely from this document, or claim external applications were submitted by the tracker.

@@ -1,6 +1,6 @@
 # Job Hunter feature list and project alignment
 
-Updated 5 October 2026 (Singapore). Baseline: the group's `Preliminary.pdf`, Sections 1.2–1.3 (product/business model), 2 (cloud design), 3 (implementation) and 4 (evaluation). This is a delivery map, not a claim that all report commitments are finished.
+Updated 5 October 2026 (Singapore). Baseline: the group's submitted preliminary report, Sections 1.2–1.3 (product/business model), 2 (cloud design), 3 (implementation) and 4 (evaluation). This is a delivery map, not a claim that all report commitments are finished.
 
 ## Local feature list
 

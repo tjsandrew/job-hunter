@@ -1,14 +1,14 @@
 # 01 — Infrastructure and deployment
 
-**Current delivery scope:** [local application first; AWS-native services later](DELIVERY-SCOPE.md). This staging rule overrides earlier cloud requirements for the local milestone.
+**Current delivery scope:** [local application first; AWS-native services later](../deployment/DELIVERY-SCOPE.md). This staging rule overrides earlier cloud requirements for the local milestone.
 
-**Portability requirement:** follow [LOCAL-TO-AWS.md](LOCAL-TO-AWS.md). Keep this component’s logic shared between local Docker execution and AWS; record adapter differences and unverified cloud checks in its handoff.
+**Portability requirement:** follow [LOCAL-TO-AWS.md](../deployment/LOCAL-TO-AWS.md). Keep this component’s logic shared between local Docker execution and AWS; record adapter differences and unverified cloud checks in its handoff.
 
 Read [README](README.md) and [contracts](CONTRACTS.md). Own `infra/`, build/deploy scripts and the operations runbook. Deliver a reproducible CDK deployment, not console-only setup.
 
 ## Current assignment boundary
 
-For the local milestone, provide Dockerfiles/Compose, persistent development volumes, environment examples and local startup/test commands. The CDK, AWS resources, Lambda packaging and cloud acceptance criteria below are deferred until cloud integration is assigned. Do not emulate these services locally.
+For the local milestone, provide Dockerfiles/Compose, persistent development volumes, environment examples and local startup/test commands. The CDK, AWS resources, Lambda packaging and cloud acceptance criteria below make up the cloud milestone. Do not emulate these services locally.
 
 ## Resources and connections
 
