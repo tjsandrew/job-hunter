@@ -2,7 +2,7 @@
 
 **Current delivery scope:** [local application first; AWS-native services later](DELIVERY-SCOPE.md). This staging rule overrides earlier cloud requirements for the local milestone.
 
-Recorded 4 October 2026 at the user's request. This is a requirement for the local implementation, not a future optional enhancement. Read alongside [README](README.md), [shared contracts](CONTRACTS.md) and the relevant component brief.
+Recorded 4 October 2026 at the user's request. This is a requirement for the local implementation, not a future optional enhancement. Read alongside [README](../design/README.md), [shared contracts](../design/CONTRACTS.md) and the relevant component brief.
 
 ## Goal
 
@@ -78,7 +78,7 @@ Deploying to AWS and pushing to a remote Git repository follow the user's actual
 
 ## Required component handoff statement
 
-Every implementation agent must report: which code is shared; which local adapters it implemented; which AWS adapters/entry points exist; unit/integration test results; and the exact remaining cloud checks. Mark AWS portability as partially verified until the relevant real-service checks pass.
+Every implementer must report: which code is shared; which local adapters it implemented; which AWS adapters/entry points exist; unit/integration test results; and the exact remaining cloud checks. Mark AWS portability as partially verified until the relevant real-service checks pass.
 
 ## Current implementation and deployment runbook
 

@@ -86,7 +86,7 @@ Keep one repository and the existing React/FastAPI/PostgreSQL architecture. Reus
 
 ## Parallel work and integration order
 
-1. **Agree contracts first:** user identity, job/profile versions, upload/finalize/download, task status, allowance behavior and environment outputs. Record changes in [CONTRACTS.md](CONTRACTS.md). Agree file ownership when editing the shared API module.
+1. **Agree contracts first:** user identity, job/profile versions, upload/finalize/download, task status, allowance behavior and environment outputs. Record changes in [CONTRACTS.md](../design/CONTRACTS.md). Agree file ownership when editing the shared API module.
 2. **Start all six in parallel:** infrastructure; API/auth boundary; storage adapter/PDF tests; source parsers/checkpoints; task/ranking logic; frontend auth/integration scaffolding.
 3. **First deployed slice:** Persons 1–3 and 6 prove login → profile → manual resume → private PDF download. Person 4 adds scheduled real jobs; Person 5 deploys lexical ranking.
 4. **Second slice:** Person 5 adds reliable asynchronous fit/tailoring; Persons 3 and 6 integrate editable drafts, review and application attachments. Semantic ranking follows only if time/access allow.
@@ -98,4 +98,4 @@ For each package, record files changed, commands, passing/failing/skipped tests,
 
 Use small reviewed branches/PRs and keep deployment secrets out of Git. Do not overwrite another owner's code or silently change shared contracts. Preserve local Compose operation. Source backup does not back up local Docker volumes or deployed user data.
 
-The first cloud POC can demonstrate manual preparation plus lexical recommendations before AI is ready. Payment collection, automatic application submission, browser automation and custom model training remain outside this split. Do not restart the stopped scheduled Codex ping.
+The first cloud POC can demonstrate manual preparation plus lexical recommendations before AI is ready. Payment collection, automatic application submission, browser automation and custom model training remain outside this split.

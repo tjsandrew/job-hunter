@@ -1,8 +1,8 @@
 # 08 — Integration, evaluation and POC acceptance
 
-**Current delivery scope:** [local application first; AWS-native services later](DELIVERY-SCOPE.md). This staging rule overrides earlier cloud requirements for the local milestone.
+**Current delivery scope:** [local application first; AWS-native services later](../deployment/DELIVERY-SCOPE.md). This staging rule overrides earlier cloud requirements for the local milestone.
 
-**Portability requirement:** follow [LOCAL-TO-AWS.md](LOCAL-TO-AWS.md). Keep this component’s logic shared between local Docker execution and AWS; record adapter differences and unverified cloud checks in its handoff.
+**Portability requirement:** follow [LOCAL-TO-AWS.md](../deployment/LOCAL-TO-AWS.md). Keep this component’s logic shared between local Docker execution and AWS; record adapter differences and unverified cloud checks in its handoff.
 
 Read [README](README.md) and [contracts](CONTRACTS.md). Own cross-component tests, evaluation scripts/fixtures and final evidence. Follow Section 4 of the group's report; distinguish measured outcomes from provisional targets.
 

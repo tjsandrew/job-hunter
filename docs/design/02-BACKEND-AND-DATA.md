@@ -1,8 +1,8 @@
 # 02 — Backend, database and task execution
 
-**Current delivery scope:** [local application first; AWS-native services later](DELIVERY-SCOPE.md). This staging rule overrides earlier cloud requirements for the local milestone.
+**Current delivery scope:** [local application first; AWS-native services later](../deployment/DELIVERY-SCOPE.md). This staging rule overrides earlier cloud requirements for the local milestone.
 
-**Portability requirement:** follow [LOCAL-TO-AWS.md](LOCAL-TO-AWS.md). Keep this component’s logic shared between local Docker execution and AWS; record adapter differences and unverified cloud checks in its handoff.
+**Portability requirement:** follow [LOCAL-TO-AWS.md](../deployment/LOCAL-TO-AWS.md). Keep this component’s logic shared between local Docker execution and AWS; record adapter differences and unverified cloud checks in its handoff.
 
 Read [README](README.md) and [contracts](CONTRACTS.md). Own shared schemas, migrations, API/auth/task scaffolding and quota logic. Other components contribute domain handlers through this infrastructure.
 
@@ -49,4 +49,4 @@ Unit tests cannot prove transaction safety or RLS. Also run real PostgreSQL inte
 - Deadline/retry/month-boundary cases preserve usage accounting. Editing profile during processing preserves captured inputs.
 - All migrations apply to an empty database and the previous schema; OpenAPI matches frontend fixtures.
 
-Deliver `docs/handoffs/02-backend.md` with actual commands, schemas, test results and unresolved integration points.
+Deliver `docs/status/02-backend.md` with actual commands, schemas, test results and unresolved integration points.

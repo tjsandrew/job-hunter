@@ -1,8 +1,8 @@
 # 04 — Job discovery, normalisation and shared processing
 
-**Current delivery scope:** [local application first; AWS-native services later](DELIVERY-SCOPE.md). This staging rule overrides earlier cloud requirements for the local milestone.
+**Current delivery scope:** [local application first; AWS-native services later](../deployment/DELIVERY-SCOPE.md). This staging rule overrides earlier cloud requirements for the local milestone.
 
-**Portability requirement:** follow [LOCAL-TO-AWS.md](LOCAL-TO-AWS.md). Keep this component’s logic shared between local Docker execution and AWS; record adapter differences and unverified cloud checks in its handoff.
+**Portability requirement:** follow [LOCAL-TO-AWS.md](../deployment/LOCAL-TO-AWS.md). Keep this component’s logic shared between local Docker execution and AWS; record adapter differences and unverified cloud checks in its handoff.
 
 Read [README](README.md) and [contracts](CONTRACTS.md). Own `ingestion/`, `discover_jobs` and `process_job` handlers. This implements the report's shared job pool rather than a per-user scraper.
 
@@ -10,7 +10,7 @@ Read [README](README.md) and [contracts](CONTRACTS.md). Own `ingestion/`, `disco
 
 Build live discovery early, before polishing recommendations or generation. The minimum live-discovery milestone is one working, permitted source fetching current job listings end to end; the target is two independent live sources to demonstrate the preliminary report's multi-source discovery. One source is an intermediate milestone, not completion of the multi-source commitment.
 
-The implementing agent should actively investigate and test access, not stop at fixture adapters:
+The implementer should actively investigate and test access, not stop at fixture adapters:
 
 1. Investigate the report's proposed Adzuna and MyCareersFuture sources first using current official documentation and permitted access methods. Verify Singapore coverage rather than assuming it from the provider name.
 2. Run a small live retrieval proof before building the full adapter: fetch a page, inspect actual fields, confirm usable application links and record retrieval time. Distinguish listing publication dates from retrieval timestamps.

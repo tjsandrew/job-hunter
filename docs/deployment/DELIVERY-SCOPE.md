@@ -1,6 +1,6 @@
 # Delivery scope: local application first, AWS-native services later
 
-**Resume editor requirement:** [09-RESUME-EDITOR.md](09-RESUME-EDITOR.md) adds a core local resume editor, manual resume creation, template/layout controls, preview, autosave and PDF export. Its document/API extensions supersede assumptions that every resume requires AI generation or a job.
+**Resume editor requirement:** [09-RESUME-EDITOR.md](../design/09-RESUME-EDITOR.md) adds a core local resume editor, manual resume creation, template/layout controls, preview, autosave and PDF export. Its document/API extensions supersede assumptions that every resume requires AI generation or a job.
 
 This staging decision reflects the user's latest direction: preserve AWS portability while avoiding time spent recreating cloud services locally. It takes precedence over earlier wording that requires cloud adapters, infrastructure or distributed-delivery machinery during the local milestone. The AWS design remains the eventual target, not a prerequisite for local development.
 
@@ -50,6 +50,6 @@ Cloud-specific acceptance criteria in other briefs do not block this milestone. 
 
 Implement native Cognito, S3, SQS, EventBridge, Bedrock, Lambda/API Gateway and deployment infrastructure when cloud work begins. Add distributed task-delivery guarantees before running concurrent cloud workers. Test actual permissions, network access, event delivery, failure recovery and production builds. Then measure cloud latency/scaling/cost and complete the deployed web-service evaluation.
 
-## Instructions to implementation agents
+## Instructions to implementers
 
 Default to the local milestone unless the user assigns cloud work. For each handoff report `implemented locally`, `verified with a real external service`, `mocked`, and `deferred to AWS` separately. Do not interpret future cloud acceptance checklists as an instruction to recreate AWS locally. Continue building the application when a cloud dependency is deferred; never claim that a fake passed the corresponding real-service acceptance test.
