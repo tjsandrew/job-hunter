@@ -1,0 +1,40 @@
+.bank-import-review { max-width: 1120px; padding-bottom: 110px; }
+.import-summary { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; margin-bottom: 24px; color: var(--muted); font-size: 12px; }
+.import-candidates { display: grid; gap: 18px; }
+.import-candidate { min-width: 0; padding: 22px; overflow-wrap: anywhere; }
+.import-candidate-head { display: flex; align-items: start; justify-content: space-between; flex-wrap: wrap; gap: 15px; margin-bottom: 18px; }
+.import-candidate h2 { font-size: 17px; margin: 10px 0 0; }
+.import-candidate fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.import-decisions { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.import-decisions button { border: 0; border-right: 1px solid var(--line); padding: 8px 13px; color: var(--muted); background: #fff; }
+.import-decisions button:last-child { border-right: 0; }
+.import-decisions button[aria-pressed="true"] { background: var(--green); color: #fff; }
+.import-decisions button:focus-visible { outline: 2px solid var(--green2); outline-offset: -3px; }
+.import-candidate.is-skipped { background: #f8f9fc; }
+.import-evidence { border-left: 3px solid #c9d5e9; color: var(--muted); padding: 7px 12px; margin: 8px 0 12px; font-size: 12px; line-height: 1.6; }
+.import-flag { font-size: 11px; color: #926025; background: #fff4dd; border-radius: 6px; padding: 5px 9px; margin: 5px 0 12px; }
+.import-field { min-width: 0; }
+.import-field textarea { width: 100%; min-width: 0; resize: vertical; }
+.import-field .field { margin: 7px 0; }
+.import-conflict { padding: 8px 10px; background: #fff4dd; border-radius: 8px; color: #73532d; font-size: 12px; line-height: 1.7; }
+.import-conflict label { display: grid; gap: 5px; margin-top: 5px; }
+.import-accept { display: flex; gap: 7px; align-items: center; font-size: 12px; }
+.import-accept input { width: 16px; height: 16px; }
+.import-points { margin-top: 18px; }
+.import-points h3 { font-size: 13px; }
+.import-unsorted { margin-top: 26px; }
+.import-unsorted > p { color: var(--muted); line-height: 1.6; }
+.import-unsorted .panel { margin-top: 18px; }
+.import-apply-bar { position: sticky; bottom: 10px; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 -5px 20px #172b4810; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; z-index: 8; }
+.bank-import-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.bank-recent-imports { margin-top: 20px; }
+.bank-import-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-top: 1px solid var(--line); padding: 10px 0; }
+.bank-import-row > span { flex: 1; min-width: 100px; font-size: 12px; color: var(--muted); }
+.bank-file-import { grid-column: 2; justify-self: start; }
+@media(max-width:600px) { .import-candidate { padding: 16px; } .bank-import-review .form-grid { grid-template-columns:minmax(0,1fr); } .import-apply-bar { padding: 12px; bottom: 6px; } .import-apply-bar .bank-actions { width:100%; } .import-apply-bar .bank-actions button { flex:1; } }
+
+.upload-button:focus-within { outline: 2px solid var(--green2); outline-offset: 2px; }
+.upload-button.is-disabled { opacity: .48; cursor: not-allowed; }
+.bank-resumes .bank-file { grid-template-columns: 30px minmax(0,1fr) auto; }
+.bank-resumes .bank-file-import { grid-column: 3; justify-self: end; }
+.bank-recent-imports h3 { font-size: 13px; margin: 0 0 6px; }

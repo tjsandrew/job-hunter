@@ -1,0 +1,14 @@
+export function Icon({ name }: { name: string }) {
+  const paths: Record<string, string> = { discover: 'M4 5h16M4 12h10M4 19h16M18 9l3 3-3 3', profile: 'M20 21a8 8 0 0 0-16 0M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z', tracker: 'M4 5h16v15H4zM8 3v4m8-4v4M7 11h10m-10 4h6', studio: 'M5 3h14v18H5zM8 7h8M8 11h8M8 15h5', plus: 'M12 5v14m-7-7h14', search: 'm20 20-4.5-4.5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z', arrow: 'M5 12h14m-7-7 7 7-7 7', back: 'M19 12H5m7 7-7-7 7-7', save: 'M5 3h12l3 3v15H4V3zm3 0v6h8V3m-8 18v-7h8v7', trash: 'M4 7h16m-10 4v6m4-6v6M6 7l1 14h10l1-14M9 7V4h6v3', copy: 'M8 8h12v13H8zM4 16V3h12', check: 'm5 12 4 4L19 6', close: 'm6 6 12 12M18 6 6 18', up: 'm6 15 6-6 6 6', down: 'm6 9 6 6 6-6', download: 'M12 3v12m-5-5 5 5 5-5M5 21h14', undo: 'M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-1', redo: 'm15 14 5-5-5-5m5 5H10a6 6 0 0 0 0 12h1' };
+  return <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name] || paths.arrow} /></svg>;
+}
+
+export function Loading({ label = 'Loading…' }: { label?: string }) { return <div className="loading"><span className="spinner" />{label}</div>; }
+
+export function Pill({ children, color = 'neutral' }: { children: React.ReactNode; color?: string }) { return <span className={`pill ${color}`}>{children}</span>; }
+
+export function Field({ label, value, onChange, placeholder, type = 'text', help, multiline = false, disabled = false, action }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string; help?: string; multiline?: boolean; disabled?: boolean; action?: React.ReactNode }) { return <label className={action ? 'field has-action' : 'field'}><span>{label}</span>{multiline ? <textarea aria-label={action ? label : undefined} disabled={disabled} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} rows={4} /> : <input aria-label={action ? label : undefined} disabled={disabled} type={type} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />}{help && <small>{help}</small>}{action}</label>; }
+
+export function SelectField({ label, value, onChange, options, disabled = false }: { label: string; value: string; onChange: (v: string) => void; options: string[]; disabled?: boolean }) { return <label className="field"><span>{label}</span><select disabled={disabled} value={value} onChange={(e) => onChange(e.target.value)}>{options.map((option) => <option key={option} value={option}>{option || 'Select one'}</option>)}</select></label>; }
+
+export function fmtDate(value?: string | null) { if (!value) return '—'; const date = new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' }); }

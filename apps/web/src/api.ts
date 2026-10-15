@@ -1,11 +1,11 @@
-import type { Application, Me, ProfileDraft, Recommendation, Resume } from './types';
+import type { Application, Me, ProfileDraft, Recommendation, Resume, ProfileResponse, ProfileBank, ProfileItem, ItemKind, ItemData, ItemChanges, PointWrite, PointUpdate, UserSettings, UploadedResume, ProfileExport, ProfileImport, ImportSource, ImportDecision, ImportResult } from './types';
 
 const base = (import.meta.env.VITE_API_BASE_URL || '/v1').replace(/\/$/, '');
 export const devUserStorageKey = 'jh-dev-user';
-export function getDevUser(): 'alice' | 'bob' {
-  return (localStorage.getItem(devUserStorageKey) === 'bob' ? 'bob' : 'alice');
+export function getDevUser(): 'alice' | 'casey' {
+  return (localStorage.getItem(devUserStorageKey) === 'casey' ? 'casey' : 'alice');
 }
-export function setDevUser(user: 'alice' | 'bob') { localStorage.setItem(devUserStorageKey, user); }
+export function setDevUser(user: 'alice' | 'casey') { localStorage.setItem(devUserStorageKey, user); }
 
 export class HttpError extends Error {
   status: number;
@@ -29,20 +29,44 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (type.includes('application/pdf')) return (await response.blob()) as T;
   return response.json() as Promise<T>;
 }
+// The browser's MIME type for .docx is sometimes empty, so the type sent follows the extension (the server re-checks the bytes).
+export const resumeContentType = (file: { name: string }) => file.name.toLowerCase().endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : '';
 const json = (method: string, body?: unknown): RequestInit => ({ method, body: body === undefined ? undefined : JSON.stringify(body) });
 
 export const api = {
   me: () => request<Me>('/me'),
   uploadResume: async (file: File) => {
-    const created = await request<{ upload_id: string; upload_url: string }>('/uploads', json('POST', { filename: file.name, content_type: file.type, size_bytes: file.size }));
+    const created = await request<{ upload_id: string; upload_url: string }>('/uploads', json('POST', { filename: file.name, content_type: resumeContentType(file), size_bytes: file.size }));
     const path = created.upload_url.startsWith(base) ? created.upload_url.slice(base.length) : created.upload_url.replace(/^\/v1/, '');
-    const uploaded = await request<{ upload_id: string; status: string; page_count: number | null; error_code: string | null; message: string; ai_available: boolean }>(path, { method: 'PUT', headers: { 'Content-Type': 'application/pdf' }, body: file });
+    const uploaded = await request<{ upload_id: string; status: string; page_count: number | null; error_code: string | null; message: string; ai_available: boolean }>(path, { method: 'PUT', headers: { 'Content-Type': resumeContentType(file) }, body: file });
     const extracted = await request<{ upload_id: string; filename: string; status: string; page_count: number | null; extracted_text: string | null; error_code: string | null }>(`/uploads/${encodeURIComponent(created.upload_id)}`);
     return { ...uploaded, extracted_text: extracted.extracted_text, filename: extracted.filename };
   },
-  getProfile: () => request<{ draft: ProfileDraft; revision: number; confirmed_revision: number | null }>('/profile'),
-  putProfile: (draft: ProfileDraft, expected_revision: number) => request('/profile', json('PUT', { draft, expected_revision })),
-  confirmProfile: (expected_revision: number) => request('/profile/confirm', json('POST', { expected_revision })),
+  getProfile: () => request<ProfileResponse>('/profile'),
+  putProfile: (draft: ProfileDraft, expected_revision: number) => request<ProfileResponse>('/profile', json('PUT', { draft, expected_revision })),
+  confirmProfile: (expected_bank_revision: number) => request<{revision: number; bank_revision: number; profile_version_id: string}>('/profile/confirm', json('POST', { expected_bank_revision })),
+  startImport: (values: ImportSource) => request<ProfileImport>('/profile/imports', json('POST', values)),
+  getImport: (id: string) => request<ProfileImport>(`/profile/imports/${encodeURIComponent(id)}`),
+  imports: () => request<{items: ProfileImport[]; next_cursor: null}>('/profile/imports'),
+  applyImport: (id: string, decisions: ImportDecision[], expected_profile_epoch: number) => request<ImportResult>(`/profile/imports/${encodeURIComponent(id)}/apply`, json('POST', {decisions, expected_profile_epoch})),
+  discardImport: (id: string) => request<ProfileImport>(`/profile/imports/${encodeURIComponent(id)}/discard`, json('POST')),
+  retryImport: (id: string) => request<ProfileImport>(`/profile/imports/${encodeURIComponent(id)}/retry`, json('POST')),
+  getBank: () => request<ProfileBank>('/profile/bank'),
+  getItem: (id: string) => request<ProfileItem>(`/profile/items/${encodeURIComponent(id)}`),
+  createItem: (values: {kind: ItemKind; data: ItemData; tags?: string[]; parent_id?: string | null}) => request<ProfileItem>('/profile/items', json('POST', values)),
+  patchItem: (id: string, values: ItemChanges) => request<ProfileItem>(`/profile/items/${encodeURIComponent(id)}`, json('PATCH', values)),
+  archiveItem: (id: string, expected_revision: number) => request<ProfileItem>(`/profile/items/${encodeURIComponent(id)}?expected_revision=${expected_revision}`, json('DELETE')),
+  reorderItems: (values: {kind: ItemKind; item_ids: string[]; expected_bank_revision: number}) => request<ProfileBank>('/profile/items/order', json('PUT', values)),
+  addPoint: (id: string, values: PointWrite) => request<ProfileItem>(`/profile/items/${encodeURIComponent(id)}/bullets`, json('POST', values)),
+  updatePoint: (id: string, pointId: string, values: PointUpdate) => request<ProfileItem>(`/profile/items/${encodeURIComponent(id)}/bullets/${encodeURIComponent(pointId)}`, json('PUT', values)),
+  addAlternative: (id: string, pointId: string, values: PointWrite) => request<ProfileItem>(`/profile/items/${encodeURIComponent(id)}/bullets/${encodeURIComponent(pointId)}/alternatives`, json('POST', values)),
+  revertItem: (id: string, values: ItemChanges) => request<ProfileItem>(`/profile/items/${encodeURIComponent(id)}/revert`, json('POST', values)),
+  getSettings: () => request<UserSettings>('/settings'),
+  putSettings: (values: Omit<UserSettings, 'revision'> & {expected_revision: number}) => request<UserSettings>('/settings', json('PUT', {resume_defaults: values.resume_defaults, expected_revision: values.expected_revision})),
+  deleteProfile: (values: {confirmation: 'DELETE'; delete_settings: boolean}) => request<{deleted: boolean; bank_revision: number; profile_epoch: number}>('/profile/data', json('DELETE', values)),
+  exportProfile: () => request<ProfileExport>('/profile/export.json'),
+  uploads: () => request<{items: UploadedResume[]; next_cursor: null}>('/uploads'),
+  downloadUpload: (id: string) => request<Blob>(`/uploads/${encodeURIComponent(id)}/download`),
   getPreferences: () => request<any>('/preferences'),
   putPreferences: (values: unknown) => request('/preferences', json('PUT', values)),
   recommendations: (q = '', offset = 0, limit = 20) => {
@@ -56,6 +80,8 @@ export const api = {
   documents: () => request<{ items: Resume[] }>('/documents?kind=resume'),
   createDocument: (values: { title: string; template: string; content: unknown; layout: unknown; job_id?: string }) => request<Resume>('/documents', json('POST', values)),
   patchDocument: (id: string, values: Partial<Resume> & { expected_revision: number }) => request<Resume>(`/documents/${encodeURIComponent(id)}`, json('PATCH', values)),
+  archiveDocument: (id: string) => request<void>(`/documents/${encodeURIComponent(id)}`, json('DELETE')),
+  restoreDocument: (id: string) => request<Resume>(`/documents/${encodeURIComponent(id)}/restore`, json('POST')),
   duplicateDocument: (id: string, title?: string, job_id?: string) => request<Resume>(`/documents/${encodeURIComponent(id)}/duplicate`, json('POST', { title, job_id })),
   reviewDocument: (id: string, expected_revision: number) => request<Resume>(`/documents/${encodeURIComponent(id)}/review`, json('POST', { expected_revision })),
   exportDocument: (id: string) => request<{ export_id: string; revision: number; download_url: string }>(`/documents/${encodeURIComponent(id)}/exports`, json('POST')),

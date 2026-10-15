@@ -7,7 +7,7 @@ import { api, HttpError } from './api';
 vi.mock('./api', async (importOriginal) => {
   const original = await importOriginal<typeof import('./api')>();
   return { ...original, api: {
-    me: vi.fn(), getProfile: vi.fn(), getPreferences: vi.fn(), recommendations: vi.fn(), applications: vi.fn(), documents: vi.fn(),
+    getBank: vi.fn(), uploads: vi.fn(), imports: vi.fn(), me: vi.fn(), getProfile: vi.fn(), getPreferences: vi.fn(), recommendations: vi.fn(), applications: vi.fn(), documents: vi.fn(),
     uploadResume: vi.fn(), reviewJob: vi.fn(), putProfile: vi.fn(), confirmProfile: vi.fn(), putPreferences: vi.fn(), putApplication: vi.fn(), createDocument: vi.fn(), patchDocument: vi.fn(),
     duplicateDocument: vi.fn(), reviewDocument: vi.fn(), exportDocument: vi.fn(), previewDocument: vi.fn(), downloadExport: vi.fn(),
   } };
@@ -18,6 +18,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockApi.me.mockResolvedValue({ user_id: '1', display_name: 'Alice Tan', plan: 'free', allowance: { limit: 5, used: 0, remaining: 5, period: '2026-10' }, ai_available: false });
   mockApi.getProfile.mockResolvedValue({ draft: { name: 'Alice Tan', email: 'alice@example.com', phone: '', location: 'Singapore', summary: '', skills: [] }, revision: 0, confirmed_revision: null });
+  mockApi.getBank.mockResolvedValue({ basics: { name: 'Alice Tan' }, items: [], grouped: { experience: [], education: [], project: [], skill: [], certification: [], award: [], volunteering: [], custom: [] }, bank_revision: 7, confirmed_revision: null, profile_epoch: 0 });
+  mockApi.uploads.mockResolvedValue({ items: [], next_cursor: null });
+  mockApi.imports.mockResolvedValue({ items: [], next_cursor: null });
+  mockApi.putProfile.mockImplementation(async (draft) => ({ draft, revision: 1, bank_revision: 8, confirmed_revision: null }));
   mockApi.getPreferences.mockResolvedValue({ roles: [], locations: [], work_modes: [], seniority: '', salary_min: null, salary_currency: 'SGD', salary_period: 'year', revision: 0 });
   mockApi.recommendations.mockResolvedValue({ items: [{ job: { id: 'role-1', title: 'Product Designer', company: 'Northstar', location: 'Singapore', description: 'Design clear tools for people.' }, score: 0.91, reasons: ['Product design experience'] }], total: 1, next_offset: null, degraded_mode: true });
   mockApi.applications.mockResolvedValue({ items: [] }); mockApi.documents.mockResolvedValue({ items: [] });
@@ -66,9 +70,28 @@ describe('Job Hunter user journey', () => {
     await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Profile' }));
     mockApi.uploadResume.mockResolvedValue({ upload_id: 'up-1', filename: 'resume.pdf', status: 'extracted', page_count: 1, error_code: null, message: 'Extracted text is a review candidate only.', ai_available: false, extracted_text: 'Jordan Tan\nProduct designer\nEmail: jordan@example.com' });
     const file = new File(['%PDF-1.4 sample'], 'resume.pdf', { type: 'application/pdf' });
-    await user.upload(screen.getByLabelText('Upload resume PDF'), file);
+    await user.upload(await screen.findByLabelText('Upload resume file'), file);
     expect(await screen.findByLabelText(/Extracted text candidate/)).toHaveValue('Jordan Tan\nProduct designer\nEmail: jordan@example.com');
-    expect(screen.getByPlaceholderText('e.g. Alex Tan')).toHaveValue('Alice Tan');
+    expect(screen.getByRole('heading', { name: 'Alice Tan' })).toBeInTheDocument();
+  });
+
+  it('uploads a Word resume, refuses legacy .doc on the client and shows server refusals', async () => {
+    const user = userEvent.setup({ applyAccept: false }); render(<App />);
+    await screen.findByText('Product Designer');
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Profile' }));
+    const input = await screen.findByLabelText('Upload resume file');
+    const docxType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    mockApi.uploadResume.mockResolvedValueOnce({ upload_id: 'up-2', filename: 'resume.docx', status: 'ready_for_review', page_count: null, error_code: null, message: 'Extracted text is a review candidate only.', ai_available: false, extracted_text: 'Jordan Tan\nBackend engineer' });
+    await user.upload(input, new File(['PK'], 'resume.docx', { type: docxType }));
+    expect(await screen.findByLabelText(/Extracted text candidate/)).toHaveValue('Jordan Tan\nBackend engineer');
+    expect(mockApi.uploadResume).toHaveBeenCalledTimes(1);
+    // The input's accept list is only a hint, so legacy files are also stopped (with guidance) before any upload.
+    await user.upload(input, new File(['x'], 'old.doc', { type: 'application/msword' }));
+    expect(await screen.findByText(/Save it as PDF or \.docx and upload again/)).toBeInTheDocument();
+    expect(mockApi.uploadResume).toHaveBeenCalledTimes(1);
+    mockApi.uploadResume.mockRejectedValueOnce(new HttpError('Macro-enabled Word files (.docm) are not supported.', 422, 'MACRO_ENABLED'));
+    await user.upload(input, new File(['PK'], 'macro.docx', { type: docxType }));
+    expect(await screen.findByText(/Macro-enabled Word files/)).toBeInTheDocument();
   });
 
   it('provides a manual resume path and communicates AI unavailability', async () => {
@@ -78,6 +101,7 @@ describe('Job Hunter user journey', () => {
     expect(screen.getByText(/Your resume library is empty/)).toBeInTheDocument();
     mockApi.createDocument.mockResolvedValue({ id: 'resume-1', title: 'Untitled resume', kind: 'resume', revision: 1, template: 'classic', content: { name: 'Alice Tan', email: 'alice@example.com', phone: '', location: 'Singapore', summary: '', sections: [] }, layout: { font_size: 11, margin: 18 }, reviewed_revision: null });
     await user.click(screen.getByRole('button', { name: /create your first resume/i }));
+    await user.click(screen.getByRole('button', { name: /^Blank/ }));
     await waitFor(() => expect(mockApi.createDocument).toHaveBeenCalled());
     const request = mockApi.createDocument.mock.calls[0][0];
     expect(request.content).toMatchObject({ name: 'Alice Tan', email: 'alice@example.com' });
@@ -88,10 +112,11 @@ describe('Job Hunter user journey', () => {
     const user = userEvent.setup(); render(<App />);
     await screen.findByText('Product Designer');
     await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Profile' }));
+    await user.click(await screen.findByRole('button', { name: 'Edit personal details' }));
     const headline = screen.getByPlaceholderText('Product designer · 6 years experience');
     await user.type(headline, 'Product designer');
     expect(screen.getByText('Unsaved profile changes')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /confirm profile/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /update my matches/i })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: 'Save profile' }));
     await waitFor(() => expect(mockApi.putProfile).toHaveBeenCalled());
   });
@@ -101,6 +126,7 @@ describe('Job Hunter user journey', () => {
     await screen.findByText('Product Designer');
     await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Profile' }));
     expect(screen.queryByText('Try a sample profile')).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Edit personal details' }));
     await user.clear(screen.getByPlaceholderText('e.g. Alex Tan'));
     await user.type(screen.getByPlaceholderText('e.g. Alex Tan'), 'Alex Tan');
     await user.click(screen.getByRole('button', { name: 'Save profile' }));
@@ -114,10 +140,11 @@ describe('Job Hunter user journey', () => {
     await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Resume studio' }));
     mockApi.createDocument.mockResolvedValue({ id: 'resume-2', title: 'Untitled resume', kind: 'resume', revision: 1, template: 'classic', content: { name: 'Alice Tan', email: '', phone: '', location: '', summary: '', sections: [] }, layout: { font_size: 11, margin: 18 }, reviewed_revision: null });
     await user.click(screen.getByRole('button', { name: /create your first resume/i }));
+    await user.click(screen.getByRole('button', { name: /^Blank/ }));
     const summary = await screen.findByRole('textbox', { name: 'Professional summary' });
     await user.type(summary, 'My latest local draft');
     const userSelect = screen.getAllByRole('combobox', { name: 'Development user' })[0];
-    await user.selectOptions(userSelect, 'bob');
+    await user.selectOptions(userSelect, 'casey');
     expect(userSelect).toHaveValue('alice');
 
     mockApi.patchDocument.mockRejectedValue(new HttpError('Revision conflict.', 409));
@@ -135,6 +162,7 @@ describe('Job Hunter user journey', () => {
     const baseResume = { id: 'resume-slow', title: 'Untitled resume', kind: 'resume' as const, revision: 1, template: 'classic' as const, content: { name: 'Alice Tan', email: '', phone: '', location: '', summary: '', sections: [] }, layout: { font_size: 11, margin: 18 }, reviewed_revision: null };
     mockApi.createDocument.mockResolvedValue(baseResume);
     await user.click(screen.getByRole('button', { name: /create your first resume/i }));
+    await user.click(screen.getByRole('button', { name: /^Blank/ }));
     const summary = await screen.findByRole('textbox', { name: 'Professional summary' });
     await user.type(summary, 'First draft');
 
