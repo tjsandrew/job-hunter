@@ -2,9 +2,9 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
-    Boolean, DateTime, ForeignKey, ForeignKeyConstraint, Integer, JSON, String, Text, UniqueConstraint,
+    Boolean, CheckConstraint, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, JSON, String, Text, UniqueConstraint, text,
 )
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID as PGUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from pgvector.sqlalchemy import Vector
 
@@ -31,7 +31,10 @@ class Profile(Base):
     user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), primary_key=True)
     draft: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     revision: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    bank_revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
+    profile_epoch: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     confirmed_revision: Mapped[int | None] = mapped_column(Integer)
+    basics_provenance: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}", nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
 
@@ -43,6 +46,11 @@ class ProfileVersion(Base):
     revision: Mapped[int] = mapped_column(Integer, nullable=False)
     data: Mapped[dict] = mapped_column(JSON, nullable=False)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(512))
+    embedding_model: Mapped[str | None] = mapped_column(Text)
+    embedding_dims: Mapped[int | None] = mapped_column(Integer)
+    embedding_text_version: Mapped[str | None] = mapped_column(Text)
+    embedding_status: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
@@ -117,6 +125,7 @@ class Application(Base):
 
 class Document(Base):
     __tablename__ = "documents"
+    __table_args__ = (UniqueConstraint("id", "user_id", name="uq_document_id_user"),)
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(240), nullable=False)
@@ -143,6 +152,7 @@ class DocumentExport(Base):
 
 class Upload(Base):
     __tablename__ = "uploads"
+    __table_args__ = (UniqueConstraint("id", "user_id", name="uq_upload_id_user"),)
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -155,3 +165,65 @@ class Upload(Base):
     extracted_text: Mapped[str | None] = mapped_column(Text)
     error_code: Mapped[str | None] = mapped_column(String(50))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class ProfileItem(Base):
+    __tablename__ = "profile_items"
+    __table_args__ = (
+        UniqueConstraint("id", "user_id", name="uq_profile_item_id_user"),
+        CheckConstraint("kind IN ('experience','education','project','skill','certification','award','volunteering','custom')", name="ck_profile_item_kind"),
+        CheckConstraint("origin IN ('manual','import')", name="ck_profile_item_origin"),
+        ForeignKeyConstraint(["parent_id", "user_id"], ["profile_items.id", "profile_items.user_id"], name="fk_profile_item_parent_owner"),
+        Index("ix_profile_items_user_kind", "user_id", "kind", "position"),
+        Index("uq_profile_skill_name", "user_id", text("lower(data->>'name')"), unique=True,
+              postgresql_where=text("kind = 'skill' AND archived_at IS NULL")),
+    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    position: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    data: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    tags: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default="{}", nullable=False)
+    origin: Mapped[str] = mapped_column(Text, default="manual", server_default="manual", nullable=False)
+    import_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    parent_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, server_default=text("now()"), onupdate=now_utc)
+
+
+class ProfileImport(Base):
+    __tablename__ = "profile_imports"
+    __table_args__ = (
+        UniqueConstraint("id", "user_id", name="uq_profile_import_id_user"),
+        CheckConstraint("source_type IN ('upload','document','json_resume','text')", name="ck_profile_import_source"),
+        CheckConstraint("status IN ('pending','ready','failed','applied','discarded')", name="ck_profile_import_status"),
+        ForeignKeyConstraint(["upload_id", "user_id"], ["uploads.id", "uploads.user_id"], name="fk_profile_import_upload_owner"),
+        ForeignKeyConstraint(["document_id", "user_id"], ["documents.id", "documents.user_id"], name="fk_profile_import_document_owner"),
+    )
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    source_type: Mapped[str] = mapped_column(Text, nullable=False)
+    upload_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    document_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    input_ref: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    input_payload: Mapped[dict | list | str | None] = mapped_column(JSONB)
+    task_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    profile_epoch: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    status: Mapped[str] = mapped_column(Text, default="pending", server_default="pending", nullable=False)
+    parser: Mapped[str | None] = mapped_column(Text)
+    candidates: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]", nullable=False)
+    error_code: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, server_default=text("now()"))
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    applied_result: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class UserSettings(Base):
+    __tablename__ = "user_settings"
+    __table_args__ = (UniqueConstraint("id", "user_id", name="uq_user_settings_id_user"),)
+    user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), primary_key=True)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), default=uuid4, nullable=False)
+    resume_defaults: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}", nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)

@@ -1,5 +1,7 @@
 """One coherent fictional candidate for the local demonstration only."""
-PROFILE = {
+from job_hunter.profile_bank.skills import infer_skill_category
+
+LEGACY_PROFILE = {
     "name": "Alex Tan", "display_name": "Alex Tan", "email": "alex.tan@example.invalid",
     "phone": "", "location": "Singapore", "headline": "Data & Backend Engineer",
     "summary": "Data and backend engineer with four years of experience building reliable Python services, SQL data pipelines and analytics products. Combines PostgreSQL performance tuning, experiment analysis and practical machine learning with clear stakeholder communication.",
@@ -11,6 +13,30 @@ PROFILE = {
     "education": [{"degree": "BSc in Computer Science", "school": "Example University (fictional)", "dates": "2018–2022"}],
     "projects": [{"name": "Customer retention analytics"}, {"name": "Job discovery data pipeline"}]
 }
+PROFILE = {key: value for key, value in LEGACY_PROFILE.items()
+           if key not in {"skills", "experience", "education", "projects"}}
+PROFILE_ITEMS = [
+    {"kind": "experience", "data": {
+        "title": "Data & Backend Engineer", "organisation": "Harbour Metrics (fictional)",
+        "start": "2023", "end": None, "current": True, "bullets": [
+            {"id": "b_demo_backend", "text": "Built FastAPI services and PostgreSQL data models with ownership checks and versioned migrations.",
+             "tags": ["backend"], "skills": ["Python", "PostgreSQL"], "alternatives": [
+                 {"id": "v_demo_technical", "text": "Implemented validated Python APIs, tenant ownership checks and PostgreSQL migrations.", "tags": ["backend"]},
+                 {"id": "v_demo_impact", "text": "Made the analytics workspace easier to maintain with tested APIs and repeatable database changes.", "tags": ["data"]}]},
+            {"id": "b_demo_data", "text": "Designed incremental SQL pipelines with duplicate detection and data-quality checks.", "tags": ["data"]},
+            {"id": "b_demo_leadership", "text": "Introduced shared testing and Docker workflows and documented release practices for the team.", "tags": ["leadership", "backend"]}]}},
+    {"kind": "experience", "data": {"title": "Data Analyst", "organisation": "Straits Commerce (fictional)",
+        "start": "2022", "end": "2023", "current": False, "bullets": []}},
+    {"kind": "education", "data": {"qualification": "BSc in Computer Science", "institution": "Example University (fictional)",
+        "start": "2018", "end": "2022", "current": False, "bullets": []}},
+    {"kind": "project", "data": {"name": "Customer retention analytics", "bullets": []}},
+    {"kind": "project", "data": {"name": "Job discovery data pipeline", "bullets": []}},
+    *[{"kind": "skill", "data": {"name": name, "category": infer_skill_category(name)}}
+      for name in LEGACY_PROFILE["skills"]],
+    {"kind": "custom", "data": {"title": "Community interests", "bullets": [
+        {"id": "b_demo_custom", "text": "Organise fictional community coding meetups using synthetic practice datasets.", "tags": ["leadership"]}]}},
+]
+
 CONTENT = {
     "name": PROFILE["name"], "email": PROFILE["email"], "phone": "", "location": "Singapore",
     "summary": PROFILE["summary"],

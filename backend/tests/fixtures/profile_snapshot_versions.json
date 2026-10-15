@@ -1,0 +1,31 @@
+{
+  "headline": "Backend Engineer",
+  "summary": "Builds reliable services",
+  "skills": [],
+  "experience": [
+    {
+      "role": "Engineer",
+      "company": "Fictional Labs",
+      "dates": "2023-07\u2013Present",
+      "skills": [
+        "Python"
+      ]
+    }
+  ],
+  "education": [],
+  "projects": [],
+  "bank_revision": 2,
+  "bullets": [
+    {
+      "id": "b_backend",
+      "item_id": "22222222-2222-2222-2222-222222222222",
+      "text": "Built reliable APIs",
+      "tags": [
+        "backend"
+      ],
+      "skills": [
+        "Python"
+      ]
+    }
+  ]
+}

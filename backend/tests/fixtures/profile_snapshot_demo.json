@@ -1,0 +1,102 @@
+{
+  "name": "Alex Tan",
+  "display_name": "Alex Tan",
+  "email": "alex.tan@example.invalid",
+  "phone": "",
+  "location": "Singapore",
+  "headline": "Data & Backend Engineer",
+  "summary": "Data and backend engineer with four years of experience building reliable Python services, SQL data pipelines and analytics products. Combines PostgreSQL performance tuning, experiment analysis and practical machine learning with clear stakeholder communication.",
+  "skills": [
+    "Python",
+    "SQL",
+    "PostgreSQL",
+    "FastAPI",
+    "Docker",
+    "Git",
+    "pandas",
+    "scikit-learn",
+    "Tableau",
+    "Data modelling",
+    "Unit testing"
+  ],
+  "experience": [
+    {
+      "role": "Data & Backend Engineer",
+      "company": "Harbour Metrics (fictional)",
+      "dates": "2023\u2013Present",
+      "skills": []
+    },
+    {
+      "role": "Data Analyst",
+      "company": "Straits Commerce (fictional)",
+      "dates": "2022\u20132023",
+      "skills": []
+    }
+  ],
+  "education": [
+    {
+      "degree": "BSc in Computer Science",
+      "school": "Example University (fictional)",
+      "dates": "2018\u20132022"
+    }
+  ],
+  "projects": [
+    {
+      "name": "Customer retention analytics",
+      "role": "",
+      "url": "",
+      "dates": "",
+      "skills": []
+    },
+    {
+      "name": "Job discovery data pipeline",
+      "role": "",
+      "url": "",
+      "dates": "",
+      "skills": []
+    }
+  ],
+  "bank_revision": 1,
+  "bullets": [
+    {
+      "id": "b_demo_custom",
+      "item_id": "None",
+      "text": "Organise fictional community coding meetups using synthetic practice datasets.",
+      "tags": [
+        "leadership"
+      ],
+      "skills": []
+    },
+    {
+      "id": "b_demo_backend",
+      "item_id": "None",
+      "text": "Built FastAPI services and PostgreSQL data models with ownership checks and versioned migrations.",
+      "tags": [
+        "backend"
+      ],
+      "skills": [
+        "Python",
+        "PostgreSQL"
+      ]
+    },
+    {
+      "id": "b_demo_data",
+      "item_id": "None",
+      "text": "Designed incremental SQL pipelines with duplicate detection and data-quality checks.",
+      "tags": [
+        "data"
+      ],
+      "skills": []
+    },
+    {
+      "id": "b_demo_leadership",
+      "item_id": "None",
+      "text": "Introduced shared testing and Docker workflows and documented release practices for the team.",
+      "tags": [
+        "leadership",
+        "backend"
+      ],
+      "skills": []
+    }
+  ]
+}

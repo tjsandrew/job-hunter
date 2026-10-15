@@ -1,0 +1,113 @@
+{
+  "applications": [
+    "applied_at",
+    "cover_letter_text",
+    "id",
+    "job_id",
+    "notes",
+    "packet_updated_at",
+    "resume_export_id",
+    "resume_title",
+    "revision",
+    "status",
+    "updated_at",
+    "user_id"
+  ],
+  "document_exports": [
+    "created_at",
+    "document_id",
+    "file_path",
+    "id",
+    "revision",
+    "user_id"
+  ],
+  "documents": [
+    "content",
+    "id",
+    "job_id",
+    "kind",
+    "layout",
+    "reviewed_revision",
+    "revision",
+    "template",
+    "title",
+    "updated_at",
+    "user_id"
+  ],
+  "job_reviews": [
+    "decision",
+    "id",
+    "job_id",
+    "updated_at",
+    "user_id"
+  ],
+  "jobs": [
+    "category",
+    "category_evidence",
+    "category_source",
+    "company",
+    "dedup_key",
+    "description",
+    "embedding",
+    "expires_at",
+    "external_id",
+    "fetched_at",
+    "id",
+    "location",
+    "posted_at",
+    "salary_currency",
+    "salary_max",
+    "salary_min",
+    "salary_period",
+    "skills",
+    "source",
+    "source_board",
+    "source_url",
+    "status",
+    "title",
+    "updated_at",
+    "url",
+    "work_mode"
+  ],
+  "preferences": [
+    "data",
+    "revision",
+    "user_id"
+  ],
+  "profile_versions": [
+    "content_hash",
+    "created_at",
+    "data",
+    "id",
+    "revision",
+    "user_id"
+  ],
+  "profiles": [
+    "confirmed_revision",
+    "draft",
+    "revision",
+    "updated_at",
+    "user_id"
+  ],
+  "uploads": [
+    "content_type",
+    "created_at",
+    "declared_size",
+    "error_code",
+    "extracted_text",
+    "file_path",
+    "filename",
+    "id",
+    "page_count",
+    "sha256",
+    "status",
+    "user_id"
+  ],
+  "users": [
+    "auth_subject",
+    "created_at",
+    "display_name",
+    "id",
+    "plan"
+  ]
+}

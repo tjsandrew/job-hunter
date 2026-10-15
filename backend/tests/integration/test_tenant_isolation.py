@@ -1,4 +1,4 @@
-"""Run against a migrated PostgreSQL DB seeded with Alice and Bob."""
+"""Run against a migrated PostgreSQL DB seeded with Alice and Casey."""
 import os
 from io import BytesIO
 import pytest
@@ -17,7 +17,7 @@ client = TestClient(app)
 
 def test_document_is_invisible_to_other_local_identity():
     headers_alice = {"X-Dev-User": "alice"}
-    headers_bob = {"X-Dev-User": "bob"}
+    headers_casey = {"X-Dev-User": "casey"}
     created = client.post("/v1/documents", headers=headers_alice, json={
         "title": "Tenant isolation test", "template": "classic",
         "content": {"name": "Alice", "sections": []},
@@ -26,8 +26,8 @@ def test_document_is_invisible_to_other_local_identity():
     assert created.status_code == 201, created.text
     document_id = created.json()["id"]
     assert client.get(f"/v1/documents/{document_id}", headers=headers_alice).status_code == 200
-    assert client.get(f"/v1/documents/{document_id}", headers=headers_bob).status_code == 404
-    assert all(row["id"] != document_id for row in client.get("/v1/documents", headers=headers_bob).json()["items"])
+    assert client.get(f"/v1/documents/{document_id}", headers=headers_casey).status_code == 404
+    assert all(row["id"] != document_id for row in client.get("/v1/documents", headers=headers_casey).json()["items"])
 
 def test_recommendations_support_server_side_search_and_offset_pages():
     headers = {"X-Dev-User": "alice"}
@@ -56,13 +56,13 @@ def test_runtime_role_rls_fails_closed_and_switches_tenant_context():
     assert created.status_code == 201, created.text
     document_id = created.json()["id"]
     alice_id = "00000000-0000-4000-8000-000000000001"
-    bob_id = "00000000-0000-4000-8000-000000000002"
+    casey_id = "00000000-0000-4000-8000-000000000002"
     with engine.connect() as connection:
         with connection.begin():
             assert connection.execute(text("SELECT count(*) FROM documents WHERE id=:id"), {"id": document_id}).scalar_one() == 0
             connection.execute(text("SELECT set_config('app.user_id', :user_id, true)"), {"user_id": alice_id})
             assert connection.execute(text("SELECT count(*) FROM documents WHERE id=:id"), {"id": document_id}).scalar_one() == 1
-            connection.execute(text("SELECT set_config('app.user_id', :user_id, true)"), {"user_id": bob_id})
+            connection.execute(text("SELECT set_config('app.user_id', :user_id, true)"), {"user_id": casey_id})
             assert connection.execute(text("SELECT count(*) FROM documents WHERE id=:id"), {"id": document_id}).scalar_one() == 0
 
 def test_pdf_upload_extracts_review_text_and_freezes_the_captured_bytes():
@@ -86,11 +86,11 @@ def test_pdf_upload_extracts_review_text_and_freezes_the_captured_bytes():
     assert "Jordan Tan" in reviewed_candidate.json()["extracted_text"]
     replay = client.put(initiated.json()["upload_url"], headers={**alice, "Content-Type": "application/pdf"}, content=data)
     assert replay.status_code == 409
-    assert client.get(f"/v1/uploads/{upload_id}", headers={"X-Dev-User": "bob"}).status_code == 404
+    assert client.get(f"/v1/uploads/{upload_id}", headers={"X-Dev-User": "casey"}).status_code == 404
 
 def test_application_packet_snapshots_reviewed_resume_and_cover_letter():
     alice = {"X-Dev-User": "alice"}
-    bob = {"X-Dev-User": "bob"}
+    casey = {"X-Dev-User": "casey"}
     from sqlalchemy import create_engine
     from job_hunter.config import settings
     from job_hunter.domain.models import Job
@@ -171,11 +171,11 @@ def test_application_packet_snapshots_reviewed_resume_and_cover_letter():
         assert cleared.json()["resume_packet"] is None
         assert cleared.json()["cover_letter_text"] is None
 
-        foreign_attach = client.put(f"/v1/applications/{job['id']}", headers=bob, json={
+        foreign_attach = client.put(f"/v1/applications/{job['id']}", headers=casey, json={
             "expected_revision": 0, "resume_export_id": export_id,
         })
         assert foreign_attach.status_code == 404
-        assert client.get(f"/v1/exports/{export_id}", headers=bob).status_code == 404
+        assert client.get(f"/v1/exports/{export_id}", headers=casey).status_code == 404
     finally:
         from pathlib import Path
         with Session(owner_engine) as db:
@@ -210,3 +210,32 @@ def test_new_resume_can_keep_its_preparation_job_context():
     assert created.json()['job_id'] == job_id
     loaded = client.get('/v1/documents/' + created.json()['id'], headers={'X-Dev-User': 'alice'})
     assert loaded.json()['job_id'] == job_id
+
+
+def test_profile_bank_rls_hides_items_imports_and_settings_from_casey():
+    from job_hunter.adapters.database import engine
+    alice_id = "00000000-0000-4000-8000-000000000001"
+    casey_id = "00000000-0000-4000-8000-000000000002"
+    created = client.post("/v1/profile/items", headers={"X-Dev-User": "alice"}, json={
+        "kind": "custom", "data": {"title": "Tenant isolation probe", "bullets": []},
+    })
+    assert created.status_code == 201, created.text
+    item_id = created.json()["id"]
+    import_id = uuid4()
+    try:
+        with engine.connect() as connection, connection.begin():
+            connection.execute(text("SELECT set_config('app.user_id', :uid, true)"), {"uid": alice_id})
+            connection.execute(text("INSERT INTO profile_imports (id,user_id,source_type,input_ref) VALUES (:id,:uid,'text','{}')"), {"id": import_id, "uid": alice_id})
+            connection.execute(text("INSERT INTO user_settings (id,user_id,resume_defaults,revision) VALUES (:id,:uid,'{}',1) ON CONFLICT (user_id) DO NOTHING"), {"id": uuid4(), "uid": alice_id})
+            for table in ("profile_items", "profile_imports", "user_settings"):
+                assert connection.execute(text(f"SELECT count(*) FROM {table} WHERE user_id=:uid"), {"uid": alice_id}).scalar_one() >= 1
+            connection.execute(text("SELECT set_config('app.user_id', :uid, true)"), {"uid": casey_id})
+            for table in ("profile_items", "profile_imports", "user_settings"):
+                assert connection.execute(text(f"SELECT count(*) FROM {table} WHERE user_id=:uid"), {"uid": alice_id}).scalar_one() == 0
+            assert connection.execute(text("UPDATE user_settings SET revision=revision+1 WHERE user_id=:uid"), {"uid": alice_id}).rowcount == 0
+            assert connection.execute(text("UPDATE profile_items SET revision=revision+1 WHERE id=:id"), {"id": item_id}).rowcount == 0
+    finally:
+        with engine.connect() as connection, connection.begin():
+            connection.execute(text("SELECT set_config('app.user_id', :uid, true)"), {"uid": alice_id})
+            connection.execute(text("DELETE FROM profile_imports WHERE id=:id"), {"id": import_id})
+        assert client.delete(f"/v1/profile/items/{item_id}", headers={"X-Dev-User": "alice"}).status_code in (200, 204)

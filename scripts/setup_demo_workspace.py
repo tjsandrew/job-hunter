@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from job_hunter.config import settings
 from job_hunter.domain.identity import DEV_USERS
 from job_hunter.domain.models import Document
-from job_hunter.demo import PROFILE, CONTENT
+from job_hunter.demo import PROFILE, PROFILE_ITEMS, CONTENT
 
 assert settings.app_env == "local", "Local demo only"
 base = "http://api:8000/v1"
@@ -23,13 +23,18 @@ def call(path, body=None, method=None):
         return json.load(response)
 
 old_profile = call("/profile")
+old_bank = call("/profile/bank")
 docs = call("/documents?kind=resume")["items"]
 apps = call("/applications")["items"]
 backup = Path("/data/demo-backups")
 backup.mkdir(exist_ok=True)
 snapshot = backup / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S") + ".json")
-snapshot.write_text(json.dumps({"profile": old_profile, "documents": docs, "applications": apps}, indent=2))
+snapshot.write_text(json.dumps({"profile": old_profile, "profile_bank": old_bank, "documents": docs, "applications": apps}, indent=2))
 call("/profile", {"draft": PROFILE, "expected_revision": old_profile["revision"]}, "PUT")
+for item in old_bank["items"]:
+    call("/profile/items/" + item["id"], method="DELETE")
+for item in PROFILE_ITEMS:
+    call("/profile/items", item)
 target = next(a for a in apps if a["job"]["title"] == "Backend Engineer" and a["job"]["company"] == "Meridian Labs")
 title = "Alex Tan — Backend Engineer"
 doc = next((d for d in docs if d["title"] == title), None)

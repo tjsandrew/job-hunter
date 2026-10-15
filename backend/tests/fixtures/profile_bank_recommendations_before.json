@@ -1,0 +1,210 @@
+{
+  "profile": {
+    "name": "Alex Tan",
+    "display_name": "Alex Tan",
+    "email": "alex.tan@example.invalid",
+    "phone": "",
+    "location": "Singapore",
+    "headline": "Data & Backend Engineer",
+    "summary": "Data and backend engineer with four years of experience building reliable Python services, SQL data pipelines and analytics products. Combines PostgreSQL performance tuning, experiment analysis and practical machine learning with clear stakeholder communication.",
+    "skills": [
+      "Python",
+      "SQL",
+      "PostgreSQL",
+      "FastAPI",
+      "Docker",
+      "Git",
+      "pandas",
+      "scikit-learn",
+      "Tableau",
+      "Data modelling",
+      "Unit testing"
+    ],
+    "experience": [
+      {
+        "role": "Data & Backend Engineer",
+        "company": "Harbour Metrics (fictional)",
+        "dates": "2023\u2013Present"
+      },
+      {
+        "role": "Data Analyst",
+        "company": "Straits Commerce (fictional)",
+        "dates": "2022\u20132023"
+      }
+    ],
+    "education": [
+      {
+        "degree": "BSc in Computer Science",
+        "school": "Example University (fictional)",
+        "dates": "2018\u20132022"
+      }
+    ],
+    "projects": [
+      {
+        "name": "Customer retention analytics"
+      },
+      {
+        "name": "Job discovery data pipeline"
+      }
+    ]
+  },
+  "jobs": [
+    {
+      "id": "backend",
+      "title": "Backend Engineer",
+      "company": "Meridian Labs",
+      "location": "Singapore",
+      "work_mode": "hybrid",
+      "skills": [
+        "Python",
+        "PostgreSQL"
+      ],
+      "description": "Build APIs and data services with a collaborative engineering team."
+    },
+    {
+      "id": "analyst",
+      "title": "Product Data Analyst",
+      "company": "Harbour Analytics",
+      "location": "Singapore",
+      "work_mode": "onsite",
+      "skills": [
+        "SQL",
+        "Analytics"
+      ],
+      "description": "Turn product data into clear experiments and recommendations."
+    },
+    {
+      "id": "frontend",
+      "title": "Frontend Developer",
+      "company": "Northstar Pte Ltd",
+      "location": "Remote",
+      "work_mode": "remote",
+      "skills": [
+        "React",
+        "TypeScript"
+      ],
+      "description": "Create accessible web experiences for customers across Asia."
+    }
+  ],
+  "preferences": {
+    "roles": [],
+    "locations": [
+      "Singapore"
+    ],
+    "work_modes": [],
+    "seniority": null,
+    "salary_min": null,
+    "salary_currency": "SGD",
+    "salary_period": "year"
+  },
+  "expected": [
+    {
+      "job": {
+        "id": "backend",
+        "title": "Backend Engineer",
+        "company": "Meridian Labs",
+        "location": "Singapore",
+        "work_mode": "hybrid",
+        "skills": [
+          "Python",
+          "PostgreSQL"
+        ],
+        "description": "Build APIs and data services with a collaborative engineering team."
+      },
+      "score": 0.330357,
+      "score_label": "relevance score (not probability)",
+      "components": {
+        "text_similarity": 0.333442,
+        "skill_overlap": 0.181818,
+        "role_alignment": 0.666667
+      },
+      "reason": "Python appears in the listing; PostgreSQL appears in the listing; The title aligns with target role Data & Backend Engineer",
+      "evidence": [
+        {
+          "kind": "skill_match",
+          "text": "Python appears in the listing",
+          "skill": "Python",
+          "source": "job.skills",
+          "matched_text": "Python"
+        },
+        {
+          "kind": "skill_match",
+          "text": "PostgreSQL appears in the listing",
+          "skill": "PostgreSQL",
+          "source": "job.skills",
+          "matched_text": "PostgreSQL"
+        },
+        {
+          "kind": "target_role",
+          "text": "The title aligns with target role Data & Backend Engineer",
+          "target_role": "Data & Backend Engineer"
+        },
+        {
+          "kind": "location_eligibility",
+          "text": "The listing location matches a selected location",
+          "job_location": "Singapore",
+          "selected_locations": [
+            "Singapore"
+          ]
+        }
+      ],
+      "matched_skills": [
+        "Python",
+        "PostgreSQL"
+      ],
+      "ranking_version": "local_tfidf_hybrid_v1",
+      "mode": "local_hybrid",
+      "rank": 1
+    },
+    {
+      "job": {
+        "id": "analyst",
+        "title": "Product Data Analyst",
+        "company": "Harbour Analytics",
+        "location": "Singapore",
+        "work_mode": "onsite",
+        "skills": [
+          "SQL",
+          "Analytics"
+        ],
+        "description": "Turn product data into clear experiments and recommendations."
+      },
+      "score": 0.295679,
+      "score_label": "relevance score (not probability)",
+      "components": {
+        "text_similarity": 0.227721,
+        "skill_overlap": 0.090909,
+        "role_alignment": 1.0
+      },
+      "reason": "SQL appears in the listing; The title aligns with target role Data Analyst; The listing location matches a selected location",
+      "evidence": [
+        {
+          "kind": "skill_match",
+          "text": "SQL appears in the listing",
+          "skill": "SQL",
+          "source": "job.skills",
+          "matched_text": "SQL"
+        },
+        {
+          "kind": "target_role",
+          "text": "The title aligns with target role Data Analyst",
+          "target_role": "Data Analyst"
+        },
+        {
+          "kind": "location_eligibility",
+          "text": "The listing location matches a selected location",
+          "job_location": "Singapore",
+          "selected_locations": [
+            "Singapore"
+          ]
+        }
+      ],
+      "matched_skills": [
+        "SQL"
+      ],
+      "ranking_version": "local_tfidf_hybrid_v1",
+      "mode": "local_hybrid",
+      "rank": 2
+    }
+  ]
+}

@@ -25,6 +25,14 @@ from job_hunter.domain.models import (User, Profile, Preference, Job, JobReview,
 from job_hunter.domain.models import Base
 from job_hunter.adapters.database import engine
 from job_hunter.preparation.rendering import pdf_bytes
+from job_hunter.profile_bank import services as bank_services
+from job_hunter.profile_bank.services import BankError
+from job_hunter.api.profile_bank import build_router
+from job_hunter.api.document_checks import check_bank_fields
+from job_hunter.api.resume_build import build_router as build_resume_router
+from job_hunter.profile_bank.build import blank_document_parts
+from job_hunter.profile_bank.importing import ImportFailure
+from job_hunter.profile_bank.importing.docx import CONTENT_TYPES, declared_file_problem, detect_resume_file, extract_docx
 
 app = FastAPI(title="Job Hunter API", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=[x.strip() for x in settings.cors_origins.split(",")],
@@ -55,7 +63,7 @@ def identity(x_dev_user: str | None = Header(default=None)) -> str:
         raise HTTPException(401, detail={"code": "AUTH_REQUIRED", "message": "Identity provider is not configured"})
     chosen = x_dev_user or settings.dev_default_user
     if chosen not in DEV_USERS:
-        raise HTTPException(401, detail={"code": "INVALID_DEV_IDENTITY", "message": "Use alice or bob in local mode"})
+        raise HTTPException(401, detail={"code": "INVALID_DEV_IDENTITY", "message": "Use alice or casey in local mode"})
     return chosen
 
 def db_for(user_key: str = Depends(identity)):
@@ -82,7 +90,7 @@ class ProfileWrite(BaseModel):
     expected_revision: int
 
 class ConfirmWrite(BaseModel):
-    expected_revision: int
+    expected_bank_revision: int = Field(ge=0)
 
 class PreferencesWrite(BaseModel):
     roles: list[str] = []
@@ -133,7 +141,13 @@ class UploadCreate(BaseModel):
     content_type: str
     size_bytes: int = Field(gt=0, le=10 * 1024 * 1024)
 
-def validate_document(template: str, content: dict, layout: dict) -> None:
+def validate_document(template: str, content: dict, layout: dict, db: Session | None = None,
+                      existing_content: dict | None = None) -> None:
+    """Check a resume's shape and limits.
+
+    With ``db``, entry sources must point to the caller's own profile items; IDs
+    already in ``existing_content`` (the stored resume being edited) are not checked again.
+    """
     if not isinstance(content, dict) or not isinstance(layout, dict):
         raise HTTPException(422, detail={"code": "INVALID_CONTENT", "message": "Content and layout must be objects"})
     for field in ("name", "email", "phone", "location", "summary"):
@@ -172,6 +186,7 @@ def validate_document(template: str, content: dict, layout: dict) -> None:
                 raise HTTPException(422, detail={"code": "INVALID_CONTENT", "message": "Entries must contain bullet lists"})
             if any(not isinstance(b, str) or len(b) > 4000 for b in entry.get("bullets", [])):
                 raise HTTPException(422, detail={"code": "INVALID_CONTENT", "message": "Bullets must be text up to 4000 characters"})
+    check_bank_fields(content, layout, db, existing_content)
 
 def inspect_pdf(data: bytes) -> dict[str, Any]:
     """Extract bounded text without trying to infer structured profile facts."""
@@ -192,6 +207,16 @@ def inspect_pdf(data: bytes) -> dict[str, Any]:
     except Exception:
         return {"status": "unsupported", "error_code": "INVALID_OR_CORRUPT_PDF", "page_count": None, "text": None}
 
+def inspect_docx(data: bytes) -> dict[str, Any]:
+    """Bounded text of a safe .docx, for the same review-only step as PDFs (Word files have no page count)."""
+    try:
+        extracted = extract_docx(data)
+    except ImportFailure as exc:
+        return {"status": "unsupported", "error_code": exc.code, "page_count": None, "text": None}
+    except Exception:
+        return {"status": "unsupported", "error_code": "INVALID_OR_CORRUPT_DOCX", "page_count": None, "text": None}
+    return {"status": "ready_for_review", "error_code": None, "page_count": None, "text": extracted.text[:120000]}
+
 @app.get("/v1/health")
 def health():
     return {"status": "ok"}
@@ -205,38 +230,24 @@ def me(db: Session = Depends(db_for)):
             "allowance": {"limit": limit, "used": None, "remaining": None, "period": period, "enabled": False},
             "ai_available": False, "ai_status": "AI generation is not configured in this local POC"}
 
+@app.exception_handler(BankError)
+async def bank_error_handler(request: Request, exc: BankError):
+    return await http_error_handler(request, HTTPException(exc.status, detail={
+        "code": exc.code, "message": exc.message}))
+
 @app.get("/v1/profile")
 def profile(db: Session = Depends(db_for)):
-    user = current_user(db); item = db.get(Profile, user.id)
-    if item is None: return {"draft": {}, "revision": 0, "confirmed_revision": None}
-    return {"draft": item.draft, "revision": item.revision, "confirmed_revision": item.confirmed_revision}
+    return bank_services.read_basics(db)
 
 @app.put("/v1/profile")
 def update_profile(body: ProfileWrite, db: Session = Depends(db_for)):
-    user = current_user(db); item = db.scalar(select(Profile).where(Profile.user_id == user.id).with_for_update())
-    if item is None:
-        if body.expected_revision != 0: raise HTTPException(409, detail={"code": "REVISION_CONFLICT", "message": "Profile changed"})
-        item = Profile(user_id=user.id, revision=1, draft=body.draft); db.add(item)
-    else:
-        if item.revision != body.expected_revision: raise HTTPException(409, detail={"code": "REVISION_CONFLICT", "message": "Profile changed"})
-        item.draft = body.draft; item.revision += 1; item.updated_at = now_utc()
-    return {"draft": item.draft, "revision": item.revision, "confirmed_revision": item.confirmed_revision}
+    return bank_services.update_basics(db, body.draft, body.expected_revision)
 
 @app.post("/v1/profile/confirm")
 def confirm_profile(body: ConfirmWrite, db: Session = Depends(db_for)):
-    item = db.scalar(select(Profile).where(Profile.user_id == current_user(db).id).with_for_update())
-    if item is None or item.revision != body.expected_revision:
-        raise HTTPException(409, detail={"code": "REVISION_CONFLICT", "message": "Profile changed"})
-    data = item.draft
-    content_hash = hashlib.sha256(json.dumps(data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    version = db.scalar(select(ProfileVersion).where(ProfileVersion.user_id == item.user_id,
-                                ProfileVersion.revision == item.revision))
-    if version is None:
-        version = ProfileVersion(user_id=item.user_id, revision=item.revision, data=data, content_hash=content_hash)
-        db.add(version)
-    item.confirmed_revision = item.revision
-    return {"confirmed": True, "revision": item.revision, "profile_version_id": str(version.id),
-            "embedding_status": "unavailable"}
+    return bank_services.confirm_bank(db, body.expected_bank_revision)
+
+app.include_router(build_router(db_for))
 
 @app.get("/v1/preferences")
 def get_preferences(db: Session = Depends(db_for)):
@@ -261,9 +272,8 @@ def recommendations(db: Session = Depends(db_for), limit: int = Query(20, ge=1, 
     jobs = db.scalars(select(Job).where(Job.status == "open")).all()
     reviews = {r.job_id: r.decision for r in db.scalars(select(JobReview)).all()}
     prefs = db.get(Preference, current_user(db).id)
-    profile = db.get(Profile, current_user(db).id)
     candidates = [job_out(job) for job in jobs if reviews.get(job.id) not in {"saved", "dismissed"}]
-    ranked = rank_jobs(candidates, profile.draft if profile else {}, prefs.data if prefs else {})
+    ranked = rank_jobs(candidates, bank_services.build_profile_snapshot(db), prefs.data if prefs else {})
     query = q.strip().casefold() if q else ""
     if query:
         ranked = [row for row in ranked if query in " ".join(str(row["job"].get(field) or "")
@@ -416,18 +426,26 @@ def put_application(job_id: UUID, body: ApplicationWrite, db: Session = Depends(
     db.flush()
     return application_out(item, db)
 
+app.include_router(build_resume_router(db_for, validate_document=validate_document, doc_out=doc_out))
+
 @app.get("/v1/documents")
 def list_documents(kind: str | None = None, db: Session = Depends(db_for)):
     stmt = select(Document).where(Document.user_id == current_user(db).id)
-    if kind: stmt = stmt.where(Document.kind == kind)
+    # Without a kind, archived (deleted) resumes stay out of the list; ask for kind=archived to see them.
+    stmt = stmt.where(Document.kind == kind) if kind else stmt.where(Document.kind != "archived")
     return {"items": [doc_out(x) for x in db.scalars(stmt.order_by(Document.updated_at.desc())).all()]}
 
 @app.post("/v1/documents", status_code=201)
 def create_document(body: DocumentCreate, db: Session = Depends(db_for)):
-    validate_document(body.template, body.content, body.layout)
+    # A new, empty resume starts from the user's resume defaults and profile basics.
+    template, content, layout = blank_document_parts(
+        body.template if "template" in body.model_fields_set else None, body.content,
+        body.layout if "layout" in body.model_fields_set else None,
+        bank_services.read_basics(db)["draft"], bank_services.get_settings(db)["resume_defaults"])
+    validate_document(template, content, layout, db)
     if body.job_id is not None and db.get(Job, body.job_id) is None: not_found()
-    item = Document(user_id=current_user(db).id, title=body.title, template=body.template,
-                    content=body.content, layout=body.layout, revision=1, job_id=body.job_id)
+    item = Document(user_id=current_user(db).id, title=body.title, template=template,
+                    content=content, layout=layout, revision=1, job_id=body.job_id)
     db.add(item); db.flush()
     return doc_out(item)
 
@@ -439,19 +457,36 @@ def get_document(document_id: UUID, db: Session = Depends(db_for)):
 
 @app.patch("/v1/documents/{document_id}")
 def patch_document(document_id: UUID, body: DocumentPatch, db: Session = Depends(db_for)):
-    item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id).with_for_update())
+    item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id, Document.kind == "resume").with_for_update())
     if item is None: not_found()
     if item.revision != body.expected_revision: raise HTTPException(409, detail={"code": "REVISION_CONFLICT", "message": "Document changed"})
     changes = body.model_dump(exclude={"expected_revision"}, exclude_unset=True)
     template = changes.get("template", item.template); content = changes.get("content", item.content); layout = changes.get("layout", item.layout)
-    validate_document(template, content, layout)
+    validate_document(template, content, layout, db, item.content)
     for key, value in changes.items(): setattr(item, key, value)
     item.revision += 1; item.reviewed_revision = None; item.updated_at = now_utc()
     return doc_out(item)
 
+@app.delete("/v1/documents/{document_id}", status_code=204)
+def archive_document(document_id: UUID, db: Session = Depends(db_for)):
+    """Archive a resume: it leaves the library but its exports and application snapshots keep working."""
+    item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id,
+                                            Document.kind.in_(("resume", "archived"))).with_for_update())
+    if item is None: not_found()
+    if item.kind == "resume": item.kind = "archived"
+    return Response(status_code=204)
+
+@app.post("/v1/documents/{document_id}/restore")
+def restore_document(document_id: UUID, db: Session = Depends(db_for)):
+    item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id,
+                                            Document.kind.in_(("resume", "archived"))).with_for_update())
+    if item is None: not_found()
+    if item.kind == "archived": item.kind = "resume"
+    return doc_out(item)
+
 @app.post("/v1/documents/{document_id}/duplicate", status_code=201)
 def duplicate_document(document_id: UUID, body: DuplicateWrite, db: Session = Depends(db_for)):
-    item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id))
+    item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id, Document.kind == "resume"))
     if item is None: not_found()
     if body.job_id and db.get(Job, body.job_id) is None: not_found()
     copy = Document(user_id=item.user_id, title=body.title or f"{item.title} copy", kind=item.kind,
@@ -461,7 +496,7 @@ def duplicate_document(document_id: UUID, body: DuplicateWrite, db: Session = De
 
 @app.post("/v1/documents/{document_id}/review")
 def review_document(document_id: UUID, body: DocumentReview, db: Session = Depends(db_for)):
-    item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id).with_for_update())
+    item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id, Document.kind == "resume").with_for_update())
     if item is None: not_found()
     if body.expected_revision != item.revision: raise HTTPException(409, detail={"code": "REVISION_CONFLICT", "message": "Document changed"})
     item.reviewed_revision = item.revision
@@ -479,7 +514,7 @@ def preview_document(document_id: UUID, db: Session = Depends(db_for)):
 
 @app.post("/v1/documents/{document_id}/exports", status_code=201)
 def export_document(document_id: UUID, db: Session = Depends(db_for)):
-    item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id).with_for_update())
+    item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id, Document.kind == "resume").with_for_update())
     if item is None: not_found()
     if item.reviewed_revision != item.revision:
         raise HTTPException(409, detail={"code": "REVIEW_REQUIRED", "message": "Review the current revision before export"})
@@ -503,10 +538,11 @@ def download_export(export_id: UUID, db: Session = Depends(db_for)):
 
 @app.post("/v1/uploads", status_code=201)
 def upload_resume(body: UploadCreate, db: Session = Depends(db_for)):
-    if body.content_type != "application/pdf" or not body.filename.lower().endswith(".pdf"):
-        raise HTTPException(422, detail={"code": "UNSUPPORTED_FILE", "message": "Upload a PDF resume"})
+    declared = declared_file_problem(body.filename, body.content_type)
+    if isinstance(declared, tuple):
+        raise HTTPException(422, detail={"code": declared[0], "message": declared[1]})
     upload_id = uuid4(); directory = Path(settings.pdf_storage_dir).resolve().parent / "uploads"; directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"{current_user(db).id}-{upload_id}.pdf"
+    path = directory / f"{current_user(db).id}-{upload_id}.{declared}"
     upload = Upload(id=upload_id, user_id=current_user(db).id, filename=Path(body.filename).name,
                     content_type=body.content_type, declared_size=body.size_bytes,
                     file_path=str(path)); db.add(upload); db.flush()
@@ -523,16 +559,21 @@ async def save_upload_content(upload_id: UUID, request: Request, db: Session = D
     async for chunk in request.stream():
         total_size += len(chunk)
         if total_size > min(item.declared_size, 10 * 1024 * 1024):
-            raise HTTPException(413, detail={"code": "UPLOAD_TOO_LARGE", "message": "PDF exceeds its declared size or the 10 MiB limit"})
+            raise HTTPException(413, detail={"code": "UPLOAD_TOO_LARGE", "message": "File exceeds its declared size or the 10 MiB limit"})
         parts.append(chunk)
     data = b"".join(parts)
     if total_size != item.declared_size:
         raise HTTPException(422, detail={"code": "SIZE_MISMATCH", "message": "Uploaded byte count does not match the declared size"})
-    if not data.startswith(b"%PDF-"):
-        raise HTTPException(422, detail={"code": "INVALID_PDF", "message": "PDF must be valid and at most 10 MiB"})
+    try:
+        kind = detect_resume_file(data)
+    except ImportFailure as exc:
+        raise HTTPException(422, detail={"code": exc.code, "message": str(exc)})
+    # The bytes decide the type, so a renamed file is stored (and later served) as what it really is.
+    item.content_type = CONTENT_TYPES[kind]
+    item.file_path = str(Path(item.file_path).with_suffix(f".{kind}"))
     Path(item.file_path).write_bytes(data)
     item.sha256 = hashlib.sha256(data).hexdigest()
-    parsed = inspect_pdf(data)
+    parsed = inspect_pdf(data) if kind == "pdf" else inspect_docx(data)
     item.status = parsed["status"]
     item.page_count = parsed["page_count"]
     item.extracted_text = parsed["text"]

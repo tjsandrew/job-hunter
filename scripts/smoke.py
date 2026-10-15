@@ -24,8 +24,8 @@ def call(path, method='GET', body=None, user='alice', expected=200):
 def main():
     call('/health')
     alice = call('/me')
-    bob = call('/me', user='bob')
-    assert alice != bob
+    casey = call('/me', user='casey')
+    assert alice != casey
     jobs = call('/recommendations')
     assert isinstance(jobs['items'], list)
     doc = call('/documents', 'POST', {
@@ -37,7 +37,7 @@ def main():
                          'dates': '2025–2026', 'bullets': ['Built a tested application.']}]}]},
         'layout': {'font_size': 11, 'margin': 18}}, expected=201)
     path = '/documents/' + doc['id']
-    call(path, user='bob', expected=404)
+    call(path, user='casey', expected=404)
     call(path, 'PATCH', {'title': 'Should conflict', 'expected_revision': 0}, expected=409)
     preview = call(path + '/preview.pdf')
     assert preview.startswith(b'%PDF')
@@ -46,16 +46,16 @@ def main():
     export = call(path + '/exports', 'POST', expected=201)
     assert export['export_id']
     assert call('/exports/' + export['export_id']).startswith(b'%PDF')
-    call('/exports/' + export['export_id'], user='bob', expected=404)
+    call('/exports/' + export['export_id'], user='casey', expected=404)
     upload = call('/uploads', 'POST', {'filename': 'synthetic-resume.pdf',
                   'content_type': 'application/pdf', 'size_bytes': len(preview)}, expected=201)
     upload_path = '/uploads/' + upload['upload_id']
-    call(upload_path + '/content', 'PUT', preview, user='bob', expected=404)
+    call(upload_path + '/content', 'PUT', preview, user='casey', expected=404)
     parsed = call(upload_path + '/content', 'PUT', preview)
     assert parsed['status'] == 'ready_for_review', parsed
     candidate = call(upload_path)
     assert 'Synthetic Applicant' in candidate['extracted_text']
-    call(upload_path, user='bob', expected=404)
+    call(upload_path, user='casey', expected=404)
     call(upload_path + '/content', 'PUT', preview, expected=409)
     print('PASS: health, identities, recommendations, persistence, owner isolation, revision conflict, PDF preview, review-gated export, immutable upload and candidate text extraction')
 

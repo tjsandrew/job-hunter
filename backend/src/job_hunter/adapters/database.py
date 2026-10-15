@@ -1,4 +1,6 @@
 from collections.abc import Generator
+from pathlib import Path
+import logging
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session, sessionmaker
 from job_hunter.config import settings
@@ -21,6 +23,11 @@ def get_db(dev_identity: str) -> Generator[Session, None, None]:
         session.info["current_user"] = user
         yield session
         session.commit()
+        for file_path in session.info.get("profile_upload_cleanup", []):
+            try:
+                Path(file_path).unlink(missing_ok=True)
+            except OSError:
+                logging.getLogger(__name__).exception("Profile upload cleanup failed after commit")
     except Exception:
         session.rollback()
         raise
