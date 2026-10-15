@@ -17,6 +17,9 @@ dependencies = [
   "reportlab>=4.2,<5",
   "pgvector>=0.3,<1",
   "pypdf>=5.0,<7",
+  "pdfplumber>=0.11,<1",
+  "jsonschema>=4,<5",
+  "python-docx>=1.1,<2",
 ]
 
 [project.optional-dependencies]
@@ -26,7 +29,7 @@ test = ["pytest==9.1.1", "httpx==0.28.1"]
 where = ["src"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "."]  # "." lets tests share helpers via `tests.…` imports
 testpaths = ["tests"]
 
 [tool.ruff]
@@ -34,3 +37,5 @@ line-length = 100
 
 [tool.setuptools.package-data]
 "job_hunter.preparation" = ["fonts/*.ttf", "fonts/*.md", "fonts/*.txt"]
+
+"job_hunter.profile_bank.importing" = ["*.json"]

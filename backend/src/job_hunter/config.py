@@ -1,3 +1,4 @@
+from typing import Literal
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,6 +11,9 @@ class Settings(BaseSettings):
     pdf_storage_dir: str = "./data/exports"
     cors_origins: str = "http://localhost:5173"
     migration_database_url: str | None = None
+    model_backend: Literal["heuristic", "fake", "ollama", "bedrock"] = "heuristic"
+    ollama_url: str = "http://host.docker.internal:11434"
+    ollama_model: str = "llama3.2"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

@@ -23,6 +23,9 @@ services:
       MIGRATION_DATABASE_URL: postgresql+psycopg://jobhunter:jobhunter@db:5432/jobhunter
       STORAGE_ROOT: /data
       PDF_STORAGE_DIR: /data/exports
+      MODEL_BACKEND: ${MODEL_BACKEND:-heuristic}
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
     command: >-
       sh -c 'alembic upgrade head &&
       DATABASE_URL=$$MIGRATION_DATABASE_URL python -m job_hunter.seed &&
