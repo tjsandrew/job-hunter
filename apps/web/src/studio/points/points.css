@@ -1,0 +1,79 @@
+/* Point rows: [up][down] text [more], always visible */
+.point-row { display: flex; align-items: flex-start; gap: 6px; margin: 8px 0; }
+.point-move { display: flex; gap: 2px; flex: none; }
+.point-row .icon-button { width: 32px; height: 32px; min-width: 32px; min-height: 32px; flex: none; }
+.point-row .icon-button:disabled { opacity: .35; cursor: default; background: transparent; }
+.point-row .icon-button .icon { width: 15px; height: 15px; }
+.point-row textarea { flex: 1; min-width: 0; padding: 8px; border: 1px solid #c7d2e1; border-radius: 7px; color: #233750; line-height: 1.55; resize: vertical; font-size: 13px; outline: 0; }
+.point-row textarea:focus { border-color: #3157ce; box-shadow: 0 0 0 2px #3157ce26; }
+.point-more { font-size: 20px; line-height: 1; font-weight: 700; color: #3d4f69; }
+.point-row .point-more[aria-expanded="true"] { background: #eaf0fc; color: #3157ce; }
+@media (max-width: 480px) {
+  .point-row { gap: 4px; }
+  .point-move { flex-direction: column; gap: 2px; }
+  .point-row .icon-button { width: 36px; height: 36px; min-width: 36px; min-height: 36px; }
+  .point-row textarea { font-size: 16px; }
+}
+
+/* Point menu: popup on desktop, bottom sheet on touch / narrow screens */
+.point-menu { background: #fff; border: 1px solid #c7d2e1; border-radius: 10px; box-shadow: 0 10px 30px #14243b33; padding: 6px; min-width: 210px; max-width: min(360px, calc(100vw - 16px)); z-index: 60; }
+.point-popup { position: fixed; }
+.point-menu-parent { position: relative; }
+.point-menu-item { display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 100%; text-align: left; background: transparent; border: 0; border-radius: 7px; padding: 8px 10px; font: inherit; font-size: 14px; color: #233750; cursor: pointer; }
+.point-menu-item:hover, .point-menu-item:focus-visible { background: #eaf0fc; outline: 0; }
+.point-menu-item[aria-current="true"] { font-weight: 600; }
+.point-menu-item.is-disabled { color: #8a96a8; cursor: not-allowed; }
+.point-menu-item.is-disabled:hover { background: transparent; }
+.point-menu [role="separator"] { height: 1px; background: #dce5f1; margin: 5px 4px; }
+.point-submenu { position: absolute; top: -6px; left: calc(100% + 4px); width: 300px; max-width: 80vw; }
+.point-submenu.flip { left: auto; right: calc(100% + 4px); }
+.point-sheet-backdrop { position: fixed; inset: 0; z-index: 59; background: #14243b66; display: flex; align-items: flex-end; }
+.point-sheet { position: static; width: 100%; max-width: none; border-radius: 16px 16px 0 0; padding: 10px 12px calc(14px + env(safe-area-inset-bottom)); max-height: 80vh; overflow-y: auto; z-index: 60; }
+.point-sheet .point-menu-item { padding: 12px 10px; font-size: 16px; }
+.point-sheet-title { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: #58677d; padding: 8px 10px 2px; }
+.point-sheet-cancel { justify-content: center; margin-top: 6px; border: 1px solid #c7d2e1; }
+
+/* Dialogs and confirmation */
+.point-dialog { max-width: 460px; width: 100%; max-height: 90vh; overflow-y: auto; }
+.point-dialog h2 { margin: 0 0 8px; font-size: 20px; }
+.point-dialog-note { color: #58677d; font-size: 14px; margin: 6px 0; }
+.point-dialog-quote { margin: 8px 0; padding: 8px 12px; border-left: 3px solid #c7d2e1; background: #f0f4fb; border-radius: 0 7px 7px 0; font-size: 14px; overflow-wrap: anywhere; }
+.point-dialog-choices { display: grid; gap: 6px; margin: 10px 0; }
+.point-dialog-choice { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; }
+.point-dialog-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.point-toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 70; display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 32px); background: #edf5f0; border: 1px solid #b4d4be; padding: 8px 12px; border-radius: 10px; box-shadow: 0 6px 20px #14243b26; font-size: 14px; }
+.point-toast.is-error { background: #fcf0ee; border-color: #e5b9b2; }
+
+/* More from this job, Add from profile */
+.more-from-job { margin-top: 10px; padding: 8px 10px; border: 1px dashed #c7d2e1; border-radius: 8px; background: #f7f9fd; }
+.more-from-job-title { font-size: 12px; font-weight: 600; letter-spacing: .04em; color: #58677d; margin-bottom: 4px; }
+.more-from-job-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; padding: 3px 0; }
+.more-from-job-row > span { min-width: 0; overflow-wrap: anywhere; }
+.more-from-job-row .button { flex: none; }
+.section-add-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.section-add-row .add-entry { margin: 0; }
+.point-picker { display: grid; gap: 10px; margin-top: 8px; }
+.point-picker-item { border: 1px solid #dce5f1; border-radius: 8px; padding: 8px 10px; }
+.point-picker-head, .point-picker-point label { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; }
+.point-picker-head small { color: #58677d; }
+.point-picker-points { display: grid; gap: 8px; margin: 8px 0 0 24px; }
+.point-picker-point { display: grid; gap: 4px; }
+.point-picker-point select { max-width: 100%; font-size: 13px; }
+
+/* Section hide */
+.section-editor.is-hidden .entry-editor, .section-editor.is-hidden .section-add-row { opacity: .55; }
+.section-editor.is-hidden .section-edit-head { background: #f3f4f6; }
+.section-hidden-note { flex: none; font-size: 12px; color: #58677d; padding: 0 6px; white-space: nowrap; }
+.section-hide { flex: none; }
+@media (max-width: 480px) {
+  .section-edit-head { flex-wrap: wrap; height: auto; min-height: 46px; padding-top: 4px; padding-bottom: 4px; }
+  .section-edit-head .section-title-input { min-width: 0; flex: 1 1 120px; }
+}
+.point-date-note { display: block; margin: -4px 0 8px; color: #58677d; font-size: 12px; }
+
+.point-toast-undo { flex: none; padding: 2px 10px; min-height: 30px; }
+@media (max-width: 480px) {
+  .point-toast { left: 16px; right: 16px; transform: none; max-width: none; bottom: calc(12px + env(safe-area-inset-bottom)); }
+  .point-toast > span { flex: 1; min-width: 0; }
+  .point-dialog-actions .button { flex: 1 1 100%; }
+}

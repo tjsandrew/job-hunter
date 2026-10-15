@@ -1,0 +1,100 @@
+/* Resume preview: style keys. Documents without the keys get none of these classes and look as before. */
+.resume-paper.heading-small-caps .paper-section h2 { text-transform: none; font-variant: small-caps; letter-spacing: .08em; border-bottom: 0; font-size: 1.14em; padding-bottom: 0; }
+.resume-paper.heading-bold .paper-section h2 { text-transform: none; letter-spacing: 0; font-weight: 800; border-bottom: 0; padding-bottom: 0; }
+.resume-paper.accent-black { --accent: #15181a; }
+.resume-paper.accent-navy { --accent: #1f3a68; }
+.resume-paper.accent-teal { --accent: #0f6b6b; }
+.resume-paper.accent-maroon { --accent: #7a1f2b; }
+.resume-paper[class*='accent-'] .paper-header h1,
+.resume-paper[class*='accent-'] .paper-section h2,
+.resume-paper.modern[class*='accent-'] .paper-section h2 { color: var(--accent); border-color: var(--accent); }
+.resume-paper[class*='accent-'] .paper-header,
+.resume-paper.modern[class*='accent-'] .paper-header { border-bottom-color: var(--accent); }
+.resume-paper.header-left .paper-header { text-align: left; }
+.resume-paper.header-center .paper-header { text-align: center; }
+.resume-paper.contact-lines .paper-header div { white-space: pre-line; }
+.resume-paper.spacing-compact .paper-section { margin: 7px 0; }
+.resume-paper.spacing-compact .paper-entry { margin-bottom: 5px; }
+.resume-paper.spacing-airy .paper-section { margin: 20px 0; }
+.resume-paper.spacing-airy .paper-entry { margin-bottom: 14px; }
+.resume-paper.bullet-dot .paper-entry ul { list-style-type: disc; }
+.resume-paper.bullet-dash .paper-entry ul { list-style-type: "– "; }
+.resume-paper.bullet-square .paper-entry ul { list-style-type: "▪ "; }
+.paper-skills { margin: 0; font-size: .9em; line-height: 1.45; }
+.paper-skills.grouped p { margin: 2px 0; }
+.paper-skills.columns { columns: 3 110px; column-gap: 18px; padding-left: 17px; margin: 4px 0; }
+.paper-skills.columns li { break-inside: avoid; margin: 2px 0; }
+
+/* Layout settings panel */
+.resume-layout-fields { max-height: min(70vh, 540px); overflow-y: auto; }
+.style-field select { width: 100%; }
+.style-defaults { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.style-message { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--green2); line-height: 1.5; }
+.style-message.error { color: #a52c39; }
+
+/* New resume chooser and build flow */
+.starts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 20px; }
+.start-card { display: grid; gap: 4px; align-content: start; text-align: left; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); }
+.start-card b { font-size: 14px; }
+.start-card span { font-size: 12px; color: var(--muted); line-height: 1.45; }
+.start-card:hover:not(:disabled) { border-color: #8da4dc; }
+.start-card.selected { border-color: var(--green2); background: var(--pale); box-shadow: inset 0 0 0 1px var(--green2); }
+.start-card:focus-visible { outline: 3px solid #3157ce; outline-offset: 2px; }
+.build-flow, .build-pick { min-width: 0; }
+.build-pick { padding: 20px; max-width: 520px; display: grid; gap: 14px; justify-items: start; }
+.build-pick h2 { margin: 0; font-size: 17px; }
+.build-pick .field { width: 100%; }
+.build-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.build-main, .build-job, .build-create { padding: 20px; min-width: 0; }
+.build-side { display: grid; gap: 20px; min-width: 0; }
+.build-main .panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.build-main .panel-heading h2 { margin: 0; font-size: 17px; }
+.build-job { display: grid; gap: 16px; }
+.build-job h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); margin: 0 0 8px; }
+.build-job-title { font-size: 15px; }
+.build-job-sub { margin: 3px 0 0; font-size: 12px; color: var(--muted); }
+.build-cover-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--muted); }
+.build-meter { height: 8px; border-radius: 99px; background: #e8eaf0; overflow: hidden; margin-top: 8px; }
+.build-meter span { display: block; height: 100%; background: var(--green2); }
+.build-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.build-missing { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.build-missing li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+.build-missing li > span { flex: 1 1 100%; font-weight: 600; }
+.build-missing select { max-width: 120px; }
+.build-muted { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.6; }
+.build-later { margin: 16px 0 0; font-size: 12px; color: var(--muted); line-height: 1.6; }
+.build-create { display: grid; gap: 14px; }
+.build-create .field { margin: 0; }
+.build-check { display: flex; gap: 9px; align-items: center; font-size: 13px; }
+.build-check input { width: 16px; height: 16px; }
+.build-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.build-error { color: #a52c39; background: #fff1f2; border: 1px solid #f4c7ce; border-radius: 9px; padding: 10px 14px; margin: 0 0 16px; overflow-wrap: anywhere; }
+.build-note { color: #2f5a44; background: #edf5f0; border: 1px solid #b4d4be; border-radius: 9px; padding: 10px 14px; margin: 0 0 16px; font-size: 13px; }
+.build-focus { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; font-size: 12px; color: var(--muted); }
+.build-focus button { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 5px 11px; font-size: 12px; color: var(--ink); }
+.build-focus button.selected { background: var(--pale); border-color: var(--green2); color: var(--green); font-weight: 600; }
+.plan-group h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); margin: 18px 0 8px; }
+.plan-item { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 0 0 10px; min-width: 0; }
+.plan-item.off { background: #fafbfc; }
+.plan-item.nested { margin-left: 22px; border-left: 3px solid #b8c6e6; }
+.plan-nested-label { display: block; margin: 0 0 6px; font-size: 11px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); }
+.plan-item-head, .plan-point-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.plan-check { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.55; min-width: 0; overflow-wrap: anywhere; }
+.plan-check input { width: 16px; height: 16px; margin-top: 3px; flex: none; }
+.plan-check small { display: block; color: var(--muted); font-size: 12px; }
+.plan-move { display: flex; gap: 2px; flex: none; }
+.plan-move .icon-button { width: 30px; height: 30px; }
+.plan-points { list-style: none; margin: 10px 0 0; padding: 0 0 0 26px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.plan-points li { min-width: 0; }
+.plan-check { flex: 1 1 0; }
+.plan-points li.off .plan-check { color: var(--muted); }
+.plan-reason { margin: 4px 0 0 26px; font-size: 12px; color: var(--green2); overflow-wrap: anywhere; }
+.plan-version { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 6px 0 0 26px; font-size: 12px; color: var(--muted); }
+.plan-version select { max-width: 100%; min-width: 0; }
+.plan-skills { display: flex; flex-wrap: wrap; gap: 8px; }
+.plan-skill { display: inline-flex; gap: 6px; align-items: center; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; background: #fff; }
+.plan-skill.on { background: var(--pale); border-color: #b4d4be; }
+.plan-empty { color: var(--muted); font-size: 13px; line-height: 1.6; }
+@media (max-width: 900px) { .build-grid { grid-template-columns: minmax(0, 1fr); } .starts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .plan-item.nested { margin-left: 10px; } .starts { gap: 8px; } .start-card { padding: 12px; } .build-main, .build-job, .build-create, .build-pick { padding: 14px; } .plan-item { padding: 10px; } .plan-points { padding-left: 14px; } .plan-reason, .plan-version { margin-left: 14px; } .build-pick { max-width: 100%; } }
+@media (max-width: 340px) { .starts { grid-template-columns: minmax(0, 1fr); } }

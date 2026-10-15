@@ -1,0 +1,8 @@
+/* Resume library delete action, the Undo toast and the "Use profile summary" button. */
+.resume-card-wrap { position: relative; min-width: 0; }
+.resume-card-wrap .resume-card { width: 100%; display: block; }
+.resume-card-delete { position: absolute; top: 8px; right: 8px; background: #fff; border: 1px solid var(--line); box-shadow: 0 2px 6px #18375814; }
+.toast .toast-action { color: #fff; font-weight: 700; text-decoration: underline; padding: 2px 4px; display: block; }
+.field.has-action { position: relative; }
+.field-action { position: absolute; top: -9px; right: 0; }
+.field-action .button { height: 26px; font-size: 12px; }
