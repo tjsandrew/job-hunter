@@ -53,6 +53,15 @@ services:
     depends_on:
       api:
         condition: service_healthy
+  embedder:
+    # Opt-in: `docker compose --profile embedder up --build -d embedder` (or `make embedder-up`).
+    # Standalone text -> 512-d vector service; see services/embedder/CONTRACT.md.
+    profiles: [embedder]
+    build: ./services/embedder
+    environment:
+      EMBEDDER_SERVICE_BACKEND: ${EMBEDDER_SERVICE_BACKEND:-fastembed}
+    ports:
+      - '127.0.0.1:8100:8100'
 volumes:
   postgres_data:
   document_data:
