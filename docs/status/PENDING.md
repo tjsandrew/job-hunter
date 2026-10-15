@@ -1,6 +1,14 @@
 # Product status and remaining work
 
-Updated 5 October 2026 (Singapore). This list distinguishes the working local slice from the target preliminary-report design. Component design briefs describe intended behaviour, not proof that every feature exists.
+Authentication and profile-bank notes updated 14 October 2026 (Singapore); other areas retain the 5 October baseline and need a final audit. This list distinguishes the working local slice from the target preliminary-report design. Component design briefs describe intended behaviour, not proof that every feature exists.
+
+## Login is still pending — required before a real-user release
+
+**Real login and authentication are not implemented.** The Alice/Casey selector sends an allowlisted `X-Dev-User` development header. There is no login screen, JWT issuance/verification, token refresh or real session lifecycle. This is not a simulated JWT flow.
+
+Ownership checks and PostgreSQL row-level security are implemented and tested, but they do not authenticate a real person. Local authentication is restricted to local/test mode. The planned Cognito/access-token integration still needs implementation and real-service verification before deployment for real users.
+
+Keep this gap prominent in the final pending-work document, even after the local feature implementation is complete. See [final pending-work notes](FINAL-PENDING-NOTES.md) for the checklist and wording to carry forward.
 
 ## Working baseline
 
@@ -19,14 +27,14 @@ The initial tracker did not store a resume or cover letter. The current change a
 | Discovery | Full source descriptions and text search are available; comprehensive category/salary/seniority/work-mode filters remain incomplete | Add filters only where normalized source facts support them; preserve unknown values |
 | Matching | No real semantic embeddings, hybrid ranking evaluation or evidence-grounded fit analysis | Connect a real model adapter when available and evaluate against labelled examples; do not present keyword scores as match percentages |
 | Profile extraction | PDF text only, manual entry of structured facts; no OCR or automatic fact provenance | Add explicit candidate fact review, with source evidence, when model/OCR services are introduced |
-| Profile depth | Basic contact/summary/skills form; full structured experience/education/projects profile workflow incomplete | Reuse editor structures with explicit profile confirmation and immutable version references |
+| Profile depth | Profile bank storage/API/page now support structured items, points/versions, skills, reviewed snapshots and explicit saves; resume assembly from the bank remains pending | Follow the remaining profile-bank build steps; see [step 2 handoff](10-profile-bank.md#step-2--profile-page-and-step-1-follow-ups) |
 | Resume editor | No inline bold/italic/link editing, entry/bullet reordering controls, section-spacing UI, exact paginated live HTML preview or CJK font coverage | Add bounded schema/UI controls and inspect representative PDF pages; server PDF is authoritative |
 | Resume history | Current revision and immutable exported PDFs; no complete document revision history or conflict merge interface | Provide recoverable edits/explicit conflict resolution before collaborative use |
 | Cover letters | Manual application text is supported by the current tracker change; no reusable standalone cover-letter library, template PDF export or AI generation | Expand document kinds/rendering when implementing preparation workflows |
 | Application history | Current status and saved materials; no timeline of every change, reminders, interview events or proof of external submission | Add revisioned activity history and clearly separate draft materials from recorded sent materials |
 | AI preparation | No tailored CV/cover-letter generation, grounding checks, provenance, prompt evaluation or allowance enforcement | Implement preparation/task contracts with tests and a real provider; keep unavailable states honest |
 | Tasks | No persistent local task runner, retry UI or result idempotency for expensive work | Introduce when AI/background work is connected; use shared task functions for later Lambda workers |
-| Data management | No user-facing archive/delete/export-all or retention workflow | Define ownership, recovery and retention before real personal-data pilot |
+| Data management | Profile item archive/Undo, profile JSON export and profile-data deletion are implemented; export-all, broader retention/recovery and durable file-cleanup retries remain pending | Define lifecycle across uploads, profile versions, documents, applications and backups before a real personal-data pilot |
 | Quality evidence | Focused unit, PostgreSQL and manual browser checks exist; comprehensive automated browser/accessibility/visual/load evaluation is pending | Add critical end-to-end scenarios, keyboard/modal checks and representative data-scale tests |
 
 ## Deliberately held for cloud POC

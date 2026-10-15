@@ -2,7 +2,7 @@
 
 ## Delivered
 
-Implemented the React, TypeScript and Vite app in `apps/web/` with a real `/v1` API client and a development identity selector (`alice` / `bob`, sent as `X-Dev-User`). Discover, Profile, Tracker and Resume Studio use responsive layouts, visible loading/error/empty states, accessible labels, and a restrained, readable type scale. The desktop sidebar collapses accessibly on narrow screens; mobile Tracker uses application cards with a visible details action.
+Implemented the React, TypeScript and Vite app in `apps/web/` with a real `/v1` API client and a development identity selector (`alice` / `casey`, sent as `X-Dev-User`). Discover, Profile, Tracker and Resume Studio use responsive layouts, visible loading/error/empty states, accessible labels, and a restrained, readable type scale. The desktop sidebar collapses accessibly on narrow screens; mobile Tracker uses application cards with a visible details action.
 
 Discover searches the server-side result pool with offset pagination and displays provided job facts, matching reasons, source dates and links. The job title and “Read full description” open a detail dialog with the complete source description and save/pass actions. Ranking language comes from the backend `ranking_status`; scores are not shown as percentages. Profile includes optional fictional SQL-analyst and ML-engineer samples that load into the form as unsaved drafts; the user must explicitly save. Saving profile/preferences refreshes recommendations.
 

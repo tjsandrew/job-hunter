@@ -26,7 +26,7 @@ make up          # or: docker compose up --build -d
 - App: http://localhost:5173
 - API docs: http://localhost:8000/docs
 
-The first start runs database migrations and seeds two fictional development users (Alice and Bob). Switch between them in the app header. Alice has a populated demo profile, resume and application.
+The first start runs database migrations and seeds two fictional development users (Alice and Casey). Switch between them in the app header. Alice has a populated demo profile, resume and application.
 
 Run `make` to list every command (`make logs`, `make down`, `make test`, `make import-jobs`, `make reset-demo`, …). `make reset` **permanently deletes** the local database and documents. More detail: [docs/LOCAL-DEVELOPMENT.md](docs/LOCAL-DEVELOPMENT.md).
 

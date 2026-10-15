@@ -6,7 +6,7 @@ Start the stack first with `make up` (see the [README](../README.md)). Most comm
 
 The stack runs PostgreSQL/pgvector, a migration and seed step, the API (as a non-superuser database role with row-level security) and the frontend. The database and exported documents use named Docker volumes. API and frontend ports bind to localhost only, and the database has no host port.
 
-Development identity switching (Alice/Bob) works only on localhost. It is not authentication.
+Development identity switching (Alice/Casey) works only on localhost. It is not authentication.
 
 ## Singapore job data
 
@@ -39,3 +39,15 @@ Run database integration tests against a disposable database, not the demo works
 ## Data and backups
 
 Only synthetic fixtures belong in Git. Real resumes, uploads, exported documents and database volumes stay out of the repository. Git backs up source history only; back up data volumes separately if you need them.
+
+## Importing resumes into the profile
+
+On the Profile page, **Import** (on an uploaded PDF or a Resume Studio resume), **Import from file** (`resume.json`) or **Paste text** opens a review screen. Nothing is saved until you choose **Apply to profile**; merges only add facts and never overwrite.
+
+PDFs and pasted text are parsed by local heuristics by default. To try a local model instead, run [Ollama](https://ollama.com) on your Mac and start the stack with:
+
+```sh
+MODEL_BACKEND=ollama OLLAMA_MODEL=llama3.2 make up
+```
+
+If the model is unavailable or returns invalid output, the import falls back to the heuristics and says so. `bedrock` is a placeholder until the AWS milestone.

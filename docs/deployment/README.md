@@ -10,7 +10,7 @@ The application runs locally. Nothing is deployed to AWS yet, and there is no in
 | FastAPI via Uvicorn (`backend/`) | API Gateway HTTP API → Lambda (ASGI adapter around `job_hunter.api.main:app`) |
 | PostgreSQL 16 + pgvector in Docker | RDS PostgreSQL + pgvector; same Alembic migrations |
 | Document volume (`/data`) | Private S3 bucket |
-| Alice/Bob development identities | Cognito + JWT authorizer, mapped to internal users |
+| Alice/Casey development identities | Cognito + JWT authorizer, mapped to internal users |
 | Manual `import_jobs` command | EventBridge → bounded discovery Lambda |
 
 ## Suggested order

@@ -2,6 +2,8 @@
 
 **Resume editor requirement:** [09-RESUME-EDITOR.md](09-RESUME-EDITOR.md) adds a core local resume editor, manual resume creation, template/layout controls, preview, autosave and PDF export. Its document/API extensions supersede assumptions that every resume requires AI generation or a job.
 
+**Profile bank step 1:** [10-PROFILE-BANK.md](10-PROFILE-BANK.md) and its [implementation handoff](../status/10-profile-bank.md) supersede profile storage/confirmation details below. `GET/PUT /profile` serve basics; items live in the bank. Confirmation takes `expected_bank_revision` and snapshots the whole bank. The public `job_hunter.profile_bank` functions and committed snapshot fixtures are the cross-area read contract. Local keyword recommendations keep ranking live data through `build_profile_snapshot`; semantic ranking remains deferred.
+
 **Current delivery scope:** [local application first; AWS-native services later](../deployment/DELIVERY-SCOPE.md). This staging rule overrides earlier cloud requirements for the local milestone.
 
 Read [the main design](README.md) first. These are normative POC defaults. Change them deliberately and update dependent briefs/tests together.

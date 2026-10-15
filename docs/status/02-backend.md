@@ -2,7 +2,7 @@
 
 ## Delivered local API
 
-The FastAPI application is in `backend/src/job_hunter/api/main.py`; SQLAlchemy models and the database/session boundary are in `domain/models.py` and `adapters/database.py`. PostgreSQL 16 with pgvector is the only supported database. Alembic migrations `0001`–`0009` create the local schema, vector extension, tenant RLS policies, immutable confirmed profile revisions, ingestion provenance/category columns, bounded upload extraction fields and application packets. The local API uses the non-owner `jobhunter_app` role. It sets `app.user_id` transaction-locally from the fixed Alice/Bob development identity map before accessing private rows. Seed and migration commands use the owner URL.
+The FastAPI application is in `backend/src/job_hunter/api/main.py`; SQLAlchemy models and the database/session boundary are in `domain/models.py` and `adapters/database.py`. PostgreSQL 16 with pgvector is the only supported database. Alembic migrations `0001`–`0009` create the local schema, vector extension, tenant RLS policies, immutable confirmed profile revisions, ingestion provenance/category columns, bounded upload extraction fields and application packets. The local API uses the non-owner `jobhunter_app` role. It sets `app.user_id` transaction-locally from the fixed Alice/Casey development identity map before accessing private rows. Seed and migration commands use the owner URL.
 
 The `/v1` API implements health and current user, editable profile and explicit immutable confirmation, preferences, filtered/ranked and paginated recommendations, job detail/review, application tracking, resume document create/read/revision-checked edit/duplicate/review, and PDF preview/reviewed export/download. `GET /recommendations` accepts `limit` (1–100), `offset`, and `q`; the response has `items`, `total`, `next_offset`, `degraded_mode`, and `ranking_status`. Job cards include source board, original URL, posted/fetched timestamps and the title-derived category provenance.
 
@@ -14,7 +14,7 @@ The ingestion component owns `backend/src/job_hunter/ingestion` and `import_jobs
 
 ## Run and verify
 
-From the project root, `docker compose up --build` starts PostgreSQL, applies migrations, seeds Alice/Bob and runs the API and web app. For the test suite against the running local DB:
+From the project root, `docker compose up --build` starts PostgreSQL, applies migrations, seeds Alice/Casey and runs the API and web app. For the test suite against the running local DB:
 
 ```sh
 docker compose run --rm --no-deps \
@@ -24,7 +24,7 @@ docker compose run --rm --no-deps \
   sh -c 'pip install pytest httpx -c requirements.lock && RUN_DB_INTEGRATION=1 pytest -q /app/tests'
 ```
 
-Actual result on the shared Compose PostgreSQL database: **72 passed**. The suite includes end-to-end owned PDF upload/extraction and immutable-byte checks; packet creation from a reviewed resume, persistence, explicit clear, cover-letter edits, revision conflicts, foreign export denial, and proof that editing the original document leaves the attached PDF/title/revision unchanged; parser errors and limits; multi-page rendering in both templates, accented Latin names and bold markup; selected font-family resources, page dimensions, line-spacing pagination, and invalid layout validation; ingestion upsert behavior; API ownership, pagination/search; plus direct runtime-role SQL checks proving private rows are hidden without a user context and when switching from Alice to Bob. A separately created empty `jobhunter_packet_migration_test` database successfully applied migrations `0001`–`0009` and the synthetic seed. The local Python environment could not install packages because network access was blocked; verification therefore ran inside the Compose image. The test run emitted FastAPI `on_event` and Starlette/httpx deprecation warnings, no failures.
+Actual result on the shared Compose PostgreSQL database: **72 passed**. The suite includes end-to-end owned PDF upload/extraction and immutable-byte checks; packet creation from a reviewed resume, persistence, explicit clear, cover-letter edits, revision conflicts, foreign export denial, and proof that editing the original document leaves the attached PDF/title/revision unchanged; parser errors and limits; multi-page rendering in both templates, accented Latin names and bold markup; selected font-family resources, page dimensions, line-spacing pagination, and invalid layout validation; ingestion upsert behavior; API ownership, pagination/search; plus direct runtime-role SQL checks proving private rows are hidden without a user context and when switching from Alice to Casey. A separately created empty `jobhunter_packet_migration_test` database successfully applied migrations `0001`–`0009` and the synthetic seed. The local Python environment could not install packages because network access was blocked; verification therefore ran inside the Compose image. The test run emitted FastAPI `on_event` and Starlette/httpx deprecation warnings, no failures.
 
 ## Limits and follow-up
 

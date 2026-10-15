@@ -1,0 +1,520 @@
+{
+  "captured_before_migration": true,
+  "count": 71,
+  "before_sha256": "33eefd4811417b26ccd9acc97eba3982aee886b52d12714186893ffede6ec8c2",
+  "after_sha256": "33eefd4811417b26ccd9acc97eba3982aee886b52d12714186893ffede6ec8c2",
+  "same_order_and_reasons": true,
+  "before": [
+    {
+      "job_id": "2842de3d-93b6-47c5-a27e-f800304d65ae",
+      "reasons": [
+        "Python appears in the listing",
+        "PostgreSQL appears in the listing",
+        "The title aligns with target role Data & Backend Engineer",
+        "The listing location matches a selected location"
+      ]
+    },
+    {
+      "job_id": "f540a2ac-8985-4f6c-a037-c169e2b92745",
+      "reasons": [
+        "SQL appears in the listing",
+        "The title aligns with target role Data Analyst",
+        "The listing location matches a selected location"
+      ]
+    },
+    {
+      "job_id": "8cd852a7-a70e-4cf2-b10b-4d8ae79d3116",
+      "reasons": [
+        "Python appears in the listing",
+        "SQL appears in the listing",
+        "Git appears in the listing",
+        "The title aligns with target role Data Analyst",
+        "The listing location matches a selected location"
+      ]
+    },
+    {
+      "job_id": "175af1b6-c597-44a8-9871-37a629c68159",
+      "reasons": [
+        "Python appears in the listing",
+        "SQL appears in the listing",
+        "The title aligns with target role Data Analyst",
+        "The listing location matches a selected location"
+      ]
+    },
+    {
+      "job_id": "bf996a32-c094-4259-ac86-7ebbf40dc40d",
+      "reasons": [
+        "SQL appears in the listing",
+        "The title aligns with target role Data Analyst",
+        "The listing location matches a selected location"
+      ]
+    },
+    {
+      "job_id": "fbfb3dc8-b622-4edf-b272-00ac714a4459",
+      "reasons": [
+        "Python appears in the listing",
+        "SQL appears in the listing",
+        "Git appears in the listing",
+        "The listing location matches a selected location"
+      ]
+    },
+    {
+      "job_id": "4ae44916-9521-4d80-9053-d9428e0741d6",
+      "reasons": [
+        "Python appears in the listing",
+        "SQL appears in the listing",
+        "The title aligns with target role Data Analyst",
+        "The listing location matches a selected location"
+      ]
+    },
+    {
+      "job_id": "d97c46e0-9098-435f-800d-8a1d7a860aa4",
+      "reasons": [
+        "Python appears in the listing",
+        "SQL appears in the listing",
+        "The listing location matches a selected location"
+      ]
+    },
+    {
+      "job_id": "4cdad221-16f4-4275-b9f9-e3366fabb639",
+      "reasons": [
+        "SQL appears in the listing",
+        "Tableau appears in the listing",
+        "The listing location matches a selected location"
+      ]
+    },
+    {
+      "job_id": "6548a84f-77c1-477a-bbf0-7df48e43f54c",
+      "reasons": [
+        "Python appears in the listing",
+        "SQL appears in the listing",
+        "The listing location matches a selected location"
+      ]
+    },
+    {
+      "job_id": "b4213e5f-59f2-4e13-8a61-3a8161d8fb7f",
+      "reasons": [
+        "Python appears in the listing",
+        "SQL appears in the listing",
+        "The listing location matches a selected location"
+      ]
+    },
+    {
+      "job_id": "bc411ebf-6b19-489a-b497-bebde83903c2",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: analysis, backend, building, data, engineer"
+      ]
+    },
+    {
+      "job_id": "1f8b6c51-ff26-44cb-9344-708531a572a1",
+      "reasons": [
+        "SQL appears in the listing",
+        "The listing location matches a selected location"
+      ]
+    },
+    {
+      "job_id": "ec93e4c4-d767-4645-b508-b049c38de550",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: backend, building, clear, communication, engineer"
+      ]
+    },
+    {
+      "job_id": "a55a5f21-32d3-4ef0-9b5e-28391d825303",
+      "reasons": [
+        "SQL appears in the listing",
+        "The listing location matches a selected location"
+      ]
+    },
+    {
+      "job_id": "c467700c-ef40-4500-b8b0-3a6826a5d526",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: backend, building, clear, communication, engineer"
+      ]
+    },
+    {
+      "job_id": "d1199df3-0a7b-49b1-a2ca-deeb6b411808",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: backend, building, clear, communication, data"
+      ]
+    },
+    {
+      "job_id": "ba6081b7-daa2-49ca-baee-0433fa860f79",
+      "reasons": [
+        "SQL appears in the listing",
+        "The listing location matches a selected location"
+      ]
+    },
+    {
+      "job_id": "c210bc1a-8ad1-4bce-bf7d-a08348be175b",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: combines, data, engineer, experience, learn"
+      ]
+    },
+    {
+      "job_id": "0395b705-ec22-47f8-9b6e-3495479670e8",
+      "reasons": [
+        "Python appears in the listing",
+        "The listing location matches a selected location"
+      ]
+    },
+    {
+      "job_id": "eb5a092c-05ae-4cd0-bf18-54ec5aa04535",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, clear, communication, engineer, experience"
+      ]
+    },
+    {
+      "job_id": "ab7a3029-4e16-4128-8759-884a24c08052",
+      "reasons": [
+        "SQL appears in the listing",
+        "The listing location matches a selected location"
+      ]
+    },
+    {
+      "job_id": "f34b394e-213a-46a0-a8a9-b2ee52db54c5",
+      "reasons": [
+        "SQL appears in the listing",
+        "The listing location matches a selected location"
+      ]
+    },
+    {
+      "job_id": "1902e7e5-9304-4803-a8c1-66aab01d88d6",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, communication, data, experience, performance"
+      ]
+    },
+    {
+      "job_id": "26ea0501-445c-40d4-9343-c07171dbcdad",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: clear, data, experience, pipelines, practical"
+      ]
+    },
+    {
+      "job_id": "84566ce6-5025-4f71-9d3b-3c57fe5cb74a",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: clear, communication, data, experience, learning"
+      ]
+    },
+    {
+      "job_id": "b07c165f-6cce-4666-8b81-1ecc16857b61",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: analytics, building, clear, communication, data"
+      ]
+    },
+    {
+      "job_id": "c9e9921a-07c5-480e-b075-b5b38848ddb9",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: combines, experience, learn, learning, performance"
+      ]
+    },
+    {
+      "job_id": "da651f89-da5c-46a8-8cab-e2a6e193757e",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: analytics, communication, data, experience, learning"
+      ]
+    },
+    {
+      "job_id": "424e695b-b38f-4013-953c-137d8ba53ae2",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: analysis, building, communication, experience, modelling"
+      ]
+    },
+    {
+      "job_id": "b3ec5108-62a6-4a53-94ea-aa14e99e6003",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: analytics, clear, communication, data, experience"
+      ]
+    },
+    {
+      "job_id": "95511119-8472-409e-8b67-78fcb60255a4",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: analysis, clear, communication, data, experience"
+      ]
+    },
+    {
+      "job_id": "249d579c-a51e-4889-97a8-eaab5bb57aeb",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: analytics, building, data, experience, learn"
+      ]
+    },
+    {
+      "job_id": "da44cc66-fade-4f2b-815b-dca1e2b42a90",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: clear, communication, data, experience, performance"
+      ]
+    },
+    {
+      "job_id": "fbc077e7-aa0e-4e78-a5e2-ead64f028af0",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: analytics, building, communication, data, experience"
+      ]
+    },
+    {
+      "job_id": "38980293-d642-4912-85ff-8ac68ffcf214",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: analytics, building, communication, data, experience"
+      ]
+    },
+    {
+      "job_id": "75e76815-9a34-4da5-919f-fc368913e526",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: analysis, analytics, building, communication, data"
+      ]
+    },
+    {
+      "job_id": "9933dfe9-1fa8-47d7-a38c-83f2e86a8797",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, clear, communication, experience, performance"
+      ]
+    },
+    {
+      "job_id": "0b4e9a97-5bcf-41c5-ba91-86cd6436e503",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, experience, performance, products, services"
+      ]
+    },
+    {
+      "job_id": "a2064c9d-3ca6-4767-8c03-51fa6e83081d",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, data, experience, performance, services"
+      ]
+    },
+    {
+      "job_id": "8f5fd2d7-862d-432d-9c57-f38b30fd5c2e",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, communication, data, experience, learn"
+      ]
+    },
+    {
+      "job_id": "565f860a-503a-4eaf-9ef6-fed6905dd5df",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, clear, communication, experience, products"
+      ]
+    },
+    {
+      "job_id": "88b48687-01ff-4285-9807-5fd7f3d2e97e",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: analysis, building, clear, communication, data"
+      ]
+    },
+    {
+      "job_id": "268547c0-252b-4234-8c7c-b0c7c2bd329c",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, communication, data, experience, learning"
+      ]
+    },
+    {
+      "job_id": "7a467e90-9d7b-4f27-a48b-8e7c7b68f6bd",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, communication, data, experience, learning"
+      ]
+    },
+    {
+      "job_id": "bb99e0c1-49d5-4265-a68a-0b64538ae7de",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, communication, experience, performance, products"
+      ]
+    },
+    {
+      "job_id": "266826a4-b0db-44a6-942b-a3230736bdee",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: communication, data, learn, learning, years"
+      ]
+    },
+    {
+      "job_id": "de11ba6b-6f67-433a-bcd5-67243f68b67c",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: reliable"
+      ]
+    },
+    {
+      "job_id": "d627d9e2-2512-48b0-a53a-dcb32fb1ecff",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, experience, performance, products, services"
+      ]
+    },
+    {
+      "job_id": "969e0d29-1dd9-48b2-8568-329dcd3a84e4",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, communication, data, learn, performance"
+      ]
+    },
+    {
+      "job_id": "92c70ce0-056c-4bc0-b752-db4679a4376d",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, communication, data, learn, performance"
+      ]
+    },
+    {
+      "job_id": "1d9b2e19-141e-4a8d-af56-f107c6f88b62",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, communication, experience, practical, services"
+      ]
+    },
+    {
+      "job_id": "c3ecba16-d9d4-40f2-b867-807f23d9c6e1",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, communication, data, experience, learn"
+      ]
+    },
+    {
+      "job_id": "2d4674cf-5702-4d44-970b-26ef3ed33a30",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, clear, communication, experience, products"
+      ]
+    },
+    {
+      "job_id": "9e74cd80-4270-4e99-8f93-ee6350a1dc37",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, communication, experience, performance, services"
+      ]
+    },
+    {
+      "job_id": "cd156f15-6c7f-4aeb-9dad-6da690918c9e",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: data, experience, learn, products, services"
+      ]
+    },
+    {
+      "job_id": "c04806f6-ff34-4f4a-b12a-85f44e47c486",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: data, experience, learn, products, services"
+      ]
+    },
+    {
+      "job_id": "b37a854f-2416-4754-8e85-6cadc337b7ef",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: communication, experience, performance, products, services"
+      ]
+    },
+    {
+      "job_id": "15a6f03b-1e5c-45a4-ae1d-c5a7489a0896",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, clear, experience, learn, performance"
+      ]
+    },
+    {
+      "job_id": "a646d2fc-fd9f-4eab-96ae-b0c56aaa3475",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: data, experience, learn, performance, years"
+      ]
+    },
+    {
+      "job_id": "5e4d352c-86c5-440b-a777-e23ceb7935ae",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, experience, products, stakeholder, years"
+      ]
+    },
+    {
+      "job_id": "6364c106-e3f0-4c86-b3ae-bb341e1de239",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, clear, experience, products, years"
+      ]
+    },
+    {
+      "job_id": "89ea1de4-c64c-4054-9b19-636ef9d53812",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: communication, data, experience, products, years"
+      ]
+    },
+    {
+      "job_id": "a2b842c7-48eb-4e40-9dae-78cdbeff93cc",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: communication, data, experience, learn, services"
+      ]
+    },
+    {
+      "job_id": "8ada36f8-eb84-4b98-b45c-4c6a7503babb",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, clear, experience, products, years"
+      ]
+    },
+    {
+      "job_id": "f4194695-99e2-4b3a-a24c-d8479d46e7da",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, experience, performance, products, years"
+      ]
+    },
+    {
+      "job_id": "42c11b9b-451b-47a6-b735-c6d063b47c5b",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: communication, experience, performance, years"
+      ]
+    },
+    {
+      "job_id": "7ecf3341-4e59-42cb-b994-49abed1dc805",
+      "reasons": [
+        "The listing location matches a selected location",
+        "Shared listing terms: building, experience, services, years"
+      ]
+    },
+    {
+      "job_id": "79c1b5ea-9fb4-4d4e-9f93-0a5387402ed1",
+      "reasons": [
+        "The listing location matches a selected location"
+      ]
+    },
+    {
+      "job_id": "4f6c8d4b-b209-4ead-99e4-9ac9ca77600a",
+      "reasons": [
+        "The listing location matches a selected location"
+      ]
+    },
+    {
+      "job_id": "d8504e68-39c8-4478-9b88-75d2b4d9f722",
+      "reasons": [
+        "The listing location matches a selected location"
+      ]
+    }
+  ]
+}
