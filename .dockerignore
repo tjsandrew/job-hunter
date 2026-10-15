@@ -1,8 +1,5 @@
 .git
 .env
-References
-tmp
-figures
 .local
 **/node_modules
 **/.venv
