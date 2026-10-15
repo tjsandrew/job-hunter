@@ -39,6 +39,7 @@ jobs:
           docker compose run --rm --no-deps
           -e RUN_DB_INTEGRATION=1
           -v "$PWD/backend/tests:/app/tests:ro"
+          -v "$PWD/contracts:/app/contracts:ro"
           api sh -c 'pip install -c requirements.lock ".[test]" && pytest /app/tests -q'
       - name: Migration check (old schema to head, ORM columns all migrated)
         run: >-
