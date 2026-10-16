@@ -41,9 +41,10 @@ Measured on this machine (CPU, Docker Desktop), indicative only:
 
 ## Finding that matters for the next plan
 
-Similarity scores from this model sit in a high band. In one probe, a related pair scored 0.78 and unrelated pairs
-0.64 and 0.65. Rank order is meaningful; **absolute thresholds are not**. The matching plan should rank by relative
-score (and fuse by rank), not filter on a fixed cosine cut-off.
+On a few short synthetic texts, similarity scores from this model sat in a high band. In one probe, a related pair
+scored 0.78 and unrelated pairs 0.64 and 0.65, and some unrelated pairs outscored related ones. Rank order was
+informative; absolute values were not. The matching plan should not rely on an uncalibrated fixed cosine cut-off or
+present raw cosine as a percentage. This has not been confirmed on real listings.
 
 ## Not verified / known gaps
 
@@ -59,6 +60,6 @@ score (and fuse by rank), not filter on a fixed cosine cut-off.
 
 ## Next
 
-Plan 2 (separate): consumer-side backend client, text templates, vector columns for jobs, backfill, semantic
-retrieval, hybrid ranking and evaluation. Template wording waits until the existing profile embedding text has been
-reviewed with the team.
+Recommender integration (separate work, paused): consumer-side backend client (built locally, see
+`12-embedding-client.md`), text formats, vector columns for jobs, backfill, semantic retrieval and evaluation against
+the existing ranker. Text-format wording waits for agreement with the ingestion and profile owners.

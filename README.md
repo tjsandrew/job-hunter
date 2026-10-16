@@ -13,6 +13,11 @@ Job Hunter helps job seekers in Singapore discover openings, shortlist them agai
 
 AI generation and semantic ranking are not connected yet. The full list and its gaps are in [docs/status/FEATURES.md](docs/status/FEATURES.md).
 
+An opt-in standalone embedder service exists in `services/embedder/`. The backend now has a tested HTTP client for its
+512-dimensional contract, but it is **not wired into ingestion, profile saves, search, or recommendations**; the
+application still uses the existing keyword/skill/role ranker. See [embedder status](docs/status/11-embedder-service.md)
+and [backend client status](docs/status/12-embedding-client.md).
+
 ## Quick start
 
 Prerequisites: [Docker Desktop](https://www.docker.com/products/docker-desktop/) (with Compose) and Git.
