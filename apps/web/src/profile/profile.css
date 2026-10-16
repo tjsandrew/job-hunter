@@ -65,3 +65,13 @@
 .bank-basics-bio { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.65; }
 .bank-basics-details { overflow-wrap: anywhere; }
 @media(max-width:600px) { .bank-page .bank-basics-summary { grid-template-columns: 42px minmax(0,1fr); gap: 12px; } .bank-basics-avatar { width:42px;height:42px; } .bank-basics-summary > button { grid-column:2; justify-self:start; } }
+
+/* Job preferences: values added one at a time, each as its own chip */
+.tag-field .tag-box { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; min-height: 42px; border: 1px solid #d8d8d2; border-radius: 8px; background: #fff; }
+.tag-field .tag-box:focus-within { border-color: #5f7a63; box-shadow: 0 0 0 2px rgba(95, 122, 99, .18); }
+.tag-field .tag-box input { flex: 1 1 90px; min-width: 80px; min-height: 28px; border: 0; padding: 2px 4px; outline: none; background: transparent; font-size: 14px; }
+.tag-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; border-radius: 999px; background: #e4f4ed; color: #236447; font-size: 13px; line-height: 1.2; }
+.tag-chip button { border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 15px; line-height: 1; padding: 0 4px; border-radius: 50%; }
+.tag-chip button:hover, .tag-chip button:focus-visible { background: rgba(35, 100, 71, .16); }
+.tag-chip.choice { border: 1px solid #d8d8d2; background: #fff; color: #424a42; padding: 5px 12px; cursor: pointer; }
+.tag-chip.choice.on { background: #e4f4ed; border-color: #8fbfa6; color: #236447; font-weight: 500; }

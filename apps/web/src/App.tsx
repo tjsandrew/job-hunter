@@ -158,8 +158,8 @@ export default function App() {
   };
   const savePreferences = async () => {
     setPrefSaving(true);
-    const payload = { ...preferences, roles: String(preferences.rolesText ?? (preferences.roles || []).join(', ')).split(',').map((x: string) => x.trim()).filter(Boolean), locations: String(preferences.locationsText ?? (preferences.locations || []).join(', ')).split(',').map((x: string) => x.trim()).filter(Boolean), work_modes: String(preferences.workModesText ?? (preferences.work_modes || []).join(', ')).split(',').map((x: string) => x.trim()).filter(Boolean), salary_min: preferences.salary_min === '' ? null : Number(preferences.salary_min), expected_revision: preferences.revision || 0 };
-    delete payload.rolesText; delete payload.locationsText; delete payload.workModesText;
+    const list = (value: unknown): string[] => (Array.isArray(value) ? value.map((x) => String(x).trim()).filter(Boolean) : []);
+    const payload = { ...preferences, roles: list(preferences.roles), locations: list(preferences.locations), work_modes: list(preferences.work_modes), salary_min: preferences.salary_min === '' ? null : Number(preferences.salary_min), expected_revision: preferences.revision || 0 };
     try { const updated: any = await api.putPreferences(payload); setPreferences({ ...preferences, ...updated }); setRefresh((x) => x + 1); announce('Preferences saved.'); }
     catch (error) {
       if (error instanceof HttpError && error.status === 409) {
