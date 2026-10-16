@@ -66,10 +66,10 @@ def test_unknown_and_unspecified_never_block_and_are_explained():
                               cand("z", vec(0.8, 0.2), levels=())])
     assert len(result.ranked) == 3 and result.blocked == ()
     by_id = {r.job_id: r for r in result.ranked}
-    assert by_id["x"].role == "unknown" and "not recorded" in by_id["x"].reasons[0]
-    assert by_id["z"].seniority == "all_levels" and "not stated" in by_id["z"].reasons[1]
+    assert by_id["x"].role == "unknown" and not any("role" in r.lower() for r in by_id["x"].reasons)   # a caveat is not a reason
+    assert by_id["z"].seniority == "all_levels" and not any("level" in r.lower() for r in by_id["z"].reasons)
     no_seniority = retrieve(ProfileQuery(vector=vec(1.0), role_families=("engineering",)), [cand("p", vec(1.0), levels=("lead",))])
-    assert no_seniority.ranked[0].seniority == "unknown" and "not set" in no_seniority.ranked[0].reasons[1]
+    assert no_seniority.ranked[0].seniority == "unknown" and not any("level" in r.lower() for r in no_seniority.ranked[0].reasons)
 
 
 def test_adjacent_role_and_level_are_kept_and_labelled():

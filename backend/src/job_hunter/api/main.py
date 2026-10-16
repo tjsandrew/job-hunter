@@ -290,11 +290,12 @@ def recommendations(db: Session = Depends(db_for), limit: int = Query(20, ge=1, 
     return {"items": items, "total": len(ranked),
             "next_offset": offset + limit if offset + limit < len(ranked) else None,
             "degraded_mode": True, "ranking_version": RANKING_VERSION,
-            "ranking_status": "Local text similarity and skill matching; semantic embeddings are not enabled"}
+            "ranking_status": "Keyword text similarity and skill matching (the For you list uses semantic matching)"}
 
 @app.get("/v1/recommendations/for-you")
 def recommendations_for_you(db: Session = Depends(db_for), limit: int = Query(20, ge=1, le=100),
-                            offset: int = Query(0, ge=0, le=1000000)):
+                            offset: int = Query(0, ge=0, le=1000000),
+                            q: str | None = Query(None, max_length=200)):
     """Semantic recommendations (eligibility, role/seniority checks, then similarity), behind FOR_YOU_ENABLED.
 
     Falls back to the keyword ranker, and says so in ``ranking_mode`` / ``fallback_reason``, whenever the
@@ -304,12 +305,15 @@ def recommendations_for_you(db: Session = Depends(db_for), limit: int = Query(20
     user_id = current_user(db).id
     prefs = db.get(Preference, user_id)
     skipped = [str(r.job_id) for r in db.scalars(select(JobReview)).all() if r.decision in {"saved", "dismissed"}]
-    result, reason = semantic.semantic_for_you(db, bank_services.get_confirmed_snapshot(db), prefs.data if prefs else {}, skipped)
+    confirmed = bank_services.get_confirmed_snapshot(db)
+    result, reason = semantic.semantic_for_you(db, confirmed, prefs.data if prefs else {}, skipped)
     if result is None:
-        base = recommendations(db=db, limit=limit, offset=offset, q=None)
+        base = recommendations(db=db, limit=limit, offset=offset, q=q)
         return {**base, "ranking_mode": "keyword_fallback", "fallback_reason": reason}
-    total = len(result.ranked)
-    return {"items": semantic.page_items(db, result, offset, limit, job_out), "total": total,
+    ranked = semantic.matching(db, result.ranked, q, job_out)
+    total = len(ranked)
+    return {"items": semantic.page_items(db, ranked, offset, limit, job_out, snapshot=confirmed[2],
+                                         preferences=prefs.data if prefs else {}), "total": total,
             "next_offset": offset + limit if offset + limit < total else None,
             "degraded_mode": False, "ranking_version": semantic.RANKING_VERSION, "ranking_mode": "semantic",
             "fallback_reason": None, "blocked_by_checks": len(result.blocked),

@@ -34,6 +34,8 @@ export default function App() {
   const [recordsLoading, setRecordsLoading] = useState(true);
   const [recommendationsDegraded, setRecommendationsDegraded] = useState(false);
   const [rankingStatus, setRankingStatus] = useState('');
+  const [discoverMode, setDiscoverMode] = useState<'for-you' | 'all'>('for-you');
+  const [forYouNote, setForYouNote] = useState('');
   const [recommendationTotal, setRecommendationTotal] = useState(0);
   const [nextJobOffset, setNextJobOffset] = useState<number | null>(null);
   const [loadingMoreJobs, setLoadingMoreJobs] = useState(false);
@@ -95,14 +97,15 @@ export default function App() {
     const revision = ++searchRequestRevision.current;
     setLoadingMoreJobs(false); setRecommendationLoading(true);
     const timer = window.setTimeout(() => {
-      api.recommendations(query, 0).then((result) => {
+      fetchJobs(discoverMode, query, 0).then((result) => {
         if (!alive) return;
         setJobs(result.items || []); setRecommendationTotal(result.total ?? result.items.length);
         setNextJobOffset(result.next_offset ?? null); setRecommendationsDegraded(Boolean(result.degraded_mode)); setRankingStatus(result.ranking_status || '');
+        setForYouNote(result.note);
       }).catch((error: Error) => alive && setFatal(error.message)).finally(() => alive && setRecommendationLoading(false));
     }, 250);
     return () => { alive = false; clearTimeout(timer); if (searchRequestRevision.current === revision) searchRequestRevision.current += 1; };
-  }, [user, query, refresh, bootstrapAttempt]);
+  }, [user, query, refresh, bootstrapAttempt, discoverMode]);
 
   useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => { setToast(''); setToastAction(null); }, toastAction ? 9000 : 3200); return () => window.clearTimeout(timer); }, [toast, toastAction]);
   const announce = (message: string) => { setToast(message); setToastAction(null); };
@@ -121,12 +124,23 @@ export default function App() {
   };
   const filteredApps = useMemo(() => apps.filter((app) => (statusFilter === 'all' || app.status === statusFilter) && `${app.job?.title || ''} ${app.job?.company || ''}`.toLowerCase().includes(trackerQuery.toLowerCase())), [apps, statusFilter, trackerQuery]);
 
+  // "For you" first; if it cannot answer (disabled, error) fall back to the original keyword list and say so.
+  const fetchJobs = async (mode: 'for-you' | 'all', q: string, offset: number) => {
+    if (mode === 'all') return { ...(await api.recommendations(q, offset)), note: '' };
+    try {
+      const result = await api.recommendationsForYou(q, offset);
+      return { ...result, note: result.ranking_mode === 'keyword_fallback' ? (result.fallback_reason || 'For you is not ready yet, so all jobs are shown.') : '' };
+    } catch {
+      return { ...(await api.recommendations(q, offset)), note: 'For you is unavailable right now, so all jobs are shown.' };
+    }
+  };
+
   const loadMoreJobs = async () => {
     if (nextJobOffset === null || loadingMoreJobs) return;
     setLoadingMoreJobs(true);
     const revision = searchRequestRevision.current;
     try {
-      const result = await api.recommendations(query, nextJobOffset);
+      const result = await fetchJobs(discoverMode, query, nextJobOffset);
       if (revision !== searchRequestRevision.current) return;
       setJobs((current) => [...current, ...result.items.filter((item) => !current.some((loaded) => loaded.job.id === item.job.id))]);
       setRecommendationTotal(result.total ?? recommendationTotal); setNextJobOffset(result.next_offset ?? null); setRankingStatus(result.ranking_status || rankingStatus);
@@ -347,7 +361,7 @@ export default function App() {
         {fatal && <div className="fatal"><div className="fatal-icon">!</div><div><strong>Could not load your workspace</strong><p>{fatal}</p><button className="button secondary small-button" onClick={() => { setFatal(''); setBootstrapAttempt((x) => x + 1); setRefresh((x) => x + 1); }}>Try again</button></div></div>}
         {!fatal && busy && <Loading label="Connecting to your workspace…" />}
         {!fatal && !busy && <>
-          {page === 'discover' && <Discover jobs={jobs} loading={recommendationLoading} total={recommendationTotal} hasMore={nextJobOffset !== null} loadingMore={loadingMoreJobs} onLoadMore={loadMoreJobs} query={query} setQuery={setQuery} busyJob={busyJob} onReview={review} onDetails={setJobDetail} degraded={recommendationsDegraded} rankingStatus={rankingStatus} />}
+          {page === 'discover' && <Discover jobs={jobs} loading={recommendationLoading} total={recommendationTotal} hasMore={nextJobOffset !== null} loadingMore={loadingMoreJobs} onLoadMore={loadMoreJobs} query={query} setQuery={setQuery} busyJob={busyJob} onReview={review} onDetails={setJobDetail} degraded={recommendationsDegraded} rankingStatus={rankingStatus} mode={discoverMode} setMode={setDiscoverMode} forYouNote={forYouNote} thinProfile={!(preferences.roles || []).length || !preferences.seniority} />}
           {page === 'profile' && <ProfileView key={user} userKey={user} onChanged={() => setRefresh(value => value + 1)} onBasicsSaved={draft => setProfile(profileToForm(draft))} onOpenResume={openResume} preferences={preferences} setPreferences={setPreferences} savePreferences={savePreferences} savingPreferences={prefSaving} uploading={uploading} uploadMessage={uploadMessage} extractedResumeText={extractedResumeText} onUpload={uploadProfileResume} resumes={resumes} onBusyChange={setProfileBusy} />}
           {page === 'tracker' && <Tracker apps={filteredApps} loading={recordsLoading} query={trackerQuery} setQuery={setTrackerQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onEdit={setTrackerEdit} />}
           {page === 'studio' && <Studio onDelete={deleteResume} resumes={resumes} loading={recordsLoading} active={activeResume} attachTarget={resumeAttachTarget} tab={studioTab} setTab={setStudioTab} busy={busyResumeAction} saving={saving} saveLabel={saveLabel} history={history} future={future} onCreate={createResume} onOpen={openResume} onCreateTailoredCopy={createTailoredCopy} onCopyResume={copyResume} onBuilt={resumeBuilt} onApplyDefaults={applyStyleDefaults} jobs={buildJobs} onAttach={attachResumeToApplication} onReturn={returnToApplication} onBack={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before leaving the editor.'); return; } setActiveResume(null); }} onUpdate={updateResume} onContent={pushContent} onUndo={undo} onRedo={redo} onDuplicate={duplicateResume} onReview={reviewResume} onExport={exportResume} onPreview={previewResume} onReload={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before reloading.'); return; } reloadResume(); }} />}
@@ -361,11 +375,14 @@ export default function App() {
   </div>;
 }
 
-function Discover({ jobs, loading, total, hasMore, loadingMore, onLoadMore, query, setQuery, busyJob, onReview, onDetails, degraded, rankingStatus }: { jobs: Recommendation[]; loading: boolean; total: number; hasMore: boolean; loadingMore: boolean; onLoadMore: () => void; query: string; setQuery: (v: string) => void; busyJob: string; onReview: (job: Job, decision: 'saved' | 'dismissed') => void; onDetails: (job: Job) => void; degraded: boolean; rankingStatus: string }) {
+function Discover({ jobs, loading, total, hasMore, loadingMore, onLoadMore, query, setQuery, busyJob, onReview, onDetails, degraded, rankingStatus, mode, setMode, forYouNote, thinProfile }: { jobs: Recommendation[]; loading: boolean; total: number; hasMore: boolean; loadingMore: boolean; onLoadMore: () => void; query: string; setQuery: (v: string) => void; busyJob: string; onReview: (job: Job, decision: 'saved' | 'dismissed') => void; onDetails: (job: Job) => void; degraded: boolean; rankingStatus: string; mode: 'for-you' | 'all'; setMode: (mode: 'for-you' | 'all') => void; forYouNote: string; thinProfile: boolean }) {
   return <div className="page-wrap"><div className="page-heading"><div><div className="eyebrow">YOUR NEXT OPPORTUNITY</div><h1>Find your next move.</h1><p>Explore roles matched to your experience and preferences.</p></div><span className="ai-unavailable-badge">AI unavailable</span></div>
     <div className="discovery-summary"><div className="discovery-icon"><Icon name="search" /></div><div><strong>Opportunities from your sources</strong><p>{total} roles match your current filters. Review each one and save what feels right.</p></div></div>
+    <div className="mode-toggle" role="group" aria-label="Job list"><button type="button" aria-pressed={mode === 'for-you'} className={mode === 'for-you' ? 'on' : ''} onClick={() => setMode('for-you')}>For you</button><button type="button" aria-pressed={mode === 'all'} className={mode === 'all' ? 'on' : ''} onClick={() => setMode('all')}>All jobs</button></div>
     <div className="toolbar"><label className="search-field"><Icon name="search" /><input aria-label="Search jobs" placeholder="Search title, company, location..." value={query} onChange={(e) => setQuery(e.target.value)} /></label><span className="result-count">{total} results</span></div>
-    {degraded && <div className="degraded-note"><span className="note-dot" /> {rankingStatus || 'Local text and skill matching is active.'}</div>}
+    {mode === 'for-you' && forYouNote && <div className="degraded-note"><span className="note-dot" /> {forYouNote}</div>}
+    {mode === 'for-you' && !forYouNote && thinProfile && <div className="degraded-note"><span className="note-dot" /> Add your target roles and seniority in Job preferences to sharpen these matches.</div>}
+    {(mode === 'all' || forYouNote) && degraded && <div className="degraded-note"><span className="note-dot" /> {rankingStatus || 'Local text and skill matching is active.'}</div>}
     {jobs.length ? <><div className="job-list">{jobs.map(({ job, reasons, review }) => { const sourceUrl = safeHttpUrl(job.url || job.source_url); return <article className="job-card" key={job.id}><div className="company-logo">{initials(job.company || 'Company')}</div><div className="job-main"><div className="job-title-row"><h2><button className="job-title-button" onClick={() => onDetails(job)}>{job.title}</button></h2></div><div className="company-line"><strong>{job.company}</strong><span>·</span><span>{job.location || 'Location not specified'}</span>{job.work_mode && job.work_mode !== 'Not stated' && <><span>·</span><span>{job.work_mode}</span></>}</div><div className="job-tags">{job.employment_type && <Pill>{job.employment_type}</Pill>}{job.salary_min != null && <Pill>{job.salary_currency || ''} {Number(job.salary_min).toLocaleString()}{job.salary_max != null ? `–${Number(job.salary_max).toLocaleString()}` : '+'} {job.salary_period ? `/ ${salaryPeriod(job.salary_period)}` : ''}</Pill>}{job.source && <Pill>{job.source}{job.source_board ? ` · ${job.source_board}` : ''}</Pill>}</div>{reasons?.length ? <div className="match-reasons"><span>WHY IT MATCHES</span>{reasons.slice(0, 2).map((reason) => <span key={reason} className="reason"><Icon name="check" />{reason}</span>)}</div> : null}<p className="job-description">{job.description || 'The source did not provide a description.'}</p><button type="button" className="job-details-button" onClick={() => onDetails(job)}>Read full description</button><div className="job-foot">{job.posted_at && <span>Posted {fmtDay(job.posted_at)}</span>}{job.fetched_at && <span>Source checked {fmtDay(job.fetched_at)}</span>}{sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer">View source listing ↗</a>}</div></div><div className="job-actions"><button className="button ghost" disabled={busyJob === job.id} onClick={() => onReview(job, 'dismissed')}><Icon name="close" /> Pass</button><button className="button primary" disabled={busyJob === job.id || review === 'saved'} onClick={() => onReview(job, 'saved')}><Icon name="save" /> {review === 'saved' ? 'Saved' : 'Save job'}</button></div></article>; })}</div>{hasMore && <div className="load-more-row"><span>Showing {jobs.length} of {total}</span><button className="button secondary" onClick={onLoadMore} disabled={loadingMore}>{loadingMore ? 'Loading…' : 'Load more roles'}</button></div>}</> : loading ? <Loading label="Loading matching roles…" /> : <div className="empty-state"><div className="empty-art">⌕</div><h2>No roles found</h2><p>Try a different search or come back after new listings arrive.</p></div>}
   </div>;
 }

@@ -7,7 +7,7 @@ import { api, HttpError } from './api';
 vi.mock('./api', async (importOriginal) => {
   const original = await importOriginal<typeof import('./api')>();
   return { ...original, api: {
-    getBank: vi.fn(), uploads: vi.fn(), imports: vi.fn(), me: vi.fn(), getProfile: vi.fn(), getPreferences: vi.fn(), recommendations: vi.fn(), applications: vi.fn(), documents: vi.fn(),
+    getBank: vi.fn(), uploads: vi.fn(), imports: vi.fn(), me: vi.fn(), getProfile: vi.fn(), getPreferences: vi.fn(), recommendations: vi.fn(), recommendationsForYou: vi.fn(), applications: vi.fn(), documents: vi.fn(),
     uploadResume: vi.fn(), reviewJob: vi.fn(), putProfile: vi.fn(), confirmProfile: vi.fn(), putPreferences: vi.fn(), putApplication: vi.fn(), createDocument: vi.fn(), patchDocument: vi.fn(),
     duplicateDocument: vi.fn(), reviewDocument: vi.fn(), exportDocument: vi.fn(), previewDocument: vi.fn(), downloadExport: vi.fn(),
   } };
@@ -24,6 +24,7 @@ beforeEach(() => {
   mockApi.putProfile.mockImplementation(async (draft) => ({ draft, revision: 1, bank_revision: 8, confirmed_revision: null }));
   mockApi.getPreferences.mockResolvedValue({ roles: [], locations: [], work_modes: [], seniority: '', salary_min: null, salary_currency: 'SGD', salary_period: 'year', revision: 0 });
   mockApi.recommendations.mockResolvedValue({ items: [{ job: { id: 'role-1', title: 'Product Designer', company: 'Northstar', location: 'Singapore', description: 'Design clear tools for people.' }, score: 0.91, reasons: ['Product design experience'] }], total: 1, next_offset: null, degraded_mode: true });
+  mockApi.recommendationsForYou.mockRejectedValue(new Error('for you unavailable in this test'));   // default: exercise the fallback
   mockApi.applications.mockResolvedValue({ items: [] }); mockApi.documents.mockResolvedValue({ items: [] });
 });
 afterEach(() => cleanup());
@@ -254,4 +255,54 @@ describe('Job Hunter user journey', () => {
     expect(within(await screen.findByRole('dialog')).getByText('Company b')).toBeInTheDocument();
   });
 
+});
+
+describe('Discover: For you and All jobs', () => {
+  const semantic = (extra: object = {}) => ({ items: [{ job: { id: 'fy-1', title: 'Backend Engineer', company: 'Northstar', location: 'Singapore', description: 'Build APIs.' }, score: null, reasons: ['Python appears in the listing', 'Same kind of role as your target role'] }], total: 1, next_offset: null, degraded_mode: false, ranking_mode: 'semantic' as const, fallback_reason: null, ...extra });
+
+  it('starts on For you, shows its reasons and does not call the keyword list', async () => {
+    mockApi.recommendationsForYou.mockResolvedValue(semantic());
+    mockApi.getPreferences.mockResolvedValue({ roles: ['Backend Engineer'], locations: [], work_modes: [], seniority: 'Junior', salary_min: null, salary_currency: 'SGD', salary_period: 'year', revision: 1 });
+    render(<App />);
+    expect(await screen.findByText('Backend Engineer')).toBeInTheDocument();
+    expect(screen.getByText('Python appears in the listing')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'For you' })).toHaveAttribute('aria-pressed', 'true');
+    expect(mockApi.recommendations).not.toHaveBeenCalled();
+    expect(screen.queryByText(/is unavailable right now/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/sharpen these matches/i)).not.toBeInTheDocument();
+  });
+
+  it('switches to All jobs with one click and back again', async () => {
+    const user = userEvent.setup();
+    mockApi.recommendationsForYou.mockResolvedValue(semantic());
+    render(<App />);
+    expect(await screen.findByText('Backend Engineer')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'All jobs' }));
+    expect(await screen.findByText('Product Designer')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'All jobs' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(screen.getByRole('button', { name: 'For you' }));
+    expect(await screen.findByText('Backend Engineer')).toBeInTheDocument();
+  });
+
+  it('falls back to the all-jobs list with a plain note when For you fails', async () => {
+    render(<App />);   // the default mock rejects For you
+    expect(await screen.findByText('Product Designer')).toBeInTheDocument();
+    expect(screen.getByText(/For you is unavailable right now, so all jobs are shown/i)).toBeInTheDocument();
+    expect(mockApi.recommendations).toHaveBeenCalled();
+  });
+
+  it('shows the server reason when For you itself fell back, and hints at thin preferences', async () => {
+    mockApi.recommendationsForYou.mockResolvedValue({ ...semantic(), ranking_mode: 'keyword_fallback' as const, fallback_reason: 'No confirmed profile yet, so the keyword ranker was used.', degraded_mode: true });
+    render(<App />);
+    expect(await screen.findByText('No confirmed profile yet, so the keyword ranker was used.')).toBeInTheDocument();
+  });
+
+  it('hints at adding roles and seniority when the profile is thin, and sends typed search to For you', async () => {
+    const user = userEvent.setup();
+    mockApi.recommendationsForYou.mockResolvedValue(semantic());
+    render(<App />);   // default preferences: no roles, no seniority
+    expect(await screen.findByText(/sharpen these matches/i)).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Search jobs'), 'backend');
+    await waitFor(() => expect(mockApi.recommendationsForYou).toHaveBeenLastCalledWith('backend', 0), { timeout: 1500 });
+  });
 });

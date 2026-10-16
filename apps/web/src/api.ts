@@ -74,6 +74,11 @@ export const api = {
     if (q.trim()) params.set('q', q.trim());
     return request<{ items: Recommendation[]; total: number; next_offset: number | null; degraded_mode?: boolean; ranking_status?: string; ranking_mode?: string }>(`/recommendations?${params}`);
   },
+  recommendationsForYou: (q = '', offset = 0, limit = 20) => {
+    const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
+    if (q.trim()) params.set('q', q.trim());
+    return request<{ items: Recommendation[]; total: number; next_offset: number | null; degraded_mode?: boolean; ranking_status?: string; ranking_mode?: 'semantic' | 'keyword_fallback'; fallback_reason?: string | null; blocked_by_checks?: number }>(`/recommendations/for-you?${params}`);
+  },
   reviewJob: (id: string, decision: 'saved' | 'dismissed' | 'none') => request(`/jobs/${encodeURIComponent(id)}/review`, json('PUT', { decision })),
   applications: () => request<{ items: Application[] }>('/applications'),
   putApplication: (jobId: string, values: Partial<Application> & { expected_revision?: number; resume_document_id?: string; expected_resume_revision?: number; resume_export_id?: string | null; cover_letter_text?: string | null }) => request<Application>(`/applications/${encodeURIComponent(jobId)}`, json('PUT', values)),

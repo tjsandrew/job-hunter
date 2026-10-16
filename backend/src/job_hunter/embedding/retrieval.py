@@ -92,22 +92,21 @@ def cosine(left: Sequence[float], right: Sequence[float]) -> float:
     return dot / norm if norm else 0.0
 
 
+# Reasons are things worth telling a user about *why a job fits*. Caveats about what could not be checked
+# (role type unknown, level not stated, seniority not set) are not reasons: the check verdicts are returned
+# alongside (`role`, `seniority`) for anything that wants to show them as hints.
 _ROLE_REASONS = {
     "same": "Same kind of role as your target role",
     "adjacent": "A related kind of role to your target role",
-    "unknown": "The role type is not recorded, so it was not checked",
 }
 _LEVEL_REASONS = {
     "match": "Level matches your profile",
-    "adjacent": "Level is one step from your profile",
-    "all_levels": "Level is not stated, so it is shown for all levels",
-    "unknown": "Your seniority is not set, so level was not checked",
+    "adjacent": "Level is close to your profile",
 }
 
 
-def _reasons(role: str, seniority: str, role_detail: str, seniority_detail: str) -> tuple[str, ...]:
-    reasons = [_ROLE_REASONS.get(role, role_detail), _LEVEL_REASONS.get(seniority, seniority_detail)]
-    return tuple(reasons)
+def _reasons(role: str, seniority: str) -> tuple[str, ...]:
+    return tuple(text for text in (_ROLE_REASONS.get(role), _LEVEL_REASONS.get(seniority)) if text)
 
 
 def retrieve(query: ProfileQuery, candidates: Iterable[RetrievalCandidate], *, limit: int | None = 10,
@@ -125,7 +124,7 @@ def retrieve(query: ProfileQuery, candidates: Iterable[RetrievalCandidate], *, l
         similarity = cosine(query.vector, candidate.vector)
         role = check_role_family(candidate.role_family, query.role_families)
         level = check_seniority(candidate.seniority_levels, query.seniority_levels)
-        reasons = _reasons(role.verdict, level.verdict, role.reason, level.reason)
+        reasons = _reasons(role.verdict, level.verdict)
         if apply_checks and (role.blocks or level.blocks):
             blocked_reasons = tuple(r.reason for r in (role, level) if r.blocks)
             blocked.append(BlockedJob(candidate.job_id, similarity, role.verdict, level.verdict, blocked_reasons))

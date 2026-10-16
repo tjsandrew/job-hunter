@@ -381,9 +381,19 @@ def test_semantic_for_you_reports_why_it_cannot_be_used_and_pages_results(db):
                                                           text_version="profile-v2", input_hash="p" * 64, vector=v(1.0)))
     result, reason = semantic_for_you(db.session, (str(db.version_a), 1, {}), prefs, exclude_job_ids=[str(jobs[2].id)])
     assert reason is None and [r.job_id for r in result.ranked] == [str(jobs[0].id), str(jobs[1].id)]
-    items = page_items(db.session, result, offset=1, limit=5, job_out=lambda job: {"id": str(job.id), "title": job.title})
+    out = lambda job: {"id": str(job.id), "title": job.title, "description": job.description, "skills": job.skills}
+    items = page_items(db.session, result.ranked, offset=1, limit=5, job_out=out)
     assert [i["job"]["id"] for i in items] == [str(jobs[1].id)]
     assert items[0]["rank"] == 2 and items[0]["score"] is None and items[0]["reasons"]
+    # typed search keeps the ranked order and reports a short, readable reason (never a caveat)
+    from job_hunter.embedding.for_you import matching
+
+    assert [r.job_id for r in matching(db.session, result.ranked, "engineer 1", out)] == [str(jobs[1].id)]
+    assert [r.job_id for r in matching(db.session, result.ranked, "  ", out)] == [str(jobs[0].id), str(jobs[1].id)]
+    assert matching(db.session, result.ranked, "no such text", out) == []
+    skilled = page_items(db.session, result.ranked, 0, 5, out,
+                         snapshot={"skills": ["Python"], "headline": "Backend Engineer"}, preferences={})
+    assert all("not set" not in r and "not stated" not in r for item in skilled for r in item["reasons"])
 
 
 # ---- save/confirm hook and the headline fallback -----------------------------------------------------
