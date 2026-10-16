@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from job_hunter.config import settings
 from job_hunter.domain.models import Base, Job, ProfileVersion, User
 from job_hunter.embedding import (
-    STATUS_FAILED, STATUS_READY, STATUS_UNCHANGED, EmbeddingRecord, EmbeddingResult, JobEmbedRequest, JobTextInput,
+    JOB_TEXT_VERSION, STATUS_FAILED, STATUS_READY, STATUS_UNCHANGED, EmbeddingRecord, EmbeddingResult, JobEmbedRequest, JobTextInput,
     ProfileEmbedRequest, embed_jobs, embed_profile)
 from job_hunter.embedding.db_store import DbJobEmbeddingStore, DbProfileEmbeddingStore
 
@@ -241,7 +241,7 @@ def test_embedding_functions_work_end_to_end_and_survive_one_bad_item(db):
     outcomes = embed_jobs([bad, good], embedder=embedder, store=store)
     assert [o.status for o in outcomes] == [STATUS_FAILED, STATUS_READY]
     assert outcomes[0].reason == "storage error: IntegrityError"
-    assert store.get_state(str(db.job_id), "job-v1").status == "ready"
+    assert store.get_state(str(db.job_id), JOB_TEXT_VERSION).status == "ready"
     features = db.connection.execute(text("SELECT features FROM job_match_features")).scalar_one()
     assert features["role_family"] == "engineering"
 
@@ -294,8 +294,8 @@ def test_recommend_for_profile_checks_first_then_ranks_and_never_mixes_models(db
     for name, vector in vectors.items():
         job_store.save(getattr(jobs, name), EmbeddingRecord(
             status="ready", model="other" if name == "other_model" else "m", dimensions=512,
-            text_version="job-v1", input_hash="h" * 64, vector=vector))
-    job_store.save(jobs.pending, EmbeddingRecord(status="pending", model=None, dimensions=None, text_version="job-v1",
+            text_version=JOB_TEXT_VERSION, input_hash="h" * 64, vector=vector))
+    job_store.save(jobs.pending, EmbeddingRecord(status="pending", model=None, dimensions=None, text_version=JOB_TEXT_VERSION,
                                                  input_hash="h" * 64, vector=None))
     job_store.save_features(jobs.principal, {"seniority_levels": ["lead"], "seniority_source": "inferred_from_title"})
     profile_store.save(str(db.version_a), EmbeddingRecord(status="ready", model="m", dimensions=512,
@@ -375,7 +375,7 @@ def test_semantic_for_you_reports_why_it_cannot_be_used_and_pages_results(db):
     db.session.flush()
     job_store, profile_store = DbJobEmbeddingStore(db.session), DbProfileEmbeddingStore(db.session)
     for index, item in enumerate(jobs):
-        job_store.save(str(item.id), EmbeddingRecord(status="ready", model="m", dimensions=512, text_version="job-v1",
+        job_store.save(str(item.id), EmbeddingRecord(status="ready", model="m", dimensions=512, text_version=JOB_TEXT_VERSION,
                                                      input_hash="h" * 64, vector=v(1.0, 0.1 * index)))
     profile_store.save(str(db.version_a), EmbeddingRecord(status="ready", model="m", dimensions=512,
                                                           text_version="profile-v2", input_hash="p" * 64, vector=v(1.0)))
@@ -455,7 +455,7 @@ def test_role_check_falls_back_to_the_profile_headline_when_no_roles_are_set(db)
         jobs[name] = str(item.id)
     job_store, profile_store = DbJobEmbeddingStore(db.session), DbProfileEmbeddingStore(db.session)
     for key in jobs.values():
-        job_store.save(key, EmbeddingRecord(status="ready", model="m", dimensions=512, text_version="job-v1",
+        job_store.save(key, EmbeddingRecord(status="ready", model="m", dimensions=512, text_version=JOB_TEXT_VERSION,
                                             input_hash="h" * 64, vector=v(1.0)))
     job_store.save_features(jobs["eng"], {"role_family": "engineering", "seniority_levels": []})
     job_store.save_features(jobs["rec"], {"role_family": "people", "seniority_levels": []})
@@ -464,3 +464,21 @@ def test_role_check_falls_back_to_the_profile_headline_when_no_roles_are_set(db)
     result = recommend_for_profile(db.session, str(db.version_a), {"locations": ["Singapore"]})   # no target roles
     assert jobs["rec"] in {b.job_id for b in result.blocked}
     assert jobs["eng"] in {r.job_id for r in result.ranked}
+
+
+def test_text_report_summarises_heading_detection_per_source(db):
+    from job_hunter.embedding.backfill import text_report
+
+    good = ("About the team\nWe are a friendly team with a long history of building things together.\n"
+            "What you'll do\n" + "Build and run reliable services for our customers every day. " * 3 +
+            "\nRequirements\n" + "Strong Python and SQL experience in production settings. " * 3)
+    db.session.add_all([Job(title="A", description=good, source="greenhouse", source_board="acme", location="Singapore"),
+                        Job(title="B", description="Just a short blurb without any headings.", source="greenhouse",
+                            source_board="acme", location="Singapore"),
+                        Job(title="C", description=None, source="lever", source_board="x", location="Singapore")])
+    db.session.flush()
+    report = text_report(db.session)
+    acme = report["greenhouse/acme"]
+    assert acme["jobs"] == 2 and acme["v1_uses_sections"] == 1 and acme["v3_uses_sections"] == 1
+    assert acme["fallback_reasons"] == {"no recognisable heading": 1} and 0 < acme["avg_kept_share_v1"] < 1
+    assert report["lever/x"]["fallback_reasons"] == {"no description": 1}

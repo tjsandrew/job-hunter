@@ -3,6 +3,7 @@
 Callable from code (``backfill_jobs`` / ``backfill_profiles``) or from the command line::
 
     python -m job_hunter.embedding.backfill [--jobs] [--profiles] [--user alice] [--limit N] [--force]
+    python -m job_hunter.embedding.backfill --text-report [--limit N]     # read-only, embeds nothing
 
 It is idempotent: anything whose text, text version and model are unchanged is skipped, and jobs or profiles
 that are pending or failed are retried. The embedder being down never raises; those items stay pending.
@@ -29,7 +30,7 @@ from job_hunter.domain.models import Job
 from . import settings as embedding_settings
 from .client import HttpEmbedder
 from .db_store import DbJobEmbeddingStore
-from .job_text import JobTextInput
+from .job_text import JobTextInput, section_stats
 from .pipeline import JobEmbedRequest, embed_jobs
 from .profile_sync import NO_CONFIRMED_PROFILE, embed_user_profile
 
@@ -51,6 +52,34 @@ def backfill_jobs(session: Session, embedder, *, batch_size: int = 32, limit: in
         session.commit()
         log(f"jobs {min(start + batch_size, len(jobs))}/{len(jobs)}: {dict(counts)}")
     return counts
+
+
+def text_report(session: Session, *, limit: int | None = None) -> dict:
+    """How well heading detection would do on the open jobs, per source. Read-only; embeds nothing.
+
+    The default job text uses the whole description, so this is for judging whether heading
+    detection (job-v1 / job-v3) could be trusted on a new source: how many listings it would use
+    sections for, how many fall back, why, and how much of the description it keeps."""
+    query = select(Job).where(Job.status == "open").order_by(Job.id)
+    if limit:
+        query = query.limit(limit)
+    report: dict = {}
+    for job in session.scalars(query):
+        source = f"{job.source}/{job.source_board}" if job.source_board else job.source
+        row = report.setdefault(source, {"jobs": 0, "v1_uses_sections": 0, "v3_uses_sections": 0, "kept_share_sum": 0.0,
+                                         "fallback_reasons": Counter()})
+        v1, v3 = section_stats(job.description), section_stats(job.description, tolerant=True)
+        row["jobs"] += 1
+        row["v1_uses_sections"] += v1.used_sections
+        row["v3_uses_sections"] += v3.used_sections
+        row["kept_share_sum"] += v1.kept_share if v1.used_sections else 0.0
+        if not v3.used_sections:
+            row["fallback_reasons"][v3.fallback_reason or "unknown"] += 1
+    for row in report.values():
+        used = row["v1_uses_sections"]
+        row["avg_kept_share_v1"] = round(row.pop("kept_share_sum") / used, 2) if used else None
+        row["fallback_reasons"] = dict(row["fallback_reasons"])
+    return report
 
 
 def backfill_profiles(session: Session, embedder, user_ids: Iterable, *, force: bool = False,
@@ -78,6 +107,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--limit", type=int, help="at most this many jobs")
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--force", action="store_true", help="re-embed even if unchanged")
+    parser.add_argument("--text-report", action="store_true",
+                        help="read-only: how heading detection would do per source (embeds nothing)")
     args = parser.parse_args(argv)
     do_jobs, do_profiles = args.jobs or not args.profiles, args.profiles or not args.jobs
 
@@ -90,6 +121,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     engine = create_engine(os.getenv("MIGRATION_DATABASE_URL") or app_settings.database_url)
     embedder = HttpEmbedder(embedding_settings.embedder_url(), timeout_seconds=120)
     with Session(engine) as session:
+        if args.text_report:
+            for source, row in sorted(text_report(session, limit=args.limit).items()):
+                print(f"{source}: {row}")
+            return 0
         if do_jobs:
             print("jobs:", dict(backfill_jobs(session, embedder, batch_size=args.batch_size, limit=args.limit,
                                               force=args.force, log=print)))

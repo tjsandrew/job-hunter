@@ -1,14 +1,20 @@
-"""Deterministic, versioned embedding text for a job (version ``job-v1``).
+"""Deterministic, versioned embedding text for a job.
 
 Turns the job fields a teammate already has into one short text for the embedder.
 Everything is nullable except the title. Location, work mode, status, salary and
 the company name are deliberately *not* part of the text: they are filters or
 display fields, and the company name would pull same-employer jobs together.
 
-Description cleanup is conservative: only sections under known headings are kept
-(duties and requirements) and known boilerplate sections are dropped. When the
-description has no recognisable duties/requirements section, or the extraction is
-too small to trust, the whole normalised description is used instead.
+Three versions exist (``build_job_text(job, version=...)``):
+
+* ``job-v2`` (the default): ``Role``, ``Stated skills`` (when the source has them) and the
+  whole normalised description. No heading detection, so nothing can be silently dropped.
+* ``job-v1``: keeps only the sections under known duties/requirements headings and drops known
+  boilerplate; falls back to the whole description when no section is found or the extraction is
+  too small. Frozen as first built, so results stay reproducible.
+* ``job-v3``: ``job-v1`` made tolerant of headings with missing spaces ("Whatyou'll do") and with a
+  stricter fallback (both Work and Requirements must be found, else the whole description).
+  Exploratory: to be compared against ``job-v2`` once a larger, more varied job set exists.
 """
 
 from __future__ import annotations
@@ -17,7 +23,10 @@ import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
-JOB_TEXT_VERSION = "job-v1"
+JOB_TEXT_VERSION = "job-v2"           # default format: Role, Stated skills, whole description
+SECTIONS_TEXT_VERSION = "job-v1"      # heading-based extraction, as first built (frozen)
+TOLERANT_SECTIONS_TEXT_VERSION = "job-v3"   # heading-based extraction, tolerant and stricter fallback
+KNOWN_TEXT_VERSIONS = (JOB_TEXT_VERSION, SECTIONS_TEXT_VERSION, TOLERANT_SECTIONS_TEXT_VERSION)
 MAX_TEXT_CHARS = 8000          # safety cap well below the embedder's own limit
 MIN_EXTRACTED_CHARS = 100      # below this, trust the full description instead
 
@@ -89,8 +98,20 @@ def _normalise_heading(line: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", line.casefold()).strip()
 
 
-def _classify(line: str) -> str | None:
-    """Return "work", "requirements", "excluded" or None when the line is not a known heading."""
+def _squash(label: str) -> str:
+    return label.replace(" ", "")
+
+
+_SQUASHED_WORK = frozenset(_squash(h) for h in _WORK_HEADINGS)
+_SQUASHED_REQUIREMENTS = frozenset(_squash(h) for h in _REQUIREMENT_HEADINGS)
+_SQUASHED_EXCLUDED = frozenset(_squash(h) for h in _EXCLUDED_HEADINGS)
+_RUN_TOGETHER_EXCLUDED_RE = re.compile(r"^(about|why)[A-Z]")      # "AboutStripe", "WhyJoin"
+
+
+def _classify(line: str, tolerant: bool = False) -> str | None:
+    """Return "work", "requirements", "excluded" or None when the line is not a known heading.
+
+    ``tolerant`` also accepts headings whose spaces were lost in the source ("Whatyou'll do")."""
     if len(line) > 90:
         return None
     label = _normalise_heading(line)
@@ -102,6 +123,14 @@ def _classify(line: str) -> str | None:
         return "requirements"
     if label in _EXCLUDED_HEADINGS or label.startswith(_EXCLUDED_PREFIXES):
         return "excluded"
+    if tolerant:
+        squashed = _squash(label)
+        if squashed in _SQUASHED_WORK:
+            return "work"
+        if squashed in _SQUASHED_REQUIREMENTS:
+            return "requirements"
+        if squashed in _SQUASHED_EXCLUDED or _RUN_TOGETHER_EXCLUDED_RE.match(line.strip()):
+            return "excluded"
     return None
 
 
@@ -140,14 +169,14 @@ def _lines(description: str) -> list[str]:
             if raw.strip() and not _HASHTAG_LINE_RE.match(raw.strip())]
 
 
-def _extract_sections(description: str) -> tuple[str, str]:
+def _extract_sections(description: str, tolerant: bool = False) -> tuple[str, str]:
     """Return (work, requirements) text from known headings, or ("", "") when none apply."""
     work: list[str] = []
     requirements: list[str] = []
     current: str | None = None
     found = False
     for raw in _lines(description):
-        kind = _classify(raw)
+        kind = _classify(raw, tolerant)
         if kind is not None:
             current = kind if kind != "excluded" else None
             found = found or kind in ("work", "requirements")
@@ -175,8 +204,51 @@ def _skills_line(skills: Sequence[str] | None) -> str:
     return ", ".join(seen.values())
 
 
-def build_job_text(job: JobTextInput) -> JobText:
-    """Assemble the versioned embedding text. Raises ``ValueError`` for a blank title."""
+@dataclass(frozen=True)
+class SectionStats:
+    """How heading detection did on one description (for judging a new source; not used to build text)."""
+
+    total_chars: int
+    work_chars: int
+    requirements_chars: int
+    used_sections: bool          # extraction would be trusted
+    fallback_reason: str | None  # why the whole description would be used instead
+
+    @property
+    def kept_share(self) -> float:
+        return (self.work_chars + self.requirements_chars) / self.total_chars if self.total_chars else 0.0
+
+
+def section_stats(description: str | None, tolerant: bool = False) -> SectionStats:
+    """Run heading detection on a description and report what it found."""
+    text = description or ""
+    full = _full_description(text) if text.strip() else ""
+    if not full:
+        return SectionStats(0, 0, 0, False, "no description")
+    work, requirements = _extract_sections(text, tolerant)
+    kept = len(work) + len(requirements)
+    if kept < MIN_EXTRACTED_CHARS:
+        reason = "no recognisable heading" if kept == 0 else "extracted text too small"
+        return SectionStats(len(full), len(work), len(requirements), False, reason)
+    if tolerant and not (work and requirements):
+        return SectionStats(len(full), len(work), len(requirements), False,
+                            "work section missing" if not work else "requirements section missing")
+    return SectionStats(len(full), len(work), len(requirements), True, None)
+
+
+def _labelled_text(labelled: list[tuple[str, str]], version: str, used_sections: bool) -> JobText:
+    text = "\n".join(f"{label}: {value}" for label, value in labelled)
+    truncated = len(text) > MAX_TEXT_CHARS
+    if truncated:
+        text = text[:MAX_TEXT_CHARS].rsplit(" ", 1)[0]
+    return JobText(text=text, version=version, included=tuple(label for label, _ in labelled),
+                   used_sections=used_sections, truncated=truncated)
+
+
+def build_job_text(job: JobTextInput, version: str = JOB_TEXT_VERSION) -> JobText:
+    """Assemble the versioned embedding text. Raises ``ValueError`` for a blank title or unknown version."""
+    if version not in KNOWN_TEXT_VERSIONS:
+        raise ValueError(f"unknown job text version {version!r}")
     title = re.sub(r"\s+", " ", job.title or "").strip()
     if not title:
         raise ValueError("a job title is required to build embedding text")
@@ -189,26 +261,21 @@ def build_job_text(job: JobTextInput) -> JobText:
     used_sections = False
     description = job.description or ""
     if description.strip():
-        work, requirements = _extract_sections(description)
-        if len(work) + len(requirements) >= MIN_EXTRACTED_CHARS:
-            used_sections = True
-            if work:
-                labelled.append(("Work", work))
-            if requirements:
-                labelled.append(("Requirements", requirements))
-        else:
+        if version == JOB_TEXT_VERSION:
             full = _full_description(description)
             if full:
                 labelled.append(("Description", full))
-
-    text = "\n".join(f"{label}: {value}" for label, value in labelled)
-    truncated = len(text) > MAX_TEXT_CHARS
-    if truncated:
-        text = text[:MAX_TEXT_CHARS].rsplit(" ", 1)[0]
-    return JobText(
-        text=text,
-        version=JOB_TEXT_VERSION,
-        included=tuple(label for label, _ in labelled),
-        used_sections=used_sections,
-        truncated=truncated,
-    )
+        else:
+            tolerant = version == TOLERANT_SECTIONS_TEXT_VERSION
+            if section_stats(description, tolerant).used_sections:
+                work, requirements = _extract_sections(description, tolerant)
+                used_sections = True
+                if work:
+                    labelled.append(("Work", work))
+                if requirements:
+                    labelled.append(("Requirements", requirements))
+            else:
+                full = _full_description(description)
+                if full:
+                    labelled.append(("Description", full))
+    return _labelled_text(labelled, version, used_sections)

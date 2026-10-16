@@ -93,19 +93,20 @@ def _failed_prep(key: str, version: str, features: dict[str, Any], exc: Exceptio
     return _Prepared(key, version, None, None, features, STATUS_FAILED, f"preparation error: {type(exc).__name__}")
 
 
-def _prepare_job(request: JobEmbedRequest, classify: Classifier | None) -> _Prepared:
+def _prepare_job(request: JobEmbedRequest, classify: Classifier | None,
+                 text_version: str = JOB_TEXT_VERSION) -> _Prepared:
     key = request.job_id
     try:
         features = _plain(extract_job_features(request.job.title, request.category,
                                                request.stated_seniority, classify))
     except Exception as exc:
-        return _failed_prep(key, JOB_TEXT_VERSION, {}, exc)
+        return _failed_prep(key, text_version, {}, exc)
     try:
-        built = build_job_text(request.job)
+        built = build_job_text(request.job, version=text_version)
     except ValueError as exc:
-        return _Prepared(key, JOB_TEXT_VERSION, None, None, features, STATUS_NO_CONTENT, str(exc))
+        return _Prepared(key, text_version, None, None, features, STATUS_NO_CONTENT, str(exc))
     except Exception as exc:
-        return _failed_prep(key, JOB_TEXT_VERSION, features, exc)
+        return _failed_prep(key, text_version, features, exc)
     return _Prepared(key, built.version, built.text, _hash(built.version, built.text), features)
 
 
@@ -215,18 +216,21 @@ def _run(prepared: list[_Prepared], embedder: Embedder, store: EmbeddingStore, *
 
 def embed_jobs(requests: Sequence[JobEmbedRequest], *, embedder: Embedder, store: EmbeddingStore,
                expected_model: str | None = None, classify: Classifier | None = None, force: bool = False,
-               batch_size: int = 32) -> list[EmbeddingOutcome]:
-    """Embed many jobs, one embedder call per batch. Outcomes are in request order."""
-    prepared = [_prepare_job(r, classify) for r in requests]
+               batch_size: int = 32, text_version: str = JOB_TEXT_VERSION) -> list[EmbeddingOutcome]:
+    """Embed many jobs, one embedder call per batch. Outcomes are in request order.
+
+    ``text_version`` picks the job text format (default ``job-v2``, the whole description); other
+    versions are for experiments and are stored as separate rows, so formats can be compared."""
+    prepared = [_prepare_job(r, classify, text_version) for r in requests]
     return _run(prepared, embedder, store, batch_size=batch_size, force=force, expected_model=expected_model)
 
 
 def embed_job(request: JobEmbedRequest, *, embedder: Embedder, store: EmbeddingStore,
               expected_model: str | None = None, classify: Classifier | None = None,
-              force: bool = False) -> EmbeddingOutcome:
+              force: bool = False, text_version: str = JOB_TEXT_VERSION) -> EmbeddingOutcome:
     """The job embedding service: one job in, one outcome out. Never raises for expected problems."""
     return embed_jobs([request], embedder=embedder, store=store, expected_model=expected_model,
-                      classify=classify, force=force, batch_size=1)[0]
+                      classify=classify, force=force, batch_size=1, text_version=text_version)[0]
 
 
 def embed_profiles(requests: Sequence[ProfileEmbedRequest], *, embedder: Embedder, store: EmbeddingStore,

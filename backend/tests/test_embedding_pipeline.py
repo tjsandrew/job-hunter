@@ -1,6 +1,7 @@
 import pytest
 
 from job_hunter.embedding import (
+    JOB_TEXT_VERSION,
     STATUS_FAILED,
     STATUS_NO_CONTENT,
     STATUS_PENDING,
@@ -23,7 +24,7 @@ from job_hunter.embedding import (
 from job_hunter.embedding.stores import StoredEmbeddingState
 
 MODEL = "fake-model"
-JOB_KEY = ("j1", "job-v1")
+JOB_KEY = ("j1", JOB_TEXT_VERSION)
 
 
 def classify(title):
@@ -75,7 +76,7 @@ def test_job_is_embedded_and_stored_with_metadata_and_features_separately():
     assert embedder.calls == [[build_job_text(job().job).text]]
     record = store.records[JOB_KEY]
     assert record.status == STATUS_READY and record.model == MODEL and record.dimensions == 512
-    assert len(record.vector) == 512 and record.text_version == "job-v1" and len(record.input_hash) == 64
+    assert len(record.vector) == 512 and record.text_version == JOB_TEXT_VERSION and len(record.input_hash) == 64
     assert store.features["j1"] == {"seniority_levels": [], "seniority_source": "unspecified", "role_family": "engineering"}
 
 
@@ -260,6 +261,19 @@ def test_in_memory_store_roundtrip():
     store.save_features("x", {"a": 1})                 # features exist independently of any embedding row
     assert store.features["x"] == {"a": 1} and store.get_state("x", "job-v1") is None
     run_job(store=store)
-    state = store.get_state("j1", "job-v1")
+    state = store.get_state("j1", JOB_TEXT_VERSION)
     assert isinstance(state, StoredEmbeddingState) and state.status == STATUS_READY and state.model == MODEL
     assert store.get_state("j1", "job-v0") is None
+
+
+def test_job_text_version_can_be_chosen_and_formats_are_stored_side_by_side():
+    store = InMemoryEmbeddingStore()
+    embedder = FakeEmbedder()
+    desc = "Responsibilities\n" + "Build and run APIs for payments. " * 6
+    request = job(description=desc)
+    assert embed_job(request, embedder=embedder, store=store, classify=classify).status == STATUS_READY
+    assert embed_job(request, embedder=embedder, store=store, classify=classify, text_version="job-v1").status == STATUS_READY
+    assert store.get_state("j1", "job-v2") is not None and store.get_state("j1", "job-v1") is not None
+    assert store.records[("j1", "job-v1")].input_hash != store.records[("j1", "job-v2")].input_hash
+    bad = embed_job(request, embedder=embedder, store=store, classify=classify, text_version="job-v9")
+    assert bad.status == STATUS_NO_CONTENT and "unknown job text version" in (bad.reason or "")
