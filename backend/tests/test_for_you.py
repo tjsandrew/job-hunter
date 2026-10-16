@@ -28,3 +28,12 @@ def test_for_you_route_is_disabled_by_default(client, monkeypatch):
     response = client.get("/v1/recommendations/for-you")
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "FOR_YOU_DISABLED"
+
+
+@pytest.mark.parametrize("value,enabled", [(None, False), ("0", False), ("1", True), ("true", True)])
+def test_embed_on_save_switch(monkeypatch, value, enabled):
+    if value is None:
+        monkeypatch.delenv("EMBED_ON_SAVE", raising=False)
+    else:
+        monkeypatch.setenv("EMBED_ON_SAVE", value)
+    assert embedding_settings.embed_on_save_enabled() is enabled

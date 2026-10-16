@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from job_hunter.config import settings
 from job_hunter.recommendations import rank_jobs, RANKING_VERSION
-from job_hunter.embedding import for_you as semantic, settings as embedding_settings
+from job_hunter.embedding import for_you as semantic, profile_sync, settings as embedding_settings
 from job_hunter.adapters.database import get_db
 from job_hunter.domain.identity import DEV_USERS
 from job_hunter.domain.models import (User, Profile, Preference, Job, JobReview, Application,
@@ -246,7 +246,9 @@ def update_profile(body: ProfileWrite, db: Session = Depends(db_for)):
 
 @app.post("/v1/profile/confirm")
 def confirm_profile(body: ConfirmWrite, db: Session = Depends(db_for)):
-    return bank_services.confirm_bank(db, body.expected_bank_revision)
+    result = bank_services.confirm_bank(db, body.expected_bank_revision)
+    profile_sync.embed_after_save(db, current_user(db).id)   # best effort: a failed embed never fails the confirm
+    return result
 
 app.include_router(build_router(db_for))
 
@@ -264,6 +266,7 @@ def update_preferences(body: PreferencesWrite, db: Session = Depends(db_for)):
     else:
         if item.revision != body.expected_revision: raise HTTPException(409, detail={"code": "REVISION_CONFLICT", "message": "Preferences changed"})
         item.data = body.model_dump(exclude={"expected_revision"}); item.revision += 1
+    profile_sync.embed_after_save(db, current_user(db).id)   # best effort; no-op without a confirmed profile
     return {**item.data, "revision": item.revision}
 
 @app.get("/v1/recommendations")

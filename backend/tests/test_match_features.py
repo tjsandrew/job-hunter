@@ -163,3 +163,21 @@ def test_real_classifier_agrees_on_the_trap_titles():
         assert extract_job_features(title).role_family == family
     profile = extract_profile_features(["Backend Engineer"], "Junior")
     assert profile.role_families == ("engineering",)
+
+
+def test_executive_is_a_stated_level_only_never_a_title_keyword():
+    # a user picking "Executive" in preferences means the top of the ladder ...
+    assert extract_profile_features(["Head of Data"], "Executive", classify=fake_classify).seniority_levels == ("lead",)
+    assert extract_profile_features(None, ["Executive"], classify=fake_classify).seniority_levels == ("lead",)
+    # ... but "Account Executive" is a sales job, not an executive-level one
+    assert levels_from_text("Account Executive") == ()
+    assert extract_job_features("Account Executive", classify=fake_classify).seniority_levels == ()
+
+
+def test_role_hint_from_snapshot():
+    from job_hunter.embedding.features import role_hint_from_snapshot
+
+    assert role_hint_from_snapshot({"headline": " Data & Backend Engineer "}) == ["Data & Backend Engineer"]
+    assert role_hint_from_snapshot({"headline": "", "experience": [{"role": "Data Analyst"}]}) == ["Data Analyst"]
+    assert role_hint_from_snapshot({"experience": [{"title": "Engineer"}]}) == ["Engineer"]
+    assert role_hint_from_snapshot({}) == [] and role_hint_from_snapshot(None) == []

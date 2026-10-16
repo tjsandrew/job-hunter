@@ -24,16 +24,14 @@ from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session
 
 from job_hunter.config import settings as app_settings
-from job_hunter.domain.models import Job, Preference, Profile, ProfileVersion
+from job_hunter.domain.models import Job
 
 from . import settings as embedding_settings
 from .client import HttpEmbedder
-from .db_store import DbJobEmbeddingStore, DbProfileEmbeddingStore
+from .db_store import DbJobEmbeddingStore
 from .job_text import JobTextInput
-from .pipeline import JobEmbedRequest, ProfileEmbedRequest, embed_jobs, embed_profile
-from .profile_text import ProfileTextInput
-
-NO_CONFIRMED_PROFILE = "no_confirmed_profile"
+from .pipeline import JobEmbedRequest, embed_jobs
+from .profile_sync import NO_CONFIRMED_PROFILE, embed_user_profile
 
 
 def backfill_jobs(session: Session, embedder, *, batch_size: int = 32, limit: int | None = None,
@@ -58,28 +56,16 @@ def backfill_jobs(session: Session, embedder, *, batch_size: int = 32, limit: in
 def backfill_profiles(session: Session, embedder, user_ids: Iterable, *, force: bool = False,
                       log: Callable[[str], None] = lambda message: None) -> Counter:
     """Embed each user's confirmed profile version, one transaction per user."""
-    store, counts = DbProfileEmbeddingStore(session), Counter()
+    counts = Counter()
     for user_id in user_ids:
         session.execute(text("SELECT set_config('app.user_id', :user_id, true)"), {"user_id": str(user_id)})
-        profile = session.get(Profile, user_id)
-        version = None
-        if profile is not None and profile.confirmed_revision is not None:
-            version = session.scalar(select(ProfileVersion).where(
-                ProfileVersion.user_id == user_id, ProfileVersion.revision == profile.confirmed_revision))
-        if version is None:
+        outcome = embed_user_profile(session, user_id, embedder, force=force)
+        if outcome is None:
             counts[NO_CONFIRMED_PROFILE] += 1
             log(f"user {user_id}: no confirmed profile version")
-            session.commit()
-            continue
-        preferences = session.get(Preference, user_id)
-        data = preferences.data if preferences else {}
-        outcome = embed_profile(
-            ProfileEmbedRequest(profile_version_id=str(version.id), snapshot=version.data,
-                                target_roles=ProfileTextInput.from_preferences({}, data).target_roles,
-                                seniority_preference=data.get("seniority")),
-            embedder=embedder, store=store, force=force)
-        counts[outcome.status] += 1
-        log(f"user {user_id}: {outcome.status}" + (f" ({outcome.reason})" if outcome.reason else ""))
+        else:
+            counts[outcome.status] += 1
+            log(f"user {user_id}: {outcome.status}" + (f" ({outcome.reason})" if outcome.reason else ""))
         session.commit()
     return counts
 

@@ -95,6 +95,11 @@ def levels_from_text(text: str | None) -> tuple[str, ...]:
     return tuple(found)
 
 
+# Plain words that only make sense as a *stated* level (a preference or a structured field), never as a
+# title keyword: "Account Executive" is a sales job, not an executive-level one.
+_STATED_ONLY_LEVELS = {"executive": "lead"}
+
+
 def _normalise_levels(levels: Sequence[str] | None) -> tuple[str, ...]:
     """Accept ladder names ("entry") or plain wording ("Junior"); ignore anything else."""
     valid: set[str] = set()
@@ -102,6 +107,8 @@ def _normalise_levels(levels: Sequence[str] | None) -> tuple[str, ...]:
         text = str(level).strip().lower()
         if text in SENIORITY_LADDER:
             valid.add(text)
+        elif text in _STATED_ONLY_LEVELS:
+            valid.add(_STATED_ONLY_LEVELS[text])
         else:
             valid.update(levels_from_text(text))
     return tuple(level for level in SENIORITY_LADDER if level in valid)
@@ -136,6 +143,19 @@ def extract_job_features(
     return JobFeatures(seniority_levels=levels, seniority_source=source, role_family=family)
 
 
+def role_hint_from_snapshot(snapshot: "dict | None") -> list[str]:
+    """Role titles to use for the role check when the user set no target roles: the headline, else the latest role."""
+    snapshot = snapshot or {}
+    headline = str(snapshot.get("headline") or "").strip()
+    if headline:
+        return [headline]
+    for item in snapshot.get("experience") or ():
+        title = str((item.get("role") or item.get("title") or "") if isinstance(item, dict) else "").strip()
+        if title:
+            return [title]
+    return []
+
+
 def extract_profile_features(
     target_roles: Sequence[str] | None,
     seniority_preference: str | Sequence[str] | None,
@@ -143,7 +163,8 @@ def extract_profile_features(
 ) -> ProfileFeatures:
     """Features for one profile, from the user's preferences."""
     if isinstance(seniority_preference, str) or seniority_preference is None:
-        levels = levels_from_text(seniority_preference)
+        levels = levels_from_text(seniority_preference) or (
+            _normalise_levels([seniority_preference]) if seniority_preference else ())
     else:
         levels = _normalise_levels(seniority_preference)
     families: list[str] = []

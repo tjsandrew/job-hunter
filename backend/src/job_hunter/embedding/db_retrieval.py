@@ -19,10 +19,10 @@ from typing import Any, Iterable, Mapping, Sequence
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from job_hunter.domain.models import Job
+from job_hunter.domain.models import Job, ProfileVersion
 
 from .db_tables import job_embeddings, job_match_features, profile_embeddings
-from .features import Classifier, extract_profile_features
+from .features import Classifier, extract_profile_features, role_hint_from_snapshot
 from .job_text import JOB_TEXT_VERSION
 from .profile_text import PROFILE_TEXT_VERSION, ProfileTextInput
 from .retrieval import ProfileQuery, RetrievalCandidate, RetrievalResult, eligible_jobs, retrieve
@@ -84,6 +84,10 @@ def recommend_for_profile(session: Session, profile_version_id: str, preferences
     preferences = preferences or {}
     if target_roles is None:
         target_roles = ProfileTextInput.from_preferences({}, preferences).target_roles
+    if not target_roles:
+        # No target roles set: the role check falls back to the profile's headline (or latest role).
+        version = session.get(ProfileVersion, _uuid(profile_version_id))
+        target_roles = role_hint_from_snapshot(version.data if version is not None else None)
     if seniority_preference is None:
         seniority_preference = preferences.get("seniority")
     loaded = load_profile_query(session, profile_version_id, target_roles=target_roles,

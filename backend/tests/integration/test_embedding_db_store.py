@@ -384,3 +384,73 @@ def test_semantic_for_you_reports_why_it_cannot_be_used_and_pages_results(db):
     items = page_items(db.session, result, offset=1, limit=5, job_out=lambda job: {"id": str(job.id), "title": job.title})
     assert [i["job"]["id"] for i in items] == [str(jobs[1].id)]
     assert items[0]["rank"] == 2 and items[0]["score"] is None and items[0]["reasons"]
+
+
+# ---- save/confirm hook and the headline fallback -----------------------------------------------------
+def _confirmed_profile(db, snapshot=None, roles=None):
+    from job_hunter.domain.models import Preference, Profile
+
+    set_user(db.connection, db.user_a)
+    db.session.add(Profile(user_id=db.user_a, draft={}, revision=1, bank_revision=1, confirmed_revision=1))
+    db.session.add(Preference(user_id=db.user_a, data={"roles": roles or [], "seniority": None}))
+    db.session.get(ProfileVersion, db.version_a).data = snapshot or {
+        "headline": "Junior Backend Engineer", "summary": "Builds APIs.", "skills": ["Python"]}
+    db.session.flush()
+
+
+class ExplodingEmbedder:
+    def embed(self, texts):
+        raise RuntimeError("boom: something nobody planned for")
+
+
+def test_embed_after_save_is_off_by_default_and_best_effort_when_on(db, monkeypatch):
+    from job_hunter.embedding.client import EmbedderUnavailable
+    from job_hunter.embedding.profile_sync import NO_CONFIRMED_PROFILE, embed_after_save
+
+    monkeypatch.delenv("EMBED_ON_SAVE", raising=False)
+    assert embed_after_save(db.session, db.user_a, embedder=FakeEmbedder()) == "disabled"
+
+    monkeypatch.setenv("EMBED_ON_SAVE", "1")
+    set_user(db.connection, db.user_a)
+    assert embed_after_save(db.session, db.user_a, embedder=FakeEmbedder()) == NO_CONFIRMED_PROFILE   # nothing confirmed yet
+
+    _confirmed_profile(db)
+    assert embed_after_save(db.session, db.user_a, embedder=FakeEmbedder()) == "ready"
+    assert embed_after_save(db.session, db.user_a, embedder=FakeEmbedder()) == "unchanged"
+
+    class Down:
+        def embed(self, texts):
+            raise EmbedderUnavailable("embedder is down")
+
+    # roles change the embedded text; with the embedder down the save still goes through (status pending)
+    pref = db.session.get(__import__("job_hunter.domain.models", fromlist=["Preference"]).Preference, db.user_a)
+    pref.data = {"roles": ["Data Analyst"], "seniority": None}
+    assert embed_after_save(db.session, db.user_a, embedder=Down()) == "pending"
+    # an unexpected error is swallowed and the session stays usable
+    pref.data = {"roles": ["Data Analyst", "Backend Engineer"], "seniority": None}
+    assert embed_after_save(db.session, db.user_a, embedder=ExplodingEmbedder()) in {"error", "failed"}
+    assert db.session.scalar(text("SELECT count(*) FROM jobs")) >= 1
+    assert embed_after_save(db.session, db.user_a, embedder=FakeEmbedder()) == "ready"   # and it recovers
+
+
+def test_role_check_falls_back_to_the_profile_headline_when_no_roles_are_set(db):
+    from job_hunter.embedding.db_retrieval import recommend_for_profile
+
+    _confirmed_profile(db)
+    jobs = {}
+    for name, title, category in (("eng", "Backend Engineer", "engineering"), ("rec", "Technical Recruiter", "people")):
+        item = Job(title=title, description="x", category=category, location="Singapore")
+        db.session.add(item)
+        db.session.flush()
+        jobs[name] = str(item.id)
+    job_store, profile_store = DbJobEmbeddingStore(db.session), DbProfileEmbeddingStore(db.session)
+    for key in jobs.values():
+        job_store.save(key, EmbeddingRecord(status="ready", model="m", dimensions=512, text_version="job-v1",
+                                            input_hash="h" * 64, vector=v(1.0)))
+    job_store.save_features(jobs["eng"], {"role_family": "engineering", "seniority_levels": []})
+    job_store.save_features(jobs["rec"], {"role_family": "people", "seniority_levels": []})
+    profile_store.save(str(db.version_a), EmbeddingRecord(status="ready", model="m", dimensions=512,
+                                                          text_version="profile-v2", input_hash="p" * 64, vector=v(1.0)))
+    result = recommend_for_profile(db.session, str(db.version_a), {"locations": ["Singapore"]})   # no target roles
+    assert jobs["rec"] in {b.job_id for b in result.blocked}
+    assert jobs["eng"] in {r.job_id for r in result.ranked}
