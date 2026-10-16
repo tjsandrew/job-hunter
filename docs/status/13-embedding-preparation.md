@@ -2,7 +2,8 @@
 
 Implemented 16 October 2026 on `noah/embedder-service`. Local commits only; no push or PR. Everything lives in
 `backend/src/job_hunter/embedding/` and is **not wired into the API, ingestion, profile saves, the database, search or
-ranking**. The live app still uses the existing keyword/skill/role ranker. There is no schema change.
+ranking**. The live app still uses the existing keyword/skill/role ranker. The only schema change is migration
+`0012_embedding_tables`, which adds three **new** tables and alters no existing table or column (see Storage).
 
 ## What it is for
 
@@ -56,30 +57,45 @@ the caller's database session lives inside the store, which keeps per-user row-l
 
 ## Storage
 
-`EmbeddingStore` is a small interface (`get_state(key, text_version)`, `save(key, record)`, `save_features(key, features)`).
-Only `InMemoryEmbeddingStore` exists; no table has been created. The interface assumes **separate tables** rather than extra
-columns on `jobs` and `profile_versions`:
+`EmbeddingStore` is a small interface (`get_state(key, text_version)`, `save(key, record)`, `save_features(key, features)`) with
+an in-memory implementation (tests, offline runs) and database implementations in `db_store.py` (import it explicitly; it needs
+SQLAlchemy). Embeddings live in **separate new tables** (migration `0012_embedding_tables`, chained after `0011`), so `jobs`,
+`profile_versions` and the resume intake flow are not touched:
 
-- **Embedding rows** are keyed by `(entity, text_version)` and hold the vector, model, dimensions, input hash, status and a short
-  reason. A new text version adds a row instead of overwriting, so formats can be compared side by side; a new model replaces the
-  row for that text version.
-- **Match features** (seniority levels and source, role family) are keyed by the entity alone and are saved on every run,
-  independently of whether an embedding succeeded, because they describe the job or profile rather than the vector.
+- **`job_embeddings`**: one row per job per text format (`unique (job_id, text_version)`): vector, model, dimensions, input hash,
+  status and a short reason. A new text format adds a row; a new model replaces the row for that format. Database checks require a
+  vector exactly when the status is `ready`. Rows are deleted with their job.
+- **`profile_embeddings`**: the same, per profile version, with a `user_id` and the **same per-user row-level security** as
+  `profile_versions`. The owner is read from the profile version itself, so a caller cannot write an embedding for someone else's
+  profile.
+- **`job_match_features`**: one row per job (seniority levels and where they came from, role family) as JSON with a feature
+  version. It is saved on every run, independently of whether the embedding succeeded. Profile match features are read live from
+  preferences and need no table.
 
-The proposed layout (job embeddings, profile embeddings with the same per-user row-level security as `profile_versions`, and a
-job match-features table) is awaiting agreement with the other owners. The existing `embedding` columns on `jobs` and
-`profile_versions` would stay untouched.
+`DbJobEmbeddingStore` and `DbProfileEmbeddingStore` take the caller's SQLAlchemy `Session` and never commit; every write runs in a
+savepoint, so one bad row cannot poison a batch. The older `embedding` columns on `jobs` and `profile_versions` are left unused.
+**The migration has not been applied to the running development database**; it applies on the next `docker compose up --build`
+of this branch.
 
 ## Verified
 
 - 102 embedding tests plus the 9 existing ranking tests pass inside the backend container (`pytest` with `backend/src` mounted
   and `PYTHONPATH=/app/src`). The text builders and checks also run on the host Python.
+- 10 database integration tests (`backend/tests/integration/test_embedding_db_store.py`, `RUN_DB_INTEGRATION=1`) run in a
+  rolled-back transaction with a throwaway schema and a restricted role, like the existing integration tests: migration adds only the
+  three new tables, changes no existing column, is re-runnable and reversible; stores, constraints, cascades, per-user isolation and
+  the embedding functions on top of the database stores.
+- The whole migration chain (`0001` to `0012`) applied to a throwaway database with a single head, downgraded to `0011` and
+  re-applied; after seeding, the full existing backend suite (498 tests, including the profile and resume integration tests) passed
+  against it. The throwaway database was dropped; the development database was not touched.
 - End to end against the local embedder service (Jina, 512-d): 70 real listings embedded in about 10 seconds in batches of 16;
   a second run skipped all 70 in 0.02 seconds. Alice's demo profile embedded with `profile-v2`.
 
 ## Not verified / known gaps
 
-- No database storage, migration, call from ingestion or profile save, or backfill command yet.
+- No call from ingestion or profile save, backfill command, similarity query or ranking use yet; the migration is not applied to the
+  running development database, and its agreement with the other owners (including the chain order if a newer migration lands) is
+  pending.
 - Years-of-experience is not used to infer seniority, and "associate" and "manager" are deliberately not read as levels.
 - Role families depend on the title-keyword classifier: about 29% of the 70 sample listings fall under "other", so the role
   check does nothing for them; most sample listings state no level, so the seniority check rarely fires.

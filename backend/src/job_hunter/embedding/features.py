@@ -23,6 +23,8 @@ import re
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
+FEATURES_VERSION = "features-v1"   # stored with the job features so a rule change is visible later
+
 SENIORITY_LADDER: tuple[str, ...] = ("intern", "entry", "mid", "senior", "lead")
 
 SOURCE_STATED = "stated"

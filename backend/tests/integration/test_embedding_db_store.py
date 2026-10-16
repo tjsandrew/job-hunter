@@ -1,0 +1,262 @@
+"""Migration 0012 and the database-backed embedding stores, run as a non-owner under forced row-level security.
+
+Everything happens in one transaction that is rolled back (throwaway schema and role), like the other
+integration tests, so the live database is never changed.
+"""
+import importlib.util
+import os
+from pathlib import Path
+from types import SimpleNamespace
+from uuid import uuid4
+
+import pytest
+from alembic.operations import Operations
+from alembic.runtime.migration import MigrationContext
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from job_hunter.config import settings
+from job_hunter.domain.models import Base, Job, ProfileVersion, User
+from job_hunter.embedding import (
+    STATUS_FAILED, STATUS_READY, STATUS_UNCHANGED, EmbeddingRecord, EmbeddingResult, JobEmbedRequest, JobTextInput,
+    ProfileEmbedRequest, embed_jobs, embed_profile)
+from job_hunter.embedding.db_store import DbJobEmbeddingStore, DbProfileEmbeddingStore
+
+pytestmark = pytest.mark.skipif(os.getenv("RUN_DB_INTEGRATION") != "1",
+                               reason="set RUN_DB_INTEGRATION=1 against local PostgreSQL")
+
+MIGRATION = Path(__file__).resolve().parents[2] / "migrations" / "versions" / "0012_embedding_tables.py"
+NEW_TABLES = {"job_embeddings", "profile_embeddings", "job_match_features"}
+
+
+def load_migration():
+    spec = importlib.util.spec_from_file_location("migration_0012", MIGRATION)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def run(connection, function):
+    with Operations.context(MigrationContext.configure(connection)):
+        function()
+
+
+def tables(connection, schema):
+    rows = connection.execute(text("SELECT tablename FROM pg_tables WHERE schemaname=:s"), {"s": schema}).scalars()
+    return set(rows)
+
+
+def columns(connection, schema, names):
+    rows = connection.execute(text("""SELECT table_name, column_name, data_type FROM information_schema.columns
+                                      WHERE table_schema=:s AND table_name = ANY(:n) ORDER BY 1, 2"""),
+                              {"s": schema, "n": list(names)}).all()
+    return [tuple(r) for r in rows]
+
+
+def set_user(connection, user_id):
+    connection.execute(text("SELECT set_config('app.user_id', :u, true)"), {"u": str(user_id)})
+
+
+@pytest.fixture
+def schema_conn():
+    """Owner connection with the app schema created from the models, before migration 0012 is applied."""
+    engine = create_engine(settings.migration_database_url or settings.database_url)
+    suffix = uuid4().hex
+    schema, role = "emb_" + suffix, "emb_writer_" + suffix
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        try:
+            connection.execute(text(f'CREATE ROLE "{role}" NOSUPERUSER NOBYPASSRLS'))
+            connection.execute(text(f'CREATE SCHEMA "{schema}"'))
+            connection.execute(text(f'SET LOCAL search_path TO "{schema}", public'))
+            Base.metadata.create_all(connection, checkfirst=False)
+            connection.execute(text("ALTER TABLE profile_versions ENABLE ROW LEVEL SECURITY"))
+            connection.execute(text("ALTER TABLE profile_versions FORCE ROW LEVEL SECURITY"))
+            connection.execute(text("""CREATE POLICY tenant_isolation ON profile_versions
+                USING (user_id = NULLIF(current_setting('app.user_id', true), '')::uuid)
+                WITH CHECK (user_id = NULLIF(current_setting('app.user_id', true), '')::uuid)"""))
+            yield SimpleNamespace(connection=connection, schema=schema, role=role)
+        finally:
+            transaction.rollback()
+    engine.dispose()
+
+
+@pytest.fixture
+def db(schema_conn):
+    connection, schema, role = schema_conn.connection, schema_conn.schema, schema_conn.role
+    run(connection, load_migration().upgrade)
+    connection.execute(text(f'GRANT USAGE ON SCHEMA "{schema}" TO "{role}"'))
+    connection.execute(text(f'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA "{schema}" TO "{role}"'))
+    connection.execute(text(f'SET LOCAL ROLE "{role}"'))
+    assert connection.execute(text("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname=current_user")).one() == (False, False)
+    session = Session(bind=connection)
+    user_a, user_b = User(auth_subject="a-" + uuid4().hex, display_name="A"), User(auth_subject="b-" + uuid4().hex, display_name="B")
+    job = Job(title="Backend Engineer", description="x")
+    session.add_all([user_a, user_b, job])
+    session.flush()
+    set_user(connection, user_a.id)
+    version_a = ProfileVersion(user_id=user_a.id, revision=1, data={}, content_hash="h" * 64)
+    session.add(version_a)
+    session.flush()
+    yield SimpleNamespace(connection=connection, session=session, user_a=user_a.id, user_b=user_b.id,
+                          job_id=job.id, version_a=version_a.id, schema=schema)
+
+
+def ready(version="job-v1", model="m", hash_="a" * 64, value=1.0):
+    return EmbeddingRecord(status=STATUS_READY, model=model, dimensions=512, text_version=version,
+                           input_hash=hash_, vector=tuple([value] + [0.0] * 511))
+
+
+class FakeEmbedder:
+    def __init__(self):
+        self.calls = []
+
+    def embed(self, texts):
+        self.calls.append(list(texts))
+        return EmbeddingResult(model="fake-model", embeddings=tuple(tuple([1.0] + [0.0] * 511) for _ in texts))
+
+
+# ---- migration ----------------------------------------------------------------------------------
+
+def test_migration_adds_only_new_tables_changes_nothing_else_and_reverses(schema_conn):
+    connection, schema = schema_conn.connection, schema_conn.schema
+    existing_before = tables(connection, schema)
+    watched = ("jobs", "profile_versions", "profiles", "users")
+    columns_before = columns(connection, schema, watched)
+    migration = load_migration()
+
+    run(connection, migration.upgrade)
+    assert tables(connection, schema) - existing_before == NEW_TABLES
+    assert columns(connection, schema, watched) == columns_before                 # no existing column touched
+    assert connection.execute(text("SELECT relrowsecurity, relforcerowsecurity FROM pg_class "
+                                   "WHERE relname='profile_embeddings' AND relnamespace=(SELECT oid FROM pg_namespace WHERE nspname=:s)"),
+                              {"s": schema}).one() == (True, True)
+    run(connection, migration.upgrade)                                             # idempotent (IF NOT EXISTS)
+
+    run(connection, migration.downgrade)
+    assert tables(connection, schema) == existing_before
+    run(connection, migration.upgrade)
+    assert tables(connection, schema) - existing_before == NEW_TABLES
+
+
+# ---- job store ----------------------------------------------------------------------------------
+
+def test_job_store_saves_updates_and_keeps_formats_side_by_side(db):
+    store = DbJobEmbeddingStore(db.session)
+    key = str(db.job_id)
+    assert store.get_state(key, "job-v1") is None
+    store.save(key, ready())
+    state = store.get_state(key, "job-v1")
+    assert (state.status, state.model, state.text_version, state.input_hash) == ("ready", "m", "job-v1", "a" * 64)
+
+    store.save(key, ready(model="m2", hash_="b" * 64))                    # same format: row replaced
+    store.save(key, ready(version="job-v2"))                              # new format: second row
+    assert store.get_state(key, "job-v1").model == "m2" and store.get_state(key, "job-v1").input_hash == "b" * 64
+    assert store.get_state(key, "job-v2").status == "ready"
+    count = db.connection.execute(text("SELECT count(*) FROM job_embeddings WHERE job_id=:j"), {"j": db.job_id}).scalar_one()
+    assert count == 2
+    first = db.connection.execute(text("SELECT embedding::text FROM job_embeddings WHERE job_id=:j AND text_version='job-v1'"),
+                                  {"j": db.job_id}).scalar_one()
+    assert first.startswith("[1,0,0")
+
+
+def test_pending_rows_have_no_vector_and_the_database_enforces_that(db):
+    store = DbJobEmbeddingStore(db.session)
+    key = str(db.job_id)
+    store.save(key, EmbeddingRecord(status="pending", model=None, dimensions=None, text_version="job-v1",
+                                    input_hash="c" * 64, vector=None, reason="embedding service unavailable"))
+    assert store.get_state(key, "job-v1").status == "pending"
+    store.save(key, ready())                                              # pending -> ready replaces it
+    assert store.get_state(key, "job-v1").status == "ready"
+    with pytest.raises(IntegrityError):                                    # ready without a vector is rejected
+        store.save(key, EmbeddingRecord(status="ready", model="m", dimensions=512, text_version="job-v1",
+                                        input_hash="d" * 64, vector=None))
+    with pytest.raises(IntegrityError):                                    # a vector on a pending row is rejected
+        store.save(key, EmbeddingRecord(status="pending", model="m", dimensions=512, text_version="job-v1",
+                                        input_hash="d" * 64, vector=tuple([1.0] + [0.0] * 511)))
+    assert store.get_state(key, "job-v1").status == "ready"               # savepoints kept the earlier row intact
+    assert db.connection.execute(text("SELECT 1")).scalar_one() == 1       # and the transaction is still usable
+
+
+def test_job_features_are_upserted_with_a_version(db):
+    store = DbJobEmbeddingStore(db.session)
+    store.save_features(str(db.job_id), {"seniority_levels": [], "seniority_source": "unspecified", "role_family": "engineering"})
+    store.save_features(str(db.job_id), {"seniority_levels": ["senior"], "seniority_source": "inferred_from_title", "role_family": "engineering"})
+    row = db.connection.execute(text("SELECT feature_version, features FROM job_match_features WHERE job_id=:j"),
+                                {"j": db.job_id}).one()
+    assert row[0] == "features-v1" and row[1]["seniority_levels"] == ["senior"]
+    assert db.connection.execute(text("SELECT count(*) FROM job_match_features")).scalar_one() == 1
+
+
+def test_deleting_a_job_removes_its_embeddings_and_features(db):
+    store = DbJobEmbeddingStore(db.session)
+    store.save(str(db.job_id), ready())
+    store.save_features(str(db.job_id), {"role_family": "engineering"})
+    db.connection.execute(text("DELETE FROM jobs WHERE id=:j"), {"j": db.job_id})
+    assert db.connection.execute(text("SELECT count(*) FROM job_embeddings")).scalar_one() == 0
+    assert db.connection.execute(text("SELECT count(*) FROM job_match_features")).scalar_one() == 0
+
+
+def test_bad_keys_are_rejected(db):
+    store = DbJobEmbeddingStore(db.session)
+    with pytest.raises(ValueError):
+        store.get_state("not-a-uuid", "job-v1")
+
+
+# ---- profile store ------------------------------------------------------------------------------
+
+def test_profile_embeddings_are_private_to_their_owner(db):
+    store = DbProfileEmbeddingStore(db.session)
+    key = str(db.version_a)
+    store.save(key, ready(version="profile-v2"))                           # user A (context already set)
+    assert store.get_state(key, "profile-v2").status == "ready"
+    owner = db.connection.execute(text("SELECT user_id FROM profile_embeddings")).scalar_one()
+    assert owner == db.user_a                                              # owner taken from the profile version
+
+    set_user(db.connection, db.user_b)                                     # now acting as user B
+    assert store.get_state(key, "profile-v2") is None
+    assert db.connection.execute(text("SELECT count(*) FROM profile_embeddings")).scalar_one() == 0
+    with pytest.raises(LookupError):
+        store.save(key, ready(version="profile-v2", value=0.5))            # cannot write for A's profile version
+
+    set_user(db.connection, db.user_a)                                     # back to A: nothing was changed
+    assert db.connection.execute(text("SELECT embedding::text FROM profile_embeddings")).scalar_one().startswith("[1,0")
+
+
+def test_profile_store_features_are_a_noop(db):
+    DbProfileEmbeddingStore(db.session).save_features(str(db.version_a), {"role_families": ["engineering"]})
+    assert db.connection.execute(text("SELECT count(*) FROM profile_embeddings")).scalar_one() == 0
+
+
+# ---- the embedding functions on top of the database stores --------------------------------------
+
+def test_embedding_functions_work_end_to_end_and_survive_one_bad_item(db):
+    embedder, store = FakeEmbedder(), DbJobEmbeddingStore(db.session)
+    description = "Responsibilities\n" + "Build and run payment APIs for the platform team. " * 6
+    good = JobEmbedRequest(job_id=str(db.job_id), job=JobTextInput(title="Backend Engineer", description=description),
+                           category="engineering")
+    bad = JobEmbedRequest(job_id=str(uuid4()), job=JobTextInput(title="Data Analyst", description=description),
+                          category="data")                                   # not a real job: foreign key fails
+    outcomes = embed_jobs([bad, good], embedder=embedder, store=store)
+    assert [o.status for o in outcomes] == [STATUS_FAILED, STATUS_READY]
+    assert outcomes[0].reason == "storage error: IntegrityError"
+    assert store.get_state(str(db.job_id), "job-v1").status == "ready"
+    features = db.connection.execute(text("SELECT features FROM job_match_features")).scalar_one()
+    assert features["role_family"] == "engineering"
+
+    again = embed_jobs([good], embedder=embedder, store=store, expected_model="fake-model")
+    assert again[0].status == STATUS_UNCHANGED and len(embedder.calls) == 1
+
+
+def test_profile_function_with_the_database_store(db):
+    embedder, store = FakeEmbedder(), DbProfileEmbeddingStore(db.session)
+    request = ProfileEmbedRequest(profile_version_id=str(db.version_a),
+                                  snapshot={"headline": "Junior backend engineer", "skills": ["Python"]},
+                                  target_roles=["Backend Engineer"], seniority_preference="Junior")
+    assert embed_profile(request, embedder=embedder, store=store).status == STATUS_READY
+    assert embed_profile(request, embedder=embedder, store=store).status == STATUS_UNCHANGED
+    assert store.get_state(str(db.version_a), "profile-v2").model == "fake-model"
+    set_user(db.connection, db.user_b)
+    outcome = embed_profile(request, embedder=embedder, store=store)       # another user cannot reach this version
+    assert outcome.status == STATUS_FAILED and outcome.reason == "storage error: LookupError"
