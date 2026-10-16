@@ -2,13 +2,14 @@
 
 Each function takes typed, nullable inputs and does the whole job:
 
-  build the versioned text  ->  skip if nothing changed  ->  call the embedder
-  ->  work out the match features  ->  hand the result to storage
+  build the versioned text  ->  save the match features  ->  skip if nothing changed
+  ->  call the embedder  ->  hand the embedding row to storage
 
 They never raise for expected problems. The outcome carries a status instead:
-``ready`` (vector stored), ``unchanged`` (skipped, features refreshed), ``pending`` (embedder
-unavailable, retry later), ``failed`` (unusable response or an internal error) or
-``no_content`` (nothing to embed). Reasons are short and never contain the input text.
+``ready`` (vector stored), ``unchanged`` (skipped), ``pending`` (embedder unavailable, retry
+later), ``failed`` (unusable response or an internal error) or ``no_content`` (nothing to embed).
+Reasons are short and never contain the input text. Match features are saved on every run, even
+when the embedding is skipped or fails, because they describe the job or profile, not the vector.
 
 The caller supplies the embedder and the store, so the same functions work in tests, in a
 backfill command, inside a request (the caller's database session lives in the store) or
@@ -24,8 +25,8 @@ from typing import Any, Mapping, Sequence
 
 from .client import DIMENSIONS, Embedder, EmbedderUnavailable, InvalidEmbeddingResponse
 from .features import Classifier, extract_job_features, extract_profile_features
-from .job_text import JobTextInput, build_job_text
-from .profile_text import ProfileTextInput, build_profile_text
+from .job_text import JOB_TEXT_VERSION, JobTextInput, build_job_text
+from .profile_text import PROFILE_TEXT_VERSION, ProfileTextInput, build_profile_text
 from .stores import (
     STATUS_FAILED,
     STATUS_NO_CONTENT,
@@ -63,7 +64,7 @@ class EmbeddingOutcome:
     key: str
     status: str            # ready | unchanged | pending | failed | no_content
     reason: str | None
-    text_version: str | None
+    text_version: str
     input_hash: str | None
     model: str | None
 
@@ -71,8 +72,8 @@ class EmbeddingOutcome:
 @dataclass(frozen=True)
 class _Prepared:
     key: str
+    version: str                       # always known, even when the text could not be built
     text: str | None
-    version: str | None
     input_hash: str | None
     features: dict[str, Any]
     error_status: str | None = None
@@ -88,39 +89,39 @@ def _plain(features: Any) -> dict[str, Any]:
     return {k: list(v) if isinstance(v, tuple) else v for k, v in asdict(features).items()}
 
 
+def _failed_prep(key: str, version: str, features: dict[str, Any], exc: Exception) -> _Prepared:
+    return _Prepared(key, version, None, None, features, STATUS_FAILED, f"preparation error: {type(exc).__name__}")
+
+
 def _prepare_job(request: JobEmbedRequest, classify: Classifier | None) -> _Prepared:
+    key = request.job_id
     try:
         features = _plain(extract_job_features(request.job.title, request.category,
                                                request.stated_seniority, classify))
-    except Exception as exc:  # e.g. blank title is handled below; anything else is an internal error
-        features = {}
-        if not isinstance(exc, ValueError):
-            return _Prepared(request.job_id, None, None, None, features, STATUS_FAILED,
-                             f"preparation error: {type(exc).__name__}")
+    except Exception as exc:
+        return _failed_prep(key, JOB_TEXT_VERSION, {}, exc)
     try:
         built = build_job_text(request.job)
     except ValueError as exc:
-        return _Prepared(request.job_id, None, None, None, features, STATUS_NO_CONTENT, str(exc))
+        return _Prepared(key, JOB_TEXT_VERSION, None, None, features, STATUS_NO_CONTENT, str(exc))
     except Exception as exc:
-        return _Prepared(request.job_id, None, None, None, features, STATUS_FAILED,
-                         f"preparation error: {type(exc).__name__}")
-    return _Prepared(request.job_id, built.text, built.version, _hash(built.version, built.text), features)
+        return _failed_prep(key, JOB_TEXT_VERSION, features, exc)
+    return _Prepared(key, built.version, built.text, _hash(built.version, built.text), features)
 
 
 def _prepare_profile(request: ProfileEmbedRequest, classify: Classifier | None) -> _Prepared:
+    key = request.profile_version_id
     try:
         features = _plain(extract_profile_features(request.target_roles, request.seniority_preference, classify))
     except Exception as exc:
-        return _Prepared(request.profile_version_id, None, None, None, {}, STATUS_FAILED,
-                         f"preparation error: {type(exc).__name__}")
+        return _failed_prep(key, PROFILE_TEXT_VERSION, {}, exc)
     try:
         built = build_profile_text(ProfileTextInput(snapshot=request.snapshot, target_roles=request.target_roles))
     except ValueError as exc:
-        return _Prepared(request.profile_version_id, None, None, None, features, STATUS_NO_CONTENT, str(exc))
+        return _Prepared(key, PROFILE_TEXT_VERSION, None, None, features, STATUS_NO_CONTENT, str(exc))
     except Exception as exc:
-        return _Prepared(request.profile_version_id, None, None, None, features, STATUS_FAILED,
-                         f"preparation error: {type(exc).__name__}")
-    return _Prepared(request.profile_version_id, built.text, built.version, _hash(built.version, built.text), features)
+        return _failed_prep(key, PROFILE_TEXT_VERSION, features, exc)
+    return _Prepared(key, built.version, built.text, _hash(built.version, built.text), features)
 
 
 def _is_current(state: StoredEmbeddingState | None, item: _Prepared, expected_model: str | None) -> bool:
@@ -139,7 +140,7 @@ def _outcome(item: _Prepared, status: str, reason: str | None, model: str | None
 
 def _store_without_vector(store: EmbeddingStore, item: _Prepared, status: str, reason: str) -> EmbeddingOutcome:
     record = EmbeddingRecord(status=status, model=None, dimensions=None, text_version=item.version,
-                             input_hash=item.input_hash, vector=None, features=item.features, reason=reason)
+                             input_hash=item.input_hash, vector=None, reason=reason)
     try:
         store.save(item.key, record)
     except Exception as exc:
@@ -155,13 +156,18 @@ def _run(prepared: list[_Prepared], embedder: Embedder, store: EmbeddingStore, *
     to_embed: list[int] = []
 
     for index, item in enumerate(prepared):
+        try:
+            if item.features:
+                store.save_features(item.key, item.features)    # features never depend on the vector
+        except Exception as exc:
+            outcomes[index] = _outcome(item, STATUS_FAILED, f"storage error: {type(exc).__name__}")
+            continue
         if item.error_status:
             outcomes[index] = _store_without_vector(store, item, item.error_status, item.error_reason or "")
             continue
         try:
-            state = store.get_state(item.key)
+            state = store.get_state(item.key, item.version)
             if not force and _is_current(state, item, expected_model):
-                store.save_features(item.key, item.features)   # keep features fresh even when the vector is reused
                 outcomes[index] = _outcome(item, STATUS_UNCHANGED, None, state.model if state else None)
                 continue
         except Exception as exc:
@@ -191,8 +197,7 @@ def _run(prepared: list[_Prepared], embedder: Embedder, store: EmbeddingStore, *
         for i, vector in zip(chunk, result.embeddings):
             item = prepared[i]
             record = EmbeddingRecord(status=STATUS_READY, model=result.model, dimensions=len(vector) or DIMENSIONS,
-                                     text_version=item.version, input_hash=item.input_hash,
-                                     vector=tuple(vector), features=item.features)
+                                     text_version=item.version, input_hash=item.input_hash, vector=tuple(vector))
             try:
                 store.save(item.key, record)
             except Exception as exc:

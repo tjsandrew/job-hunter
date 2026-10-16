@@ -56,14 +56,23 @@ the caller's database session lives inside the store, which keeps per-user row-l
 
 ## Storage
 
-`EmbeddingStore` is a small interface (`get_state`, `save`, `save_features`). Only `InMemoryEmbeddingStore` exists. A database
-implementation needs extra nullable columns, which have not been added: on `jobs` the embedding model, dimensions, text
-version, status and input hash, plus seniority levels and source; on `profile_versions` an input hash. That change needs
-agreement with the ingestion and profile owners before it is made.
+`EmbeddingStore` is a small interface (`get_state(key, text_version)`, `save(key, record)`, `save_features(key, features)`).
+Only `InMemoryEmbeddingStore` exists; no table has been created. The interface assumes **separate tables** rather than extra
+columns on `jobs` and `profile_versions`:
+
+- **Embedding rows** are keyed by `(entity, text_version)` and hold the vector, model, dimensions, input hash, status and a short
+  reason. A new text version adds a row instead of overwriting, so formats can be compared side by side; a new model replaces the
+  row for that text version.
+- **Match features** (seniority levels and source, role family) are keyed by the entity alone and are saved on every run,
+  independently of whether an embedding succeeded, because they describe the job or profile rather than the vector.
+
+The proposed layout (job embeddings, profile embeddings with the same per-user row-level security as `profile_versions`, and a
+job match-features table) is awaiting agreement with the other owners. The existing `embedding` columns on `jobs` and
+`profile_versions` would stay untouched.
 
 ## Verified
 
-- 100 embedding tests plus the 9 existing ranking tests pass inside the backend container (`pytest` with `backend/src` mounted
+- 102 embedding tests plus the 9 existing ranking tests pass inside the backend container (`pytest` with `backend/src` mounted
   and `PYTHONPATH=/app/src`). The text builders and checks also run on the host Python.
 - End to end against the local embedder service (Jina, 512-d): 70 real listings embedded in about 10 seconds in batches of 16;
   a second run skipped all 70 in 0.02 seconds. Alice's demo profile embedded with `profile-v2`.
