@@ -32,7 +32,7 @@ Keep this in a prominent authentication/release-blockers section. Do not bury it
 
 - **Resume intake:** current local intake extracts PDF text only (10 MiB/20-page limits); it does not perform OCR or model-based structured intake. The profile bank import parser/review/apply flow is the next implementation step. Disabled Import controls are intentional.
 - **Profile bank:** steps 1–2 are implemented. Remaining bank-to-resume assembly/editor integration, later features and any limitations must be checked against the design and [handoff](10-profile-bank.md).
-- **AI and recommendations:** local keyword/TF-IDF ranking exists. Real semantic embeddings, AI fit analysis and AI preparation are separate pending integrations; unavailable UI states must stay honest.
+- **AI and recommendations:** local keyword/TF-IDF ranking exists, and a semantic "For you" list built on a local embedding model (falls back to the keyword list). Evaluation labels are assistant-only, the Bedrock embedding backend is untested, and AI fit analysis and AI preparation are separate pending integrations; unavailable UI states must stay honest.
 - **Data deletion:** profile deletion exists, but durable storage-cleanup retry remains a known production gap. Audit retention/recovery across source files, confirmed versions, resumes, application packets and backups.
 - **Cloud:** real Cognito, S3, SQS/Lambda task behavior, RDS operations, Bedrock, deployment/observability and cost/performance validation remain separate from successful local tests.
 

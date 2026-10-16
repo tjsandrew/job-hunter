@@ -11,7 +11,7 @@ Job Hunter helps job seekers in Singapore discover openings, shortlist them agai
 - Resume Studio: structured editor, autosave, undo/redo, two templates, server-rendered PDF export
 - Application tracker with an attached reviewed resume PDF and cover letter
 
-AI generation and semantic ranking are not connected yet. The full list and its gaps are in [docs/status/FEATURES.md](docs/status/FEATURES.md).
+AI generation is not connected yet. Semantic ranking is available as the "For you" list on the Discover page (see below). The full list and its gaps are in [docs/status/FEATURES.md](docs/status/FEATURES.md).
 
 A standalone embedder service in `services/embedder/` starts with the stack (`make up`). The backend embeds the confirmed
 profile after "Update my matches" and after saving preferences (best effort: a failed embed never fails the save), and

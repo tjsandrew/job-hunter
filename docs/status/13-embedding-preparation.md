@@ -1,9 +1,10 @@
 # Job and profile embedding functions (local)
 
-Implemented 16 October 2026 on `noah/embedder-service`. Local commits only; no push or PR. Everything lives in
-`backend/src/job_hunter/embedding/` and is **not wired into the API, ingestion, profile saves, the database, search or
-ranking**. The live app still uses the existing keyword/skill/role ranker. The only schema change is migration
-`0012_embedding_tables`, which adds three **new** tables and alters no existing table or column (see Storage).
+Implemented 16-17 October 2026 on `noah/embedder-service`. Local commits; nothing pushed. Everything lives in
+`backend/src/job_hunter/embedding/`. It is wired into the app through a small number of hooks (see "Backfill and the flagged
+endpoint"): the confirm and preferences-save hooks, `GET /v1/recommendations/for-you` and the Discover "For you / All jobs"
+toggle. The original keyword ranker stays as `/v1/recommendations` ("All jobs") and as the fallback. The only schema change is
+migration `0012_embedding_tables`, which adds three **new** tables and alters no existing table or column (see Storage).
 
 ## What it is for
 
@@ -38,9 +39,17 @@ the caller's database session lives inside the store, which keeps per-user row-l
 
 ## Text (versioned, deterministic)
 
-- **Job, `job-v1`:** `Role`, `Stated skills` (only when the source lists skills), `Work` and `Requirements` taken from known
-  headings in the description (company, team, salary, equal-opportunity and contact text dropped), or the whole normalised
-  description when no known section is found. Company name, location, work mode and salary are not in the text.
+- **Job, `job-v2` (the default):** `Role`, `Stated skills` (only when the source lists skills) and `Description`, the whole
+  normalised description (links, emails, bullet marks and stray replacement characters cleaned; capped at 8000 characters). No
+  heading detection, so nothing can be dropped silently. Company name, location, work mode and salary are not in the text.
+- **Job, `job-v1` and `job-v3` (kept, not the default):** `Role`, `Stated skills`, `Work` and `Requirements` taken from known
+  headings (company, team, salary, equal-opportunity and contact text dropped). `job-v1` is frozen as first built; `job-v3` also
+  accepts headings whose spaces were lost ("Whatyou'll do") and falls back to the whole description unless both Work and
+  Requirements are found. Choose one with `embed_job(s)(..., text_version=...)` or `build_job_text(job, version=...)`; each
+  version is stored as its own row, so formats can be compared side by side. `python -m job_hunter.embedding.backfill --text-report`
+  shows, per source, how heading detection would do (read-only, embeds nothing). Heading detection will be reconsidered as the
+  default once a larger, more varied job set exists (on the 70 listings it scored higher than the whole description; see the
+  evaluation log in the offline notes).
 - **Profile, `profile-v2`:** `Target role` (from preferences), `Summary`, `Demonstrated skills`, `Roles`, `Projects`,
   `Highlights`. Contact data is removed with the same stripping the older `profile-v1` text uses; education is not
   included. `profile-v1` is untouched.
@@ -122,7 +131,7 @@ later without changing callers.
 
 ## Verified
 
-- The full backend suite (558 tests, including the database integration tests, the OpenAPI contract and the new backfill and for-you tests) passes inside the backend container (`pytest` with `backend/src` mounted
+- The full backend suite (567 tests, including the database integration tests, the OpenAPI contract and the new backfill and for-you tests) passes inside the backend container (`pytest` with `backend/src` mounted
   and `PYTHONPATH=/app/src`). The text builders and checks also run on the host Python.
 - 10 database integration tests (`backend/tests/integration/test_embedding_db_store.py`, `RUN_DB_INTEGRATION=1`) run in a
   rolled-back transaction with a throwaway schema and a restricted role, like the existing integration tests: migration adds only the
@@ -136,13 +145,15 @@ later without changing callers.
 
 ## Not verified / known gaps
 
-- No call from ingestion or profile save, backfill command, similarity query or ranking use yet; the migration is not applied to the
-  running development database, and its agreement with the other owners (including the chain order if a newer migration lands) is
-  pending.
-- Years-of-experience is not used to infer seniority, and "associate" and "manager" are deliberately not read as levels.
-- Role families depend on the title-keyword classifier: about 29% of the 70 sample listings fall under "other", so the role
-  check does nothing for them; most sample listings state no level, so the seniority check rarely fires.
-- Replaying the checks on 75 judged pairs (assistant labels, same cases that motivated them) blocked none of the 5 good
-  pairs, 1 of 22 partial and 16 of 48 poor. This shows the checks are plausible, not that they are accurate.
-- The profile text includes the target role from preferences, which can change without a new profile version; the
-  stored input hash is what detects that.
+- Keeping **job** vectors current when jobs are ingested is for the ingestion owner (`embed_job(s)` after insert/update, or
+  `make backfill`); until then new jobs have no vector and do not appear in For you. Profiles are embedded by the confirm and
+  preferences-save hooks.
+- All relevance labels so far are assistant-only and non-blind, on 70 listings (48 from one employer, 2 with stated skills).
+  The replacement gate (match or beat the keyword ranker on a broader, independently labelled set) has not been met.
+- Role family comes from title keywords (`role_family.py`); about a quarter of titles are "other" (unknown, never blocked).
+  Years of experience are not used to infer seniority, and "associate" and "manager" are not read as levels.
+- The embedding model is English-only (`jina-embeddings-v2-small-en`).
+- The migration has been applied to the development database only; its position in the chain (`0012`, after Andrew's `0011`) must be
+  re-checked if a newer migration lands first.
+- The profile text includes the target roles from preferences, which can change without a new profile version; the stored input
+  hash detects that, and the preferences-save hook re-embeds.
