@@ -106,6 +106,11 @@ later without changing callers.
   is meaningful) plus `ranking_mode` (`semantic` or `keyword_fallback`), `fallback_reason` and `blocked_by_checks`. With no confirmed
   profile or no profile vector it returns the keyword ranker's result and says why. `/v1/recommendations` is unchanged and the OpenAPI
   contract has the one extra path.
+- **Discover page:** a "For you / All jobs" toggle (For you is the default). For you calls `/v1/recommendations/for-you` (it accepts `q` for typed search);
+  All jobs is the original keyword list. If the For you request errors, the page falls back to All jobs with a note; if the server itself fell
+  back, it shows the server's reason. `reasons` on For you cards are user-facing positives only (matched skills, role/level checks that
+  matched); caveats such as "level not stated" are not reasons, and the check verdicts come back as `role_check` / `seniority_check`.
+  A hint asks for target roles and seniority when either is missing.
 - **Profile hook (`EMBED_ON_SAVE`, on by default in compose; off in the application when the variable is unset):** `POST /v1/profile/confirm` and `PUT /v1/preferences` call
   `profile_sync.embed_after_save` after saving. It embeds the user's confirmed profile version in the same transaction, inside a savepoint
   with a 5 second embedder timeout, and never raises: an embedder outage leaves the profile `pending` (the for-you endpoint falls back,
