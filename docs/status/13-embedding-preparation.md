@@ -77,9 +77,25 @@ savepoint, so one bad row cannot poison a batch. The older `embedding` columns o
 **The migration has not been applied to the running development database**; it applies on the next `docker compose up --build`
 of this branch.
 
+## Semantic candidate retrieval (not wired into the app)
+
+`retrieval.py` (pure, in memory) and `db_retrieval.py` (loads from the embedding tables) rank jobs for a profile in this order:
+
+1. **Eligibility**: open status, wanted location and work mode, optional excluded job ids. It reuses the existing ranker's own
+   helpers, and a test pins it to return exactly the set of jobs `rank_jobs` returns.
+2. **Checks**: a job whose role family is clearly different, or whose level is two or more steps from the profile's, is blocked.
+   Unknown and unspecified never block. Blocked jobs are returned in a separate list (with their similarity) for evaluation.
+3. **Similarity**: the rest are ordered by cosine similarity. Only the order is meaningful; do not show the raw number as a
+   percentage. Each result carries short, rule-based reasons ("same kind of role", "level not stated, shown for all levels").
+
+Vectors from different models are never compared: candidates must have been embedded with the same model and text version as the
+profile. `recommend_for_profile` returns `None` when the profile has no usable vector, which is the caller's cue to fall back to the
+existing keyword ranker. Similarity is computed exactly in memory (fine at proof-of-concept scale); a pgvector query can replace it
+later without changing callers.
+
 ## Verified
 
-- 102 embedding tests plus the 9 existing ranking tests pass inside the backend container (`pytest` with `backend/src` mounted
+- 142 tests (embedding, retrieval, database integration) plus the existing ranking tests pass inside the backend container (`pytest` with `backend/src` mounted
   and `PYTHONPATH=/app/src`). The text builders and checks also run on the host Python.
 - 10 database integration tests (`backend/tests/integration/test_embedding_db_store.py`, `RUN_DB_INTEGRATION=1`) run in a
   rolled-back transaction with a throwaway schema and a restricted role, like the existing integration tests: migration adds only the

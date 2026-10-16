@@ -260,3 +260,70 @@ def test_profile_function_with_the_database_store(db):
     set_user(db.connection, db.user_b)
     outcome = embed_profile(request, embedder=embedder, store=store)       # another user cannot reach this version
     assert outcome.status == STATUS_FAILED and outcome.reason == "storage error: LookupError"
+
+
+# ---- retrieval on the database tables -----------------------------------------------------------
+
+def v(*head):
+    return tuple(list(head) + [0.0] * (512 - len(head)))
+
+
+def test_recommend_for_profile_checks_first_then_ranks_and_never_mixes_models(db):
+    from job_hunter.embedding.db_retrieval import recommend_for_profile
+
+    def job(title, category, location="Singapore", status="open"):
+        item = Job(title=title, description="x", category=category, location=location, status=status)
+        db.session.add(item)
+        db.session.flush()
+        return str(item.id)
+
+    jobs = SimpleNamespace(
+        good=job("Backend Engineer, Payments", "engineering"),
+        ok2=job("Platform Engineer", "engineering"),
+        recruiter=job("Technical Recruiter", "people"),
+        principal=job("Principal Engineer", "engineering"),
+        closed=job("Software Engineer", "engineering", status="closed"),
+        london=job("Software Engineer", "engineering", location="London"),
+        pending=job("DevOps Engineer", "engineering"),
+        unembedded=job("QA Engineer", "engineering"),
+        other_model=job("Data Platform Engineer", "engineering"),
+    )
+    job_store, profile_store = DbJobEmbeddingStore(db.session), DbProfileEmbeddingStore(db.session)
+    vectors = {"good": v(1.0), "ok2": v(0.6, 0.8), "recruiter": v(0.99, 0.1), "principal": v(0.98, 0.2),
+               "closed": v(1.0), "london": v(1.0), "other_model": v(1.0)}
+    for name, vector in vectors.items():
+        job_store.save(getattr(jobs, name), EmbeddingRecord(
+            status="ready", model="other" if name == "other_model" else "m", dimensions=512,
+            text_version="job-v1", input_hash="h" * 64, vector=vector))
+    job_store.save(jobs.pending, EmbeddingRecord(status="pending", model=None, dimensions=None, text_version="job-v1",
+                                                 input_hash="h" * 64, vector=None))
+    job_store.save_features(jobs.principal, {"seniority_levels": ["lead"], "seniority_source": "inferred_from_title"})
+    profile_store.save(str(db.version_a), EmbeddingRecord(status="ready", model="m", dimensions=512,
+                                                          text_version="profile-v2", input_hash="p" * 64, vector=v(1.0)))
+
+    prefs = {"locations": ["Singapore"], "target_roles": ["Backend Engineer"], "seniority": "Junior"}
+    result = recommend_for_profile(db.session, str(db.version_a), prefs)
+    assert [r.job_id for r in result.ranked] == [jobs.good, jobs.ok2]
+    assert {b.job_id for b in result.blocked} == {jobs.recruiter, jobs.principal}
+    seen = {r.job_id for r in result.ranked} | {b.job_id for b in result.blocked}
+    for absent in ("closed", "london", "pending", "unembedded", "other_model"):
+        assert getattr(jobs, absent) not in seen                          # ineligible / unusable / other model
+    assert result.considered == 4
+
+    no_checks = recommend_for_profile(db.session, str(db.version_a), prefs, apply_checks=False)
+    assert [r.job_id for r in no_checks.ranked][:2] == [jobs.good, jobs.recruiter]
+    excluded = recommend_for_profile(db.session, str(db.version_a), prefs, exclude_job_ids=[jobs.good])
+    assert [r.job_id for r in excluded.ranked] == [jobs.ok2]
+    assert len(recommend_for_profile(db.session, str(db.version_a), prefs, limit=1).ranked) == 1
+
+
+def test_recommend_returns_none_without_a_usable_profile_vector(db):
+    from job_hunter.embedding.db_retrieval import recommend_for_profile
+    prefs = {"target_roles": ["Backend Engineer"]}
+    assert recommend_for_profile(db.session, str(db.version_a), prefs) is None            # nothing stored yet
+    DbProfileEmbeddingStore(db.session).save(str(db.version_a), EmbeddingRecord(
+        status="pending", model=None, dimensions=None, text_version="profile-v2", input_hash="p" * 64, vector=None))
+    assert recommend_for_profile(db.session, str(db.version_a), prefs) is None            # pending is not usable
+    DbProfileEmbeddingStore(db.session).save(str(db.version_a), ready(version="profile-v2"))
+    set_user(db.connection, db.user_b)
+    assert recommend_for_profile(db.session, str(db.version_a), prefs) is None            # another user's vector is invisible
