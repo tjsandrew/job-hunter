@@ -76,8 +76,8 @@ def text_report(session: Session, *, limit: int | None = None) -> dict:
         if not v3.used_sections:
             row["fallback_reasons"][v3.fallback_reason or "unknown"] += 1
     for row in report.values():
-        used = row["v1_uses_sections"]
-        row["avg_kept_share_v1"] = round(row.pop("kept_share_sum") / used, 2) if used else None
+        used, share_sum = row["v1_uses_sections"], row.pop("kept_share_sum")
+        row["avg_kept_share_v1"] = round(share_sum / used, 2) if used else None
         row["fallback_reasons"] = dict(row["fallback_reasons"])
     return report
 
