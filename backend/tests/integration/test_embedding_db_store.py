@@ -327,3 +327,60 @@ def test_recommend_returns_none_without_a_usable_profile_vector(db):
     DbProfileEmbeddingStore(db.session).save(str(db.version_a), ready(version="profile-v2"))
     set_user(db.connection, db.user_b)
     assert recommend_for_profile(db.session, str(db.version_a), prefs) is None            # another user's vector is invisible
+
+
+# ---- backfill and the for-you helpers ---------------------------------------------------------------
+def test_backfill_embeds_open_jobs_and_confirmed_profiles_and_is_idempotent(db):
+    from job_hunter.domain.models import Preference, Profile
+    from job_hunter.embedding.backfill import NO_CONFIRMED_PROFILE, backfill_jobs, backfill_profiles
+
+    closed = Job(title="Closed Engineer", description="x", status="closed")
+    db.session.add(closed)
+    db.session.flush()
+    open_count = db.session.scalar(text("SELECT count(*) FROM jobs WHERE status='open'"))
+    embedder = FakeEmbedder()
+    first = backfill_jobs(db.session, embedder, batch_size=2)
+    assert first["ready"] == open_count and sum(first.values()) == open_count
+    assert db.session.scalar(text("SELECT count(*) FROM job_embeddings WHERE job_id=:j"), {"j": closed.id}) == 0
+    again = backfill_jobs(db.session, embedder)
+    assert again["unchanged"] == open_count and again["ready"] == 0
+
+    set_user(db.connection, db.user_a)
+    db.session.add(Profile(user_id=db.user_a, draft={}, revision=1, bank_revision=1, confirmed_revision=1))
+    db.session.add(Preference(user_id=db.user_a, data={"roles": ["Backend Engineer"], "seniority": "Junior"}))
+    version = db.session.get(ProfileVersion, db.version_a)
+    version.data = {"headline": "Junior Backend Engineer", "summary": "Builds APIs.", "skills": ["Python"]}
+    db.session.flush()
+    profiles = backfill_profiles(db.session, embedder, [db.user_a, db.user_b])
+    assert profiles["ready"] == 1 and profiles[NO_CONFIRMED_PROFILE] == 1
+    set_user(db.connection, db.user_a)      # the backfill left the last user (B) set; read A's row as A
+    row = db.session.execute(text("SELECT status, text_version FROM profile_embeddings WHERE profile_version_id=:v"),
+                             {"v": db.version_a}).one()
+    assert tuple(row) == ("ready", "profile-v2")
+    assert backfill_profiles(db.session, embedder, [db.user_a])["unchanged"] == 1
+
+
+def test_semantic_for_you_reports_why_it_cannot_be_used_and_pages_results(db):
+    from job_hunter.embedding.for_you import NO_PROFILE, NO_VECTOR, page_items, semantic_for_you
+
+    prefs = {"locations": ["Singapore"], "roles": ["Backend Engineer"]}
+    assert semantic_for_you(db.session, None, prefs) == (None, NO_PROFILE)
+    assert semantic_for_you(db.session, (str(db.version_a), 1, {}), prefs) == (None, NO_VECTOR)   # not embedded yet
+
+    jobs = []
+    for index in range(3):
+        item = Job(title=f"Backend Engineer {index}", description="x", category="engineering", location="Singapore")
+        db.session.add(item)
+        jobs.append(item)
+    db.session.flush()
+    job_store, profile_store = DbJobEmbeddingStore(db.session), DbProfileEmbeddingStore(db.session)
+    for index, item in enumerate(jobs):
+        job_store.save(str(item.id), EmbeddingRecord(status="ready", model="m", dimensions=512, text_version="job-v1",
+                                                     input_hash="h" * 64, vector=v(1.0, 0.1 * index)))
+    profile_store.save(str(db.version_a), EmbeddingRecord(status="ready", model="m", dimensions=512,
+                                                          text_version="profile-v2", input_hash="p" * 64, vector=v(1.0)))
+    result, reason = semantic_for_you(db.session, (str(db.version_a), 1, {}), prefs, exclude_job_ids=[str(jobs[2].id)])
+    assert reason is None and [r.job_id for r in result.ranked] == [str(jobs[0].id), str(jobs[1].id)]
+    items = page_items(db.session, result, offset=1, limit=5, job_out=lambda job: {"id": str(job.id), "title": job.title})
+    assert [i["job"]["id"] for i in items] == [str(jobs[1].id)]
+    assert items[0]["rank"] == 2 and items[0]["score"] is None and items[0]["reasons"]

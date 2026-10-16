@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from job_hunter.config import settings
 from job_hunter.recommendations import rank_jobs, RANKING_VERSION
+from job_hunter.embedding import for_you as semantic, settings as embedding_settings
 from job_hunter.adapters.database import get_db
 from job_hunter.domain.identity import DEV_USERS
 from job_hunter.domain.models import (User, Profile, Preference, Job, JobReview, Application,
@@ -287,6 +288,29 @@ def recommendations(db: Session = Depends(db_for), limit: int = Query(20, ge=1, 
             "next_offset": offset + limit if offset + limit < len(ranked) else None,
             "degraded_mode": True, "ranking_version": RANKING_VERSION,
             "ranking_status": "Local text similarity and skill matching; semantic embeddings are not enabled"}
+
+@app.get("/v1/recommendations/for-you")
+def recommendations_for_you(db: Session = Depends(db_for), limit: int = Query(20, ge=1, le=100),
+                            offset: int = Query(0, ge=0, le=1000000)):
+    """Semantic recommendations (eligibility, role/seniority checks, then similarity), behind FOR_YOU_ENABLED.
+
+    Falls back to the keyword ranker, and says so in ``ranking_mode`` / ``fallback_reason``, whenever the
+    profile has no confirmed version or no vector. The existing /v1/recommendations is unchanged."""
+    if not embedding_settings.for_you_enabled():
+        raise HTTPException(404, detail={"code": "FOR_YOU_DISABLED", "message": "Semantic recommendations are not enabled"})
+    user_id = current_user(db).id
+    prefs = db.get(Preference, user_id)
+    skipped = [str(r.job_id) for r in db.scalars(select(JobReview)).all() if r.decision in {"saved", "dismissed"}]
+    result, reason = semantic.semantic_for_you(db, bank_services.get_confirmed_snapshot(db), prefs.data if prefs else {}, skipped)
+    if result is None:
+        base = recommendations(db=db, limit=limit, offset=offset, q=None)
+        return {**base, "ranking_mode": "keyword_fallback", "fallback_reason": reason}
+    total = len(result.ranked)
+    return {"items": semantic.page_items(db, result, offset, limit, job_out), "total": total,
+            "next_offset": offset + limit if offset + limit < total else None,
+            "degraded_mode": False, "ranking_version": semantic.RANKING_VERSION, "ranking_mode": "semantic",
+            "fallback_reason": None, "blocked_by_checks": len(result.blocked),
+            "ranking_status": "Semantic similarity after role and level checks; the order is meaningful, not the scores"}
 
 def job_out(job: Job) -> dict:
     return {"id": str(job.id), "title": job.title, "company": job.company,
