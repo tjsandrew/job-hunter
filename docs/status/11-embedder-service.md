@@ -11,7 +11,7 @@ evaluation are a separate plan and are not started.
 - Three interchangeable backends behind one interface, selected by `EMBEDDER_SERVICE_BACKEND`:
   `fastembed` (default, `jinaai/jina-embeddings-v2-small-en`, 512-d, local ONNX), `bedrock` (Titan Text Embeddings v2
   at 512 dims) and `fake` (deterministic word hashing for tests).
-- Opt-in compose service `embedder` under profile `embedder` on `127.0.0.1:8100`. `make up` and CI are unchanged.
+- Compose service `embedder` on `127.0.0.1:8100`, started with the rest of the stack (it was opt-in until 16 October 2026, when it became default so every local stack can test end to end). The api does not depend on it and CI starts only `api`, so CI is unchanged.
 - Makefile targets `embedder-up`, `embedder-down`, `test-embedder`.
 - Model baked into the image at build; unprivileged runtime user; dependencies pinned in `requirements.lock`.
 

@@ -100,13 +100,13 @@ later without changing callers.
   user's *confirmed* profile version, commits per batch / per user, skips unchanged items and retries pending or failed ones. The
   embedder URL comes from `EMBEDDER_URL` (default `http://embedder:8100`). In local mode the users come from the development identity
   map; a cloud deployment must pass `user_ids` itself. Also callable as `backfill_jobs` / `backfill_profiles`.
-- **Endpoint:** `GET /v1/recommendations/for-you` (`limit`, `offset`), **off unless `FOR_YOU_ENABLED=1`** (404 `FOR_YOU_DISABLED`
-  otherwise; the compose file passes the variable through, default 0). It excludes saved/dismissed jobs like the existing endpoint, runs
+- **Endpoint:** `GET /v1/recommendations/for-you` (`limit`, `offset`), **on by default in compose (`FOR_YOU_ENABLED`, set 0 to switch off)** (404 `FOR_YOU_DISABLED`
+  when off; the application default without the variable is off). It excludes saved/dismissed jobs like the existing endpoint, runs
   eligibility, then the role and level checks, then similarity, and returns the existing result shape without a score (only the order
   is meaningful) plus `ranking_mode` (`semantic` or `keyword_fallback`), `fallback_reason` and `blocked_by_checks`. With no confirmed
   profile or no profile vector it returns the keyword ranker's result and says why. `/v1/recommendations` is unchanged and the OpenAPI
   contract has the one extra path.
-- **Profile hook (off unless `EMBED_ON_SAVE=1`):** `POST /v1/profile/confirm` and `PUT /v1/preferences` call
+- **Profile hook (`EMBED_ON_SAVE`, on by default in compose; off in the application when the variable is unset):** `POST /v1/profile/confirm` and `PUT /v1/preferences` call
   `profile_sync.embed_after_save` after saving. It embeds the user's confirmed profile version in the same transaction, inside a savepoint
   with a 5 second embedder timeout, and never raises: an embedder outage leaves the profile `pending` (the for-you endpoint falls back,
   the backfill retries), an unexpected error is logged and swallowed, and unchanged text skips the embedder entirely. Saving preferences

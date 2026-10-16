@@ -13,10 +13,13 @@ Job Hunter helps job seekers in Singapore discover openings, shortlist them agai
 
 AI generation and semantic ranking are not connected yet. The full list and its gaps are in [docs/status/FEATURES.md](docs/status/FEATURES.md).
 
-An opt-in standalone embedder service exists in `services/embedder/`. The backend now has a tested HTTP client for its
-512-dimensional contract, but it is **not wired into ingestion, profile saves, search, or recommendations**; the
-application still uses the existing keyword/skill/role ranker. See [embedder status](docs/status/11-embedder-service.md)
-and [backend client status](docs/status/12-embedding-client.md).
+A standalone embedder service in `services/embedder/` starts with the stack (`make up`). The backend embeds the confirmed
+profile after "Update my matches" and after saving preferences (best effort: a failed embed never fails the save), and
+`GET /v1/recommendations/for-you` ranks jobs semantically, falling back to the keyword ranker (which stays the default
+`/v1/recommendations`) when there is no profile vector. Job vectors are filled by `make backfill` until ingestion calls
+`embed_job(s)`. Switches: `FOR_YOU_ENABLED`, `EMBED_ON_SAVE` (both default on in compose). See
+[embedder status](docs/status/11-embedder-service.md), [backend client status](docs/status/12-embedding-client.md) and
+[embedding preparation](docs/status/13-embedding-preparation.md).
 
 ## Quick start
 

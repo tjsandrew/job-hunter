@@ -5,10 +5,10 @@ The wire format is in [CONTRACT.md](CONTRACT.md).
 
 ## Run
 
-From the repo root (opt-in; `make up` is unaffected):
+From the repo root (`make up` already starts it; these are for working on the service alone):
 
 ```sh
-make embedder-up        # docker compose --profile embedder up --build -d embedder
+make embedder-up        # docker compose up --build -d embedder
 curl -s localhost:8100/health
 curl -s localhost:8100/v1/embed -H 'content-type: application/json' \
   -d '{"inputs": ["Python backend engineer"]}'
@@ -27,7 +27,7 @@ Real-model checks (dimension, norm, determinism, related-vs-unrelated) are marke
 image against the baked model:
 
 ```sh
-docker compose --profile embedder run --rm --no-deps --user root \
+docker compose run --rm --no-deps --user root \
   -v "$PWD/services/embedder/tests:/app/tests:ro" embedder \
   sh -c 'pip install -q -c requirements.lock pytest httpx && pytest /app/tests -m real_model -o addopts= -q'
 ```
