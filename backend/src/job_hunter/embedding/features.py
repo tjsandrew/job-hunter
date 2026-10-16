@@ -8,9 +8,10 @@ junior backend profile). These small, transparent rules cover that gap:
   from an explicit value when the caller has one, otherwise from conservative title
   keywords, otherwise the job is "unspecified" and counts as open to every level (and is
   flagged as such, so evaluation can see how often the check did nothing).
-* **Role family** - reuses the job family the ingestion code already stores in
-  ``jobs.category`` (``classify_title`` in ``import_jobs.py``). Jobs the classifier files
-  under "other" are unknown, which counts as compatible.
+* **Role family** - the recommender's own title classifier (``role_family.py``, which starts
+  from the ingestion classifier's families and keywords but puts the occupation and the head
+  of the title first). When it finds nothing, the job's stored ``jobs.category`` is the
+  fallback. "other" is unknown, which counts as compatible.
 
 Every check returns a verdict plus a reason; ``blocks`` is True only for a clear
 mismatch. Unknown never blocks. Years-of-experience inference is deliberately not part
@@ -23,7 +24,9 @@ import re
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
-FEATURES_VERSION = "features-v1"   # stored with the job features so a rule change is visible later
+from .role_family import CLASSIFIER_VERSION, classify_role_family
+
+FEATURES_VERSION = "features-v2"   # stored with the job features so a rule change is visible later
 
 SENIORITY_LADDER: tuple[str, ...] = ("intern", "entry", "mid", "senior", "lead")
 
@@ -105,9 +108,8 @@ def _normalise_levels(levels: Sequence[str] | None) -> tuple[str, ...]:
 
 
 def _default_classifier(title: str) -> "tuple[str, str, str | None]":
-    from job_hunter.import_jobs import classify_title  # lazy: that module needs SQLAlchemy
-
-    return classify_title(title)
+    family, evidence = classify_role_family(title)
+    return family, CLASSIFIER_VERSION, evidence
 
 
 def _family(category: str | None) -> str | None:
@@ -121,16 +123,16 @@ def extract_job_features(
     stated_seniority: Sequence[str] | None = None,
     classify: Classifier | None = None,
 ) -> JobFeatures:
-    """Features for one job. ``category`` is the stored ``jobs.category`` when available."""
+    """Features for one job. ``category`` is the stored ``jobs.category``, used only when the title says nothing."""
     stated = _normalise_levels(stated_seniority)
     if stated:
         levels, source = stated, SOURCE_STATED
     else:
         inferred = levels_from_text(title)
         levels, source = (inferred, SOURCE_INFERRED_FROM_TITLE) if inferred else ((), SOURCE_UNSPECIFIED)
-    family = _family(category)
-    if family is None and title:
-        family = _family((classify or _default_classifier)(title)[0])
+    family = _family((classify or _default_classifier)(title)[0]) if title else None
+    if family is None:
+        family = _family(category)
     return JobFeatures(seniority_levels=levels, seniority_source=source, role_family=family)
 
 

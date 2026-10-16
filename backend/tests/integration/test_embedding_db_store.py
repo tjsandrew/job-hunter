@@ -185,7 +185,7 @@ def test_job_features_are_upserted_with_a_version(db):
     store.save_features(str(db.job_id), {"seniority_levels": ["senior"], "seniority_source": "inferred_from_title", "role_family": "engineering"})
     row = db.connection.execute(text("SELECT feature_version, features FROM job_match_features WHERE job_id=:j"),
                                 {"j": db.job_id}).one()
-    assert row[0] == "features-v1" and row[1]["seniority_levels"] == ["senior"]
+    assert row[0] == "features-v2" and row[1]["seniority_levels"] == ["senior"]
     assert db.connection.execute(text("SELECT count(*) FROM job_match_features")).scalar_one() == 1
 
 

@@ -70,12 +70,13 @@ def test_job_features_stated_beats_inferred_and_unspecified_is_flagged():
     assert (unspecified.seniority_levels, unspecified.seniority_source) == ((), SOURCE_UNSPECIFIED)
 
 
-def test_job_role_family_uses_stored_category_first():
+def test_job_role_family_uses_the_title_classifier_first_then_the_stored_category():
     assert extract_job_features("Backend Engineer", category="engineering", classify=fake_classify).role_family == "engineering"
-    # a stored category wins even when the classifier would disagree
-    assert extract_job_features("Backend Engineer", category="people", classify=fake_classify).role_family == "people"
-    # "other" or missing falls back to the classifier; "other" from the classifier means unknown
-    assert extract_job_features("Data Analyst", category="other", classify=fake_classify).role_family == "data"
+    # the title classifier wins over a stored category that disagrees
+    assert extract_job_features("Backend Engineer", category="people", classify=fake_classify).role_family == "engineering"
+    # when the title says nothing, the stored category is the fallback
+    assert extract_job_features("Fraud Strategist", category="operations", classify=fake_classify).role_family == "operations"
+    assert extract_job_features("Fraud Strategist", category="other", classify=fake_classify).role_family is None
     assert extract_job_features("Data Analyst", category=None, classify=fake_classify).role_family == "data"
     assert extract_job_features("Fraud Strategist", category=None, classify=fake_classify).role_family is None
 
@@ -152,7 +153,6 @@ def test_recruiter_and_seniority_traps_are_caught_without_hurting_good_jobs():
 
 
 def test_real_classifier_agrees_on_the_trap_titles():
-    pytest.importorskip("sqlalchemy")  # the real classifier lives in a module that needs the backend dependencies
     jobs = {
         "Principal Recruiter": "people",
         "Technical Recruiter (Fixed Term Contract)": "people",

@@ -110,11 +110,12 @@ def test_a_row_for_an_older_text_version_does_not_count_and_is_kept():
 
 def test_features_are_refreshed_even_when_the_vector_is_reused():
     store = InMemoryEmbeddingStore()
-    _, embedder, _ = run_job(store=store)
-    assert store.features["j1"]["role_family"] == "engineering"
-    outcome, _, _ = run_job(job(category="people"), embedder, store)
+    # a title the classifier says nothing about, so the stored category decides the role family
+    _, embedder, _ = run_job(job(title="Fraud Strategist", category="operations"), store=store)
+    assert store.features["j1"]["role_family"] == "operations"
+    outcome, _, _ = run_job(job(title="Fraud Strategist", category="finance"), embedder, store)
     assert outcome.status == STATUS_UNCHANGED and len(embedder.calls) == 1
-    assert store.features["j1"]["role_family"] == "people"
+    assert store.features["j1"]["role_family"] == "finance"
 
 
 def test_embedder_unavailable_gives_pending_without_a_usable_vector_then_recovers():

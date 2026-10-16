@@ -64,8 +64,9 @@ def load_job_candidates(session: Session, *, model: str, text_version: str = JOB
     loaded = []
     for job_id, title, company, location, work_mode, status, category, embedding, features in rows:
         features = features or {}
-        # The stored category is the live source for the role family; the stored feature copy is a fallback.
-        family = category if category and category != "other" else features.get("role_family")
+        # The role family saved with the job's features (our own title classifier) comes first; the ingestion
+        # category is only a fallback for jobs whose features hold none.
+        family = features.get("role_family") or (category if category and category != "other" else None)
         job = {"id": str(job_id), "title": title, "company": company, "location": location,
                "work_mode": work_mode, "status": status, "category": category}
         loaded.append((job, RetrievalCandidate(job_id=str(job_id), vector=_floats(embedding), role_family=family,
