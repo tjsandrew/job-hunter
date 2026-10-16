@@ -93,9 +93,25 @@ profile. `recommend_for_profile` returns `None` when the profile has no usable v
 existing keyword ranker. Similarity is computed exactly in memory (fine at proof-of-concept scale); a pgvector query can replace it
 later without changing callers.
 
+## Backfill and the flagged "for you" endpoint
+
+- **Backfill:** `python -m job_hunter.embedding.backfill [--jobs] [--profiles] [--user alice] [--limit N] [--force]` (in the api
+  container, `docker compose run --rm --no-deps api python -m job_hunter.embedding.backfill`). It embeds every open job and each
+  user's *confirmed* profile version, commits per batch / per user, skips unchanged items and retries pending or failed ones. The
+  embedder URL comes from `EMBEDDER_URL` (default `http://embedder:8100`). In local mode the users come from the development identity
+  map; a cloud deployment must pass `user_ids` itself. Also callable as `backfill_jobs` / `backfill_profiles`.
+- **Endpoint:** `GET /v1/recommendations/for-you` (`limit`, `offset`), **off unless `FOR_YOU_ENABLED=1`** (404 `FOR_YOU_DISABLED`
+  otherwise; the compose file passes the variable through, default 0). It excludes saved/dismissed jobs like the existing endpoint, runs
+  eligibility, then the role and level checks, then similarity, and returns the existing result shape without a score (only the order
+  is meaningful) plus `ranking_mode` (`semantic` or `keyword_fallback`), `fallback_reason` and `blocked_by_checks`. With no confirmed
+  profile or no profile vector it returns the keyword ranker's result and says why. `/v1/recommendations` is unchanged and the OpenAPI
+  contract has the one extra path.
+- Keeping vectors up to date when jobs are ingested or profiles are confirmed is deliberately not built here: that hook belongs to the
+  ingestion and profile-save owners, who call `embed_job(s)` / `embed_profile(s)`.
+
 ## Verified
 
-- 142 tests (embedding, retrieval, database integration) plus the existing ranking tests pass inside the backend container (`pytest` with `backend/src` mounted
+- The full backend suite (550 tests, including the database integration tests, the OpenAPI contract and the new backfill and for-you tests) passes inside the backend container (`pytest` with `backend/src` mounted
   and `PYTHONPATH=/app/src`). The text builders and checks also run on the host Python.
 - 10 database integration tests (`backend/tests/integration/test_embedding_db_store.py`, `RUN_DB_INTEGRATION=1`) run in a
   rolled-back transaction with a throwaway schema and a restricted role, like the existing integration tests: migration adds only the
