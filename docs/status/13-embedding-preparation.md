@@ -106,12 +106,18 @@ later without changing callers.
   is meaningful) plus `ranking_mode` (`semantic` or `keyword_fallback`), `fallback_reason` and `blocked_by_checks`. With no confirmed
   profile or no profile vector it returns the keyword ranker's result and says why. `/v1/recommendations` is unchanged and the OpenAPI
   contract has the one extra path.
-- Keeping vectors up to date when jobs are ingested or profiles are confirmed is deliberately not built here: that hook belongs to the
-  ingestion and profile-save owners, who call `embed_job(s)` / `embed_profile(s)`.
+- **Profile hook (off unless `EMBED_ON_SAVE=1`):** `POST /v1/profile/confirm` and `PUT /v1/preferences` call
+  `profile_sync.embed_after_save` after saving. It embeds the user's confirmed profile version in the same transaction, inside a savepoint
+  with a 5 second embedder timeout, and never raises: an embedder outage leaves the profile `pending` (the for-you endpoint falls back,
+  the backfill retries), an unexpected error is logged and swallowed, and unchanged text skips the embedder entirely. Saving preferences
+  without a confirmed profile does nothing. Roles are part of the embedded text, so changing them re-embeds.
+- **Job side:** keeping job vectors current when jobs are ingested is still for the ingestion owner, who calls `embed_job(s)`.
+- **Role check without target roles** falls back to the profile headline (else the latest role). A stated seniority of "Executive" counts
+  as the top of the ladder; "executive" is never read from a job title ("Account Executive" is a sales job).
 
 ## Verified
 
-- The full backend suite (550 tests, including the database integration tests, the OpenAPI contract and the new backfill and for-you tests) passes inside the backend container (`pytest` with `backend/src` mounted
+- The full backend suite (558 tests, including the database integration tests, the OpenAPI contract and the new backfill and for-you tests) passes inside the backend container (`pytest` with `backend/src` mounted
   and `PYTHONPATH=/app/src`). The text builders and checks also run on the host Python.
 - 10 database integration tests (`backend/tests/integration/test_embedding_db_store.py`, `RUN_DB_INTEGRATION=1`) run in a
   rolled-back transaction with a throwaway schema and a restricted role, like the existing integration tests: migration adds only the
