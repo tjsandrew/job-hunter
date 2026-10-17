@@ -82,7 +82,7 @@ class Job(Base):
     category: Mapped[str | None] = mapped_column(String(40))
     category_source: Mapped[str | None] = mapped_column(String(40))
     category_evidence: Mapped[str | None] = mapped_column(String(120))
-    # Seniority levels named by the job (ladder: intern, entry, mid, senior, lead); [] = names no level (open to
+    # Seniority levels named by the job (ladder: intern, junior, mid, senior, lead, executive); [] = names no level (open to
     # all levels), NULL = not classified yet. Set at ingestion by job_hunter.seniority, like category.
     seniority: Mapped[list | None] = mapped_column(JSON)
     seniority_source: Mapped[str | None] = mapped_column(String(40))

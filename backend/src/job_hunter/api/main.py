@@ -111,7 +111,7 @@ class PreferencesWrite(BaseModel):
             return None
         normalized = normalise_levels(value)
         if len(normalized) == 1 and (value.strip().casefold() in SENIORITY_LADDER or
-                                     value.strip().casefold() in {"junior", "mid-level", "executive"}):
+                                     value.strip().casefold() in {"entry", "mid-level"}):
             return normalized[0]
         raise ValueError("seniority must be one of the supported levels")
 

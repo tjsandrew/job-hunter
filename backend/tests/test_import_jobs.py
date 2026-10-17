@@ -216,7 +216,7 @@ def test_imported_seniority_comes_from_the_title_or_from_a_level_the_source_stat
     titled = repo.jobs[("greenhouse", "sample-board", "100")]
     assert (titled.seniority, titled.seniority_source, titled.seniority_evidence) == (["senior"], "seniority-v1", "Senior")
     stated = repo.jobs[("greenhouse", "sample-board", "101")]
-    assert (stated.seniority, stated.seniority_source) == (["entry"], "stated")
+    assert (stated.seniority, stated.seniority_source) == (["junior"], "stated")
     # no level anywhere: classified as open to all levels ([]), which is different from NULL (never classified)
     unspecified = repo.jobs[("greenhouse", "sample-board", "102")]
     assert (unspecified.seniority, unspecified.seniority_source, unspecified.seniority_evidence) == ([], "seniority-v1", None)
@@ -235,7 +235,7 @@ def test_reclassify_recomputes_from_the_title_and_keeps_a_stated_level():
     old = FakeJob(title="Recruiter, Data Analytics", category="data", category_source="title_keyword_v1",
                   category_evidence="analytics", seniority=None)
     stated = FakeJob(title="Data Engineer", category="data", category_source="role-family-v1", category_evidence="data engineer",
-                     seniority=["entry"], seniority_source="stated", seniority_evidence="Junior")
+                     seniority=["junior"], seniority_source="stated", seniority_evidence="Junior")
     current = FakeJob(title="Senior Data Engineer", category="data", category_source="role-family-v1",
                       category_evidence="data engineer", seniority=["senior"], seniority_source="seniority-v1",
                       seniority_evidence="Senior")
@@ -243,7 +243,7 @@ def test_reclassify_recomputes_from_the_title_and_keeps_a_stated_level():
     assert counts == {"jobs": 3, "updated": 1, "unchanged": 2, "kept_stated_seniority": 1}
     assert (old.category, old.category_source, old.category_evidence) == ("people", "role-family-v1", "recruiter")
     assert (old.seniority, old.seniority_source) == ([], "seniority-v1")
-    assert (stated.seniority, stated.seniority_source) == (["entry"], "stated")      # not overwritten from the title
+    assert (stated.seniority, stated.seniority_source) == (["junior"], "stated")      # not overwritten from the title
     assert reclassify_jobs([old, stated, current])["updated"] == 0                    # and it settles
 
 

@@ -1,6 +1,6 @@
 """Add seniority columns to jobs, filled at ingestion like category.
 
-Seniority levels (intern, entry, mid, senior, lead) are a property of the job, so they live on the job row and
+Seniority levels (intern, junior, mid, senior, lead, executive) are a property of the job, so they live on the job row and
 are set by the shared classifier (job_hunter/seniority.py) at ingestion, next to jobs.category. ``seniority`` is
 a JSON list ([] = names no level, NULL = not classified yet); ``seniority_source`` says which classifier (or
 "stated") produced it; ``seniority_evidence`` is the matched phrase. Values in the legacy match-features table
@@ -22,7 +22,8 @@ def upgrade():
     op.execute("""DO $$ BEGIN
       IF to_regclass('job_match_features') IS NOT NULL THEN
         UPDATE jobs AS job SET
-          seniority = (feature.features->'seniority_levels')::json,
+          -- the earlier five-level ladder called junior "entry"
+          seniority = replace((feature.features->'seniority_levels')::text, '"entry"', '"junior"')::json,
           seniority_source = CASE WHEN feature.features->>'seniority_source' = 'stated'
                                   THEN 'stated' ELSE 'legacy-features-v2' END
         FROM job_match_features AS feature
@@ -41,7 +42,9 @@ def downgrade():
         features jsonb NOT NULL,
         updated_at timestamptz NOT NULL DEFAULT now())""")
     op.execute("""INSERT INTO job_match_features (job_id, feature_version, features)
-        SELECT id, 'features-v2', jsonb_build_object('seniority_levels', seniority,
+        SELECT id, 'features-v2', jsonb_build_object('seniority_levels',
+            -- back to the earlier five-level ladder: junior was "entry" and executive did not exist
+            replace(replace(seniority::text, '"junior"', '"entry"'), '"executive"', '"lead"')::jsonb,
             'seniority_source', seniority_source, 'role_family', category)
         FROM jobs WHERE seniority IS NOT NULL
         ON CONFLICT (job_id) DO NOTHING""")

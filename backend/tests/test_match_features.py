@@ -40,7 +40,7 @@ def test_job_role_family_is_read_from_the_stored_category(category, expected):
 
 @pytest.mark.parametrize("stored,expected", [
     (None, ()), ([], ()), (["senior"], ("senior",)), (["lead", "senior"], ("senior", "lead")),
-    (["bogus", "entry"], ("entry",)), (["Senior"], ("senior",)),
+    (["bogus", "junior"], ("junior",)), (["Senior"], ("senior",)),
 ])
 def test_job_seniority_levels_are_read_from_the_stored_column(stored, expected):
     assert job_seniority_levels(stored) == expected
@@ -49,26 +49,26 @@ def test_job_seniority_levels_are_read_from_the_stored_column(stored, expected):
 def test_profile_features():
     f = extract_profile_features(["Backend Engineer", "backend developer", "Data Analyst"], "Junior", classify=fake_classify)
     assert f.role_families == ("engineering", "data")
-    assert f.seniority_levels == ("entry",)
+    assert f.seniority_levels == ("junior",)
     empty = extract_profile_features(None, None, classify=fake_classify)
     assert empty.role_families == () and empty.seniority_levels == ()
     assert extract_profile_features(["Mystery Role"], ["Senior", "x"], classify=fake_classify).seniority_levels == ("senior",)
 
 
 def test_seniority_verdicts():
-    assert check_seniority(["entry"], ["entry"]).verdict == "match"
-    assert check_seniority(["mid"], ["entry"]).verdict == "adjacent"
-    assert check_seniority(["senior"], ["entry"]).verdict == "mismatch"
-    assert check_seniority(["lead"], ["entry"]).blocks is True
+    assert check_seniority(["junior"], ["junior"]).verdict == "match"
+    assert check_seniority(["mid"], ["junior"]).verdict == "adjacent"
+    assert check_seniority(["senior"], ["junior"]).verdict == "mismatch"
+    assert check_seniority(["lead"], ["junior"]).blocks is True
     assert check_seniority(["intern"], ["senior"]).verdict == "mismatch"
     # several job levels: the closest one counts
-    assert check_seniority(["entry", "mid"], ["mid"]).verdict == "match"
+    assert check_seniority(["junior", "mid"], ["mid"]).verdict == "match"
     assert check_seniority(["senior", "lead"], ["mid"]).verdict == "adjacent"
 
 
 def test_unspecified_job_counts_as_all_levels_and_is_flagged():
     for job in (None, [], ()):
-        result = check_seniority(job, ["entry"])
+        result = check_seniority(job, ["junior"])
         assert result.verdict == "all_levels" and result.job_unspecified is True and result.blocks is False
     # unspecified takes precedence even when the profile is also unset
     assert check_seniority(None, None).verdict == "all_levels"
@@ -101,7 +101,7 @@ def test_unknown_role_family_never_blocks(job, profile):
 
 def test_adjacency_table_is_symmetric_and_uses_known_families():
     assert all(len(pair) == 2 for pair in ADJACENT_FAMILIES)
-    assert SENIORITY_LADDER == ("intern", "entry", "mid", "senior", "lead")
+    assert SENIORITY_LADDER == ("intern", "junior", "mid", "senior", "lead", "executive")
 
 
 def test_recruiter_and_seniority_traps_are_caught_without_hurting_good_jobs():
@@ -129,9 +129,19 @@ def test_real_classifier_agrees_on_the_trap_titles():
     assert extract_profile_features(["Backend Engineer"], "Junior").role_families == ("engineering",)
 
 
-def test_executive_in_a_preference_is_the_top_of_the_ladder():
-    assert extract_profile_features(["Head of Data"], "Executive", classify=fake_classify).seniority_levels == ("lead",)
-    assert extract_profile_features(None, ["Executive"], classify=fake_classify).seniority_levels == ("lead",)
+def test_executive_in_a_preference_is_its_own_level():
+    assert extract_profile_features(["Head of Data"], "Executive", classify=fake_classify).seniority_levels == ("executive",)
+    assert extract_profile_features(None, ["Executive"], classify=fake_classify).seniority_levels == ("executive",)
+
+
+def test_lead_and_executive_count_as_the_same_level_in_the_checks():
+    for job, profile in ((["lead"], ["executive"]), (["executive"], ["lead"]), (["executive"], ["executive"])):
+        assert check_seniority(job, profile).verdict == "match"
+    # and executive sits at the top of the ladder like lead does
+    assert check_seniority(["executive"], ["senior"]).verdict == "adjacent"
+    assert check_seniority(["executive"], ["mid"]).blocks is True
+    assert check_seniority(["executive"], ["junior"]).blocks is True
+    assert check_seniority(["lead"], ["junior"]).blocks is True
 
 
 def test_role_hint_from_snapshot():

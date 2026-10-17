@@ -6,11 +6,15 @@ Ingestion calls ``classify_seniority`` (in ``import_jobs.py``) to fill ``jobs.se
 value. The profile side (a user's stated level) uses ``levels_from_text`` / ``normalise_levels`` from here too.
 
 This is the single swap point if the deterministic rules are ever replaced (for example by an LLM that returns
-both the level and the role family at ingestion): keep the return shape and the five-step ladder.
+both the level and the role family at ingestion): keep the return shape and the ladder keys.
 
-The ladder is intern < entry < mid < senior < lead. A job that names no level is stored as an empty list and
-counts as open to every level; ``NULL`` means "not classified yet". "associate" and "manager" are deliberately
-not read as levels: they say little about seniority ("Product Manager", "Customer Associate").
+The contract has six levels: intern < junior < mid < senior < lead < executive (the words the preferences
+dropdown always used). For the match checks ``lead`` and ``executive`` are the same step (``CHECK_LADDER``), because
+the evidence so far is too small to say the split helps; split them there if a larger labelled set shows it does.
+The title rules cannot tell the two apart yet, so they return ``lead`` for director/VP/chief/head-of titles;
+``executive`` is stored only when a job source or a user states it. A job that names no level is stored as an empty
+list and counts as open to every level; ``NULL`` means "not classified yet". "associate" and "manager" are
+deliberately not read as levels: they say little about seniority ("Product Manager", "Customer Associate").
 """
 
 from __future__ import annotations
@@ -22,19 +26,28 @@ SENIORITY_VERSION = "seniority-v1"      # stored as seniority_source when the le
 SENIORITY_STATED = "stated"            # stored as seniority_source when the job source named the level itself
 EVIDENCE_MAX = 120                     # jobs.seniority_evidence is varchar(120)
 
-SENIORITY_LADDER: tuple[str, ...] = ("intern", "entry", "mid", "senior", "lead")
+SENIORITY_LADDER: tuple[str, ...] = ("intern", "junior", "mid", "senior", "lead", "executive")
 SENIORITY_OPTIONS: tuple[dict[str, str], ...] = (
     {"value": "intern", "label": "Intern"},
-    {"value": "entry", "label": "Junior / Entry-level"},
+    {"value": "junior", "label": "Junior / Entry-level"},
     {"value": "mid", "label": "Mid-level"},
     {"value": "senior", "label": "Senior"},
-    {"value": "lead", "label": "Lead / Executive"},
+    {"value": "lead", "label": "Lead"},
+    {"value": "executive", "label": "Executive"},
 )
+
+# What the match checks compare. Levels in the same group are one step apart from the rest of the ladder, so a
+# lead job and an executive profile (or the reverse) count as the same level for now.
+_CHECK_GROUP = {"executive": "lead"}
+CHECK_LADDER: tuple[str, ...] = tuple(level for level in SENIORITY_LADDER if level not in _CHECK_GROUP)
+
+# Keys and wording stored before this contract, accepted and converted when read.
+_LEGACY_KEYS = {"entry": "junior", "mid-level": "mid"}
 
 # Ordered keyword patterns, one per ladder level.
 _SENIORITY_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("intern", re.compile(r"\b(intern|internship|co-?op)\b", re.I)),
-    ("entry", re.compile(r"\b(junior|jr|entry[\s-]*level|new[\s-]*grad(uate)?|graduate|early[\s-]*career|trainee)\b", re.I)),
+    ("junior", re.compile(r"\b(junior|jr|entry[\s-]*level|new[\s-]*grad(uate)?|graduate|early[\s-]*career|trainee)\b", re.I)),
     ("mid", re.compile(r"\b(mid[\s-]*level|intermediate)\b", re.I)),
     ("senior", re.compile(r"\b(senior|sr)\b", re.I)),
     ("lead", re.compile(
@@ -46,9 +59,13 @@ _SENIORITY_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         r"|\blead\b(?!\s*gen)", re.I)),
 )
 
-# Plain words that only make sense as a *stated* level (a preference or a structured field), never as a
-# title keyword: "Account Executive" is a sales job, not an executive-level one.
-_STATED_ONLY_LEVELS = {"executive": "lead"}
+# "executive" is a *stated* level only (a preference or a structured field), never a title keyword:
+# "Account Executive" is a sales job, not an executive-level one. It is not in _SENIORITY_PATTERNS for that reason.
+
+
+def check_rank(level: str) -> int:
+    """Position of a level on the ladder the match checks use (``executive`` shares ``lead``'s position)."""
+    return CHECK_LADDER.index(_CHECK_GROUP.get(level, level))
 
 
 def _matches(text: str | None) -> list[tuple[str, str]]:
@@ -69,14 +86,14 @@ def levels_from_text(text: str | None) -> tuple[str, ...]:
 
 
 def normalise_levels(levels: str | Sequence[str] | None) -> tuple[str, ...]:
-    """Accept ladder names ("entry") or plain wording ("Junior"); ignore anything else."""
+    """Accept ladder keys ("junior"), plain wording ("Junior") or a legacy key ("entry"); ignore anything else."""
     valid: set[str] = set()
     for level in ([levels] if isinstance(levels, str) else levels or ()):
         text = str(level).strip().lower()
         if text in SENIORITY_LADDER:
             valid.add(text)
-        elif text in _STATED_ONLY_LEVELS:
-            valid.add(_STATED_ONLY_LEVELS[text])
+        elif text in _LEGACY_KEYS:
+            valid.add(_LEGACY_KEYS[text])
         else:
             valid.update(levels_from_text(text))
     return tuple(level for level in SENIORITY_LADDER if level in valid)

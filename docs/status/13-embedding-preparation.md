@@ -65,14 +65,15 @@ everything else reads them from there (no second copy, nothing classified lazily
 | Column | Set by | Meaning |
 |---|---|---|
 | `jobs.category` (+ `category_source`, `category_evidence`) | `classify_title()` in `import_jobs.py`, which calls `classify_role_family` in `backend/src/job_hunter/role_family.py` (source label `role-family-v1`) | one of 12 families; "other" = no family matched |
-| `jobs.seniority` (+ `seniority_source`, `seniority_evidence`) | `classify_seniority()` in `backend/src/job_hunter/seniority.py` (source `seniority-v1`, or `stated` when the source names the level itself via an optional `stated_seniority` on the record) | JSON list of ladder levels (intern, entry, mid, senior, lead); `[]` = names no level (open to all levels); `NULL` = not classified yet |
+| `jobs.seniority` (+ `seniority_source`, `seniority_evidence`) | `classify_seniority()` in `backend/src/job_hunter/seniority.py` (source `seniority-v1`, or `stated` when the source names the level itself via an optional `stated_seniority` on the record) | JSON list of ladder levels (intern, junior, mid, senior, lead, executive); `[]` = names no level (open to all levels); `NULL` = not classified yet |
 
 - **Reading.** `db_retrieval.load_job_candidates` reads both columns. An empty, "other", unknown, invalid or `NULL` value counts as
   unknown / open to all levels, so it **never blocks** a job (a source whose ingestion skipped the classifiers therefore weakens the
   checks silently; `backfill --classification-report` shows per source how many open jobs have no category or seniority).
 - **Profiles.** A profile's target-role families and level are worked out live from its preferences on each request with the same
-  functions (`extract_profile_features`); a stated level of "Executive" counts as the top of the ladder, and "executive" is never
-  read from a job title ("Account Executive" is a sales job).
+  functions (`extract_profile_features`); "executive" is its own level but the checks count it as the same step as "lead" (`CHECK_LADDER`
+  in `seniority.py`; split them only if a larger labelled set shows it helps). "executive" is stored only when a source or a user
+  states it and is never read from a job title ("Account Executive" is a sales job); director/VP/chief/head-of titles stay "lead".
 - **Checks.** Role family: same / adjacent / different / unknown, only "different" blocks (adjacency is a judgement call,
   `ADJACENT_FAMILIES` in `features.py`). Seniority: only a clear mismatch (two or more steps apart) blocks; an unspecified job is
   flagged `all_levels`.
@@ -153,11 +154,11 @@ later without changing callers.
   `job_hunter.job_classification.classify_job(title, stated_seniority=None)` after title normalization and before saving:
   the recommender's role and level checks, Andrew's keyword ranker, the job API output, the resume builder
   and search all read those columns. The embedder itself classifies nothing for jobs.
-- **Preference seniority:** `GET /v1/preferences/seniority-options` serves the backend's five canonical keys and display labels.
+- **Preference seniority:** `GET /v1/preferences/seniority-options` serves the backend's six canonical keys (intern, junior, mid, senior, lead, executive) and display labels (the dropdown's own words).
   The UI fetches these when Job preferences opens, while target roles remain free text. `PUT /v1/preferences` validates and
-  stores canonical keys; legacy Junior, Mid-level and Executive labels are accepted and normalized for compatibility.
-- **Role check without target roles** falls back to the profile headline (else the latest role). A stated seniority of "Executive" counts
-  as the top of the ladder; "executive" is never read from a job title ("Account Executive" is a sales job).
+  stores canonical keys; the earlier `entry` key and the Junior and Mid-level labels are accepted and normalized for compatibility.
+- **Role check without target roles** falls back to the profile headline (else the latest role). A stated seniority of "Executive" is kept as
+  "executive" and compared as the same step as "lead"; "executive" is never read from a job title ("Account Executive" is a sales job).
 
 ## Verified
 

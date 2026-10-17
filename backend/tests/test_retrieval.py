@@ -17,7 +17,7 @@ def vec(*head):
     return tuple(list(head) + [0.0] * (8 - len(head)))
 
 
-QUERY = ProfileQuery(vector=vec(1.0), role_families=("engineering",), seniority_levels=("entry",))
+QUERY = ProfileQuery(vector=vec(1.0), role_families=("engineering",), seniority_levels=("junior",))
 
 
 def cand(job_id, vector, family="engineering", levels=()):

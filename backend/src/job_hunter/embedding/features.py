@@ -4,7 +4,8 @@ Embeddings find jobs that read alike; they cannot enforce "different occupation"
 "wrong experience level" (a recruiter or a principal-level job can read very close to a
 junior backend profile). These small, transparent rules cover that gap:
 
-* **Seniority** - a five-step ladder (intern, entry, mid, senior, lead). A job's levels are classified at
+* **Seniority** - a ladder of six levels (intern, junior, mid, senior, lead, executive) in which lead and
+  executive count as one step for now (``job_hunter.seniority.CHECK_LADDER``). A job's levels are classified at
   ingestion (``job_hunter.seniority``) and stored in ``jobs.seniority``; a job that names no level counts as
   open to all levels (and is flagged as such, so evaluation can see how often the check did nothing). A
   profile's level comes from the user's preferences.
@@ -23,7 +24,7 @@ from dataclasses import dataclass
 from typing import Callable, Sequence
 
 from job_hunter.role_family import CLASSIFIER_VERSION, ROLE_FAMILIES, classify_role_family
-from job_hunter.seniority import SENIORITY_LADDER, levels_from_text, normalise_levels
+from job_hunter.seniority import SENIORITY_LADDER, check_rank, levels_from_text, normalise_levels
 
 FEATURES_VERSION = "features-v3"   # part of the ranking version string, so a change to the rules is visible later
 
@@ -118,7 +119,7 @@ def check_seniority(job_levels: Sequence[str] | None, profile_levels: Sequence[s
         return SeniorityCheck("all_levels", True, "the job does not state a level; counted as open to all levels")
     if not profile:
         return SeniorityCheck("unknown", False, "the profile has no seniority set")
-    distance = min(abs(SENIORITY_LADDER.index(j) - SENIORITY_LADDER.index(p)) for j in job for p in profile)
+    distance = min(abs(check_rank(j) - check_rank(p)) for j in job for p in profile)
     if distance == 0:
         return SeniorityCheck("match", False, "job and profile name the same level")
     if distance == 1:

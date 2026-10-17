@@ -17,6 +17,6 @@ def test_classify_job_returns_database_values_from_title():
 
 def test_source_stated_seniority_overrides_title():
     values = classify_job("Senior Backend Engineer", stated_seniority="Junior")
-    assert values["seniority"] == ["entry"]
+    assert values["seniority"] == ["junior"]
     assert values["seniority_source"] == SENIORITY_STATED
     assert values["seniority_evidence"] == "Junior"

@@ -25,7 +25,7 @@ keyword tables, run `make reclassify-jobs` and inspect the classification report
 [embedder status](docs/status/11-embedder-service.md), [backend client status](docs/status/12-embedding-client.md) and
 [embedding preparation](docs/status/13-embedding-preparation.md).
 
-Ingestion can call `job_hunter.job_classification.classify_job(title, stated_seniority=None)` before saving a job; it returns the six category/seniority columns. Job preferences keep free-text target roles. The seniority dropdown loads canonical keys and labels from `GET /v1/preferences/seniority-options`; `PUT /v1/preferences` saves a canonical key (`intern`, `entry`, `mid`, `senior`, `lead`). If the options endpoint is unavailable, only the seniority selector is disabled and can be retried.
+Ingestion can call `job_hunter.job_classification.classify_job(title, stated_seniority=None)` before saving a job; it returns the six category/seniority columns. Job preferences keep free-text target roles. The seniority dropdown loads canonical keys and labels from `GET /v1/preferences/seniority-options`; `PUT /v1/preferences` saves a canonical key (`intern`, `junior`, `mid`, `senior`, `lead`, `executive`; the old `entry` key and the old labels are accepted and converted). The match checks treat `lead` and `executive` as one step for now. If the options endpoint is unavailable, only the seniority selector is disabled and can be retried.
 
 ## Quick start
 

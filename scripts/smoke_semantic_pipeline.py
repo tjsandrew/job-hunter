@@ -54,10 +54,10 @@ def main():
                 session.flush()
                 connection.execute(text("""INSERT INTO job_match_features (job_id, feature_version, features)
                     VALUES (:job_id, 'features-v2', CAST(:features AS jsonb))"""),
-                    {"job_id": legacy.id, "features": '{"seniority_levels":["entry"],"seniority_source":"stated"}'})
+                    {"job_id": legacy.id, "features": '{"seniority_levels":["junior"],"seniority_source":"stated"}'})
                 run_migration(connection, "0013_job_seniority.py")
                 session.refresh(legacy)
-                assert legacy.seniority == ["entry"] and legacy.seniority_source == "stated"
+                assert legacy.seniority == ["junior"] and legacy.seniority_source == "stated"
                 assert connection.execute(text("SELECT to_regclass('job_match_features')")).scalar_one() is None
                 records = [
                     {"source": "synthetic", "source_board": "smoke", "external_id": str(index),
@@ -73,7 +73,7 @@ def main():
                 jobs = {job.title: job for job in session.scalars(select(Job))}
                 assert jobs[titles[1][0]].category == "people"
                 assert jobs[titles[2][0]].seniority == ["lead"]
-                assert jobs[titles[3][0]].seniority == ["entry"]
+                assert jobs[titles[3][0]].seniority == ["junior"]
                 assert jobs[titles[3][0]].seniority_source == "stated"
                 classified = reclassify_jobs(session.scalars(select(Job)))
                 assert classified["updated"] == 1 and classified["kept_stated_seniority"] == 2

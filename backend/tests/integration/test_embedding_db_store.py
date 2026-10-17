@@ -178,11 +178,11 @@ def test_migration_0013_preserves_stated_seniority_before_retiring_features(sche
     session.flush()
     connection.execute(text("""INSERT INTO job_match_features (job_id, feature_version, features)
         VALUES (:job_id, 'features-v2', CAST(:features AS jsonb))"""),
-        {"job_id": job.id, "features": '{"seniority_levels": ["entry"], "seniority_source": "stated"}'})
+        {"job_id": job.id, "features": '{"seniority_levels": ["junior"], "seniority_source": "stated"}'})
     run(connection, load_migration("0013_job_seniority.py").upgrade)
     values = connection.execute(text("SELECT seniority, seniority_source FROM jobs WHERE id=:job_id"),
                                 {"job_id": job.id}).one()
-    assert values.seniority == ["entry"] and values.seniority_source == "stated"
+    assert values.seniority == ["junior"] and values.seniority_source == "stated"
     assert "job_match_features" not in tables(connection, schema_conn.schema)
 
 
