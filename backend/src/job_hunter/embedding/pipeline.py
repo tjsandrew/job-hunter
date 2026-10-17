@@ -47,7 +47,6 @@ MAX_BATCH_SIZE = 64   # the embedder service accepts at most 64 texts per reques
 class JobEmbedRequest:
     job_id: str
     job: JobTextInput
-    category: str | None = None                       # the stored jobs.category, when available
     stated_seniority: Sequence[str] | None = None     # only if the source states a level
 
 
@@ -97,8 +96,7 @@ def _prepare_job(request: JobEmbedRequest, classify: Classifier | None,
                  text_version: str = JOB_TEXT_VERSION) -> _Prepared:
     key = request.job_id
     try:
-        features = _plain(extract_job_features(request.job.title, request.category,
-                                               request.stated_seniority, classify))
+        features = _plain(extract_job_features(request.job.title, request.stated_seniority, classify))
     except Exception as exc:
         return _failed_prep(key, text_version, {}, exc)
     try:

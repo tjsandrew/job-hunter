@@ -48,9 +48,8 @@ class FakeEmbedder:
 
 
 def job(job_id="j1", title="Backend Engineer", description="Responsibilities\n" + "Build and run APIs for payments. " * 6,
-        category="engineering", **kwargs):
-    return JobEmbedRequest(job_id=job_id, job=JobTextInput(title=title, description=description),
-                           category=category, **kwargs)
+        **kwargs):
+    return JobEmbedRequest(job_id=job_id, job=JobTextInput(title=title, description=description), **kwargs)
 
 
 SNAPSHOT = {"headline": "Junior backend engineer", "summary": "Builds APIs.", "skills": ["Python", "SQL"],
@@ -111,12 +110,14 @@ def test_a_row_for_an_older_text_version_does_not_count_and_is_kept():
 
 def test_features_are_refreshed_even_when_the_vector_is_reused():
     store = InMemoryEmbeddingStore()
-    # a title the classifier says nothing about, so the stored category decides the role family
-    _, embedder, _ = run_job(job(title="Fraud Strategist", category="operations"), store=store)
-    assert store.features["j1"]["role_family"] == "operations"
-    outcome, _, _ = run_job(job(title="Fraud Strategist", category="finance"), embedder, store)
+    _, embedder, _ = run_job(job(title="Backend Engineer"), store=store)
+    assert store.features["j1"]["role_family"] == "engineering"
+    # a retuned classifier changes the stored family without paying for a new embedding
+    def retuned(title):
+        return "operations", "test-v2", None
+    outcome = embed_job(job(title="Backend Engineer"), embedder=embedder, store=store, classify=retuned)
     assert outcome.status == STATUS_UNCHANGED and len(embedder.calls) == 1
-    assert store.features["j1"]["role_family"] == "finance"
+    assert store.features["j1"]["role_family"] == "operations"
 
 
 def test_embedder_unavailable_gives_pending_without_a_usable_vector_then_recovers():

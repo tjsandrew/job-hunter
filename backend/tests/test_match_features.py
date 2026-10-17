@@ -15,7 +15,7 @@ from job_hunter.embedding.features import (
 
 
 def fake_classify(title):
-    """Stand-in for import_jobs.classify_title (which needs SQLAlchemy); same return shape."""
+    """A tiny stand-in classifier with the real one's return shape (family, version, evidence)."""
     t = f" {title.casefold()} "
     for category, words in (("people", ("recruiter",)), ("data", ("data",)), ("engineering", ("engineer", "developer")),
                             ("sales", ("sales", "account executive"))):
@@ -70,15 +70,12 @@ def test_job_features_stated_beats_inferred_and_unspecified_is_flagged():
     assert (unspecified.seniority_levels, unspecified.seniority_source) == ((), SOURCE_UNSPECIFIED)
 
 
-def test_job_role_family_uses_the_title_classifier_first_then_the_stored_category():
-    assert extract_job_features("Backend Engineer", category="engineering", classify=fake_classify).role_family == "engineering"
-    # the title classifier wins over a stored category that disagrees
-    assert extract_job_features("Backend Engineer", category="people", classify=fake_classify).role_family == "engineering"
-    # when the title says nothing, the stored category is the fallback
-    assert extract_job_features("Fraud Strategist", category="operations", classify=fake_classify).role_family == "operations"
-    assert extract_job_features("Fraud Strategist", category="other", classify=fake_classify).role_family is None
-    assert extract_job_features("Data Analyst", category=None, classify=fake_classify).role_family == "data"
-    assert extract_job_features("Fraud Strategist", category=None, classify=fake_classify).role_family is None
+def test_job_role_family_comes_from_the_title_alone():
+    assert extract_job_features("Backend Engineer", classify=fake_classify).role_family == "engineering"
+    assert extract_job_features("Data Analyst", classify=fake_classify).role_family == "data"
+    # a title the classifier says nothing about is unknown (None), which never blocks
+    assert extract_job_features("Fraud Strategist", classify=fake_classify).role_family is None
+    assert extract_job_features("", classify=fake_classify).role_family is None
 
 
 def test_profile_features():
@@ -141,13 +138,13 @@ def test_adjacency_table_is_symmetric_and_uses_known_families():
 
 def test_recruiter_and_seniority_traps_are_caught_without_hurting_good_jobs():
     profile = extract_profile_features(["Backend Engineer"], "Junior", classify=fake_classify)
-    trap = extract_job_features("Principal Recruiter", category="people", classify=fake_classify)
+    trap = extract_job_features("Principal Recruiter", classify=fake_classify)
     assert check_role_family(trap.role_family, profile.role_families).blocks is True
     assert check_seniority(trap.seniority_levels, profile.seniority_levels).blocks is True
-    senior = extract_job_features("Senior Backend Engineer", category="engineering", classify=fake_classify)
+    senior = extract_job_features("Senior Backend Engineer", classify=fake_classify)
     assert check_role_family(senior.role_family, profile.role_families).blocks is False
     assert check_seniority(senior.seniority_levels, profile.seniority_levels).blocks is True
-    good = extract_job_features("Backend Engineer, Payments", category="engineering", classify=fake_classify)
+    good = extract_job_features("Backend Engineer, Payments", classify=fake_classify)
     assert check_role_family(good.role_family, profile.role_families).verdict == "same"
     assert check_seniority(good.seniority_levels, profile.seniority_levels).verdict == "all_levels"
 

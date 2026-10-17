@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from job_hunter.ingestion.discovery import DiscoveryConfig, DiscoveryReport, discover_report
+from job_hunter.role_family import CLASSIFIER_VERSION, classify_role_family
 
 logger = logging.getLogger(__name__)
 
@@ -93,31 +94,13 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
-# Stable title-only inference. These values are explicitly marked as inferred;
-# category evidence is the exact matched phrase from the listing title.
-CATEGORY_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("data", ("data scientist", "data engineer", "data analyst", "analytics", "machine learning", " ml ", "artificial intelligence", "business intelligence")),
-    ("design", ("designer", "design", " ux", "ux ", "user experience", "visual design")),
-    ("product", ("product manager", "product owner", "product lead", "product management")),
-    ("sales", ("sales", "account executive", "business development", "partnerships")),
-    ("customer_success", ("customer success", "client success", "customer support", "customer service", "account manager")),
-    ("engineering", ("engineer", "developer", "software", "infrastructure", "platform", "devops", "sre", "quality assurance", " qa ", "cybersecurity")),
-    ("operations", ("operations", "strategy", "program manager", "project manager", "supply chain", "logistics")),
-    ("marketing", ("marketing", "communications", "public relations", "content", "brand")),
-    ("finance", ("finance", "accounting", "accountant", "treasury", "audit")),
-    ("people", ("human resources", "people operations", "recruiter", "recruiting", "talent acquisition")),
-    ("legal", ("legal", "compliance", "privacy counsel")),
-)
-
-
+# Title-only inference with the shared role-family classifier (``job_hunter.role_family``), which is also what
+# the recommender uses, so ``jobs.category`` and the recommender's role family always agree. These values are
+# explicitly marked as inferred; category evidence is the exact matched phrase from the listing title.
 def classify_title(title: str) -> tuple[str, str, str | None]:
     """Return (category, source label, title evidence); categories are inferred."""
-    normalized = f" {title.casefold()} "
-    for category, phrases in CATEGORY_RULES:
-        for phrase in phrases:
-            if phrase in normalized:
-                return category, "title_keyword_v1", phrase.strip()
-    return "other", "title_keyword_v1", None
+    category, evidence = classify_role_family(title)
+    return category, CLASSIFIER_VERSION, evidence
 
 
 def _parse_datetime(value: Any) -> datetime | None:

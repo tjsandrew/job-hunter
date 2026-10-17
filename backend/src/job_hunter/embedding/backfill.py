@@ -45,7 +45,7 @@ def backfill_jobs(session: Session, embedder, *, batch_size: int = 32, limit: in
     store, counts = DbJobEmbeddingStore(session), Counter()
     for start in range(0, len(jobs), batch_size):
         chunk = jobs[start:start + batch_size]
-        requests = [JobEmbedRequest(job_id=str(job.id), job=JobTextInput.from_job(job), category=job.category)
+        requests = [JobEmbedRequest(job_id=str(job.id), job=JobTextInput.from_job(job))
                     for job in chunk]
         for outcome in embed_jobs(requests, embedder=embedder, store=store, force=force, batch_size=batch_size):
             counts[outcome.status] += 1

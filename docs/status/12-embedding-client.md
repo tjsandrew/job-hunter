@@ -5,11 +5,9 @@ contract. It sends a list of texts and returns the model ID with immutable 512-d
 blank inputs, fake/missing backends, malformed/truncated responses, non-finite or non-unit vectors, wrong dimensions,
 and missing model IDs. Service/HTTP failures are reported as `EmbedderUnavailable` without exposing source text.
 
-The client is **not wired into the API, ingestion, profile saves, database, or ranking**. There is no schema change,
-background job, or on-request embedding. The existing recommendation behavior and Compose defaults remain unchanged.
-This is the first local stage of the separate recommender plan; job text and metadata need coordination with the
-ingestion owner before persistence or retrieval is built. The embedder service can change models behind the same
-HTTP contract, but a model change requires re-embedding both jobs and profiles.
+This document describes the client alone. It was first built as a standalone stage; the embedding functions, storage, the
+For you endpoint and the profile-save hooks that use it are described in `13-embedding-preparation.md`. The embedder service
+can change models behind the same HTTP contract, but a model change requires re-embedding both jobs and profiles.
 
 Focused verification from the repository root: `py -3 -m pytest backend/tests/test_embedding_client.py
 backend/tests/test_recommendations.py -q` passed (17 client tests, 9 existing ranking tests). A local host-side

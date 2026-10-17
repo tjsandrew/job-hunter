@@ -6,8 +6,7 @@ Typical use from ingestion or profile-save code::
     from job_hunter.embedding import (HttpEmbedder, InMemoryEmbeddingStore, JobEmbedRequest,
                                       JobTextInput, embed_job)
 
-    outcome = embed_job(JobEmbedRequest(job_id=str(job.id), job=JobTextInput.from_job(job),
-                                        category=job.category),
+    outcome = embed_job(JobEmbedRequest(job_id=str(job.id), job=JobTextInput.from_job(job)),
                         embedder=HttpEmbedder("http://embedder:8100"), store=my_store)
     # outcome.status is "ready", "unchanged", "pending", "failed" or "no_content"; nothing is raised
 """

@@ -20,7 +20,7 @@ from job_hunter.embedding import (HttpEmbedder, JobEmbedRequest, JobTextInput, P
                                   embed_job, embed_profile)
 
 outcome = embed_job(
-    JobEmbedRequest(job_id=str(job.id), job=JobTextInput.from_job(job), category=job.category),
+    JobEmbedRequest(job_id=str(job.id), job=JobTextInput.from_job(job)),
     embedder=HttpEmbedder("http://embedder:8100"), store=store)
 
 outcome = embed_profile(
@@ -59,10 +59,17 @@ the caller's database session lives inside the store, which keeps per-user row-l
 
 - **Seniority:** a five-step ladder (intern, entry, mid, senior, lead) from a stated value or conservative title keywords. A job that
   names no level counts as open to all levels and is flagged `all_levels`. Only a clear mismatch (two or more steps apart) blocks.
-- **Role family:** reuses `jobs.category` from `classify_title()` in `import_jobs.py`. Results are same / adjacent / different /
-  unknown; only "different" blocks, and unknown (including category "other") never does. The adjacency list is a judgement
-  call (`ADJACENT_FAMILIES` in `features.py`).
-- These are checks for the future recommender to use; nothing calls them yet.
+- **Role family:** worked out from the job title alone by the shared classifier in `backend/src/job_hunter/role_family.py`
+  (`classify_role_family`; the old `embedding/role_family.py` path still imports it). Ingestion calls the **same** classifier
+  (`classify_title()` in `import_jobs.py`, source label `role-family-v1`) to fill `jobs.category`, so `jobs.category` and the
+  recommender's role family always agree, and the keyword tables in `role_family.py` are the one place to tune. The family is
+  worked out when a job is embedded and saved in `job_match_features`; For you reads the saved value (nothing is classified at
+  request time for jobs; a profile's target-role families are worked out from its preferences on each request). Results are
+  same / adjacent / different / unknown; only "different" blocks, and unknown (family "other") never does. The adjacency list is
+  a judgement call (`ADJACENT_FAMILIES` in `features.py`). After the keyword tables change, re-run `make import-jobs` /
+  `make replay-jobs` to refresh `jobs.category` (a changed category counts as an update) and `make backfill` to refresh the saved
+  families (no re-embedding needed).
+- The checks are used by the For you ranking (see below); the old ingestion-category fallback no longer exists.
 
 ## Storage
 
@@ -83,10 +90,10 @@ SQLAlchemy). Embeddings live in **separate new tables** (migration `0012_embeddi
 
 `DbJobEmbeddingStore` and `DbProfileEmbeddingStore` take the caller's SQLAlchemy `Session` and never commit; every write runs in a
 savepoint, so one bad row cannot poison a batch. The older `embedding` columns on `jobs` and `profile_versions` are left unused.
-**The migration has not been applied to the running development database**; it applies on the next `docker compose up --build`
-of this branch.
+The migration runs automatically when the api container starts (`alembic upgrade head` in `compose.yaml`), so a stack
+rebuilt from this branch picks it up.
 
-## Semantic candidate retrieval (not wired into the app)
+## Semantic candidate retrieval
 
 `retrieval.py` (pure, in memory) and `db_retrieval.py` (loads from the embedding tables) rank jobs for a profile in this order:
 
@@ -95,7 +102,8 @@ of this branch.
 2. **Checks**: a job whose role family is clearly different, or whose level is two or more steps from the profile's, is blocked.
    Unknown and unspecified never block. Blocked jobs are returned in a separate list (with their similarity) for evaluation.
 3. **Similarity**: the rest are ordered by cosine similarity. Only the order is meaningful; do not show the raw number as a
-   percentage. Each result carries short, rule-based reasons ("same kind of role", "level not stated, shown for all levels").
+   percentage. Each result carries short positive reasons ("Same kind of role as your target role", "Level matches your profile");
+   caveats such as "level not stated" are not shown as reasons.
 
 Vectors from different models are never compared: candidates must have been embedded with the same model and text version as the
 profile. `recommend_for_profile` returns `None` when the profile has no usable vector, which is the caller's cue to fall back to the
@@ -109,7 +117,7 @@ later without changing callers.
   user's *confirmed* profile version, commits per batch / per user, skips unchanged items and retries pending or failed ones. The
   embedder URL comes from `EMBEDDER_URL` (default `http://embedder:8100`). In local mode the users come from the development identity
   map; a cloud deployment must pass `user_ids` itself. Also callable as `backfill_jobs` / `backfill_profiles`.
-- **Endpoint:** `GET /v1/recommendations/for-you` (`limit`, `offset`), **on by default in compose (`FOR_YOU_ENABLED`, set 0 to switch off)** (404 `FOR_YOU_DISABLED`
+- **Endpoint:** `GET /v1/recommendations/for-you` (`limit`, `offset`, `q` for the Discover search text), **on by default in compose (`FOR_YOU_ENABLED`, set 0 to switch off)** (404 `FOR_YOU_DISABLED`
   when off; the application default without the variable is off). It excludes saved/dismissed jobs like the existing endpoint, runs
   eligibility, then the role and level checks, then similarity, and returns the existing result shape without a score (only the order
   is meaningful) plus `ranking_mode` (`semantic` or `keyword_fallback`), `fallback_reason` and `blocked_by_checks`. With no confirmed
@@ -126,6 +134,9 @@ later without changing callers.
   the backfill retries), an unexpected error is logged and swallowed, and unchanged text skips the embedder entirely. Saving preferences
   without a confirmed profile does nothing. Roles are part of the embedded text, so changing them re-embeds.
 - **Job side:** keeping job vectors current when jobs are ingested is still for the ingestion owner, who calls `embed_job(s)`.
+  A new ingestion path should also fill `jobs.category` with `classify_title(title)` from `import_jobs.py` (or
+  `classify_role_family(title)` from `job_hunter.role_family`); the embedder does not read `jobs.category`, but Andrew's
+  keyword ranker, the job API output, the resume builder and search still do.
 - **Role check without target roles** falls back to the profile headline (else the latest role). A stated seniority of "Executive" counts
   as the top of the ladder; "executive" is never read from a job title ("Account Executive" is a sales job).
 

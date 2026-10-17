@@ -22,6 +22,7 @@ from job_hunter.embedding import (
     JOB_TEXT_VERSION, STATUS_FAILED, STATUS_READY, STATUS_UNCHANGED, EmbeddingRecord, EmbeddingResult, JobEmbedRequest, JobTextInput,
     ProfileEmbedRequest, embed_jobs, embed_profile)
 from job_hunter.embedding.db_store import DbJobEmbeddingStore, DbProfileEmbeddingStore
+from job_hunter.embedding.features import extract_job_features
 
 pytestmark = pytest.mark.skipif(os.getenv("RUN_DB_INTEGRATION") != "1",
                                reason="set RUN_DB_INTEGRATION=1 against local PostgreSQL")
@@ -234,10 +235,9 @@ def test_profile_store_features_are_a_noop(db):
 def test_embedding_functions_work_end_to_end_and_survive_one_bad_item(db):
     embedder, store = FakeEmbedder(), DbJobEmbeddingStore(db.session)
     description = "Responsibilities\n" + "Build and run payment APIs for the platform team. " * 6
-    good = JobEmbedRequest(job_id=str(db.job_id), job=JobTextInput(title="Backend Engineer", description=description),
-                           category="engineering")
-    bad = JobEmbedRequest(job_id=str(uuid4()), job=JobTextInput(title="Data Analyst", description=description),
-                          category="data")                                   # not a real job: foreign key fails
+    good = JobEmbedRequest(job_id=str(db.job_id), job=JobTextInput(title="Backend Engineer", description=description))
+    bad = JobEmbedRequest(job_id=str(uuid4()),     # not a real job: foreign key fails
+                          job=JobTextInput(title="Data Analyst", description=description))
     outcomes = embed_jobs([bad, good], embedder=embedder, store=store)
     assert [o.status for o in outcomes] == [STATUS_FAILED, STATUS_READY]
     assert outcomes[0].reason == "storage error: IntegrityError"
@@ -271,10 +271,13 @@ def v(*head):
 def test_recommend_for_profile_checks_first_then_ranks_and_never_mixes_models(db):
     from job_hunter.embedding.db_retrieval import recommend_for_profile
 
+    titles: dict[str, str] = {}
+
     def job(title, category, location="Singapore", status="open"):
         item = Job(title=title, description="x", category=category, location=location, status=status)
         db.session.add(item)
         db.session.flush()
+        titles[str(item.id)] = title
         return str(item.id)
 
     jobs = SimpleNamespace(
@@ -297,7 +300,11 @@ def test_recommend_for_profile_checks_first_then_ranks_and_never_mixes_models(db
             text_version=JOB_TEXT_VERSION, input_hash="h" * 64, vector=vector))
     job_store.save(jobs.pending, EmbeddingRecord(status="pending", model=None, dimensions=None, text_version=JOB_TEXT_VERSION,
                                                  input_hash="h" * 64, vector=None))
-    job_store.save_features(jobs.principal, {"seniority_levels": ["lead"], "seniority_source": "inferred_from_title"})
+    # what the embedding functions save with each job: its levels and role family, worked out from the title alone
+    for job_id, title in titles.items():
+        found = extract_job_features(title)
+        job_store.save_features(job_id, {"seniority_levels": list(found.seniority_levels),
+                                         "seniority_source": found.seniority_source, "role_family": found.role_family})
     profile_store.save(str(db.version_a), EmbeddingRecord(status="ready", model="m", dimensions=512,
                                                           text_version="profile-v2", input_hash="p" * 64, vector=v(1.0)))
 

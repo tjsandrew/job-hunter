@@ -174,9 +174,25 @@ def test_overlong_source_fields_are_rejected_without_truncation():
     ("Account Executive, APAC", "sales", "account executive"),
     ("Senior Software Engineer", "engineering", "engineer"),
     ("Graduate Programme", "other", None),
+    # the occupation beats a domain word elsewhere in the title
+    ("Technical Recruiter, Backend Engineering", "people", "recruiter"),
+    ("Recruiter, Data Analytics", "people", "recruiter"),
+    ("Internal Auditor - APAC Regulatory & Financial Operations", "finance", "auditor"),
 ])
 def test_deterministic_title_category_is_labelled_and_has_evidence(title, expected, evidence):
-    assert classify_title(title) == (expected, "title_keyword_v1", evidence)
+    assert classify_title(title) == (expected, "role-family-v1", evidence)
+
+
+def test_ingestion_category_and_the_recommenders_role_family_always_agree():
+    from job_hunter.embedding.features import extract_job_features
+
+    titles = ["Senior Data Engineer", "Product Designer", "Account Executive, Product - Local Payment Methods",
+              "Technical Recruiter, Backend Engineering", "Recruiter, Data Analytics", "Fraud Strategist",
+              "Database Administrator", "Customer Success Account Manager", "Product Counsel (APAC)", ""]
+    for title in titles:
+        category = classify_title(title)[0]
+        family = extract_job_features(title).role_family
+        assert family == (None if category == "other" else category), title
 
 
 def test_imported_category_is_marked_as_inferred():
@@ -184,8 +200,21 @@ def test_imported_category_is_marked_as_inferred():
     upsert_records(repo, [record(title="Senior Data Engineer")], job_model=FakeJob)
     job = repo.jobs[("greenhouse", "sample-board", "100")]
     assert job.category == "data"
-    assert job.category_source == "title_keyword_v1"
+    assert job.category_source == "role-family-v1"
     assert job.category_evidence == "data engineer"
+
+
+def test_reimport_refreshes_a_category_written_by_the_old_classifier():
+    repo = MemoryRepository()
+    upsert_records(repo, [record(title="Recruiter, Data Analytics")], job_model=FakeJob)
+    job = repo.jobs[("greenhouse", "sample-board", "100")]
+    # a row ingested before the shared classifier: wrong family and the old source label
+    job.category, job.category_source, job.category_evidence = "data", "title_keyword_v1", "analytics"
+    stats = upsert_records(repo, [record(title="Recruiter, Data Analytics")], job_model=FakeJob)
+    assert (stats.updated, stats.unchanged) == (1, 0)
+    assert (job.category, job.category_source, job.category_evidence) == ("people", "role-family-v1", "recruiter")
+    # and the next import has nothing left to change
+    assert upsert_records(repo, [record(title="Recruiter, Data Analytics")], job_model=FakeJob).unchanged == 1
 
 
 class BrokenModel(FakeJob):

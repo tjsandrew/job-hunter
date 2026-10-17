@@ -8,10 +8,9 @@ junior backend profile). These small, transparent rules cover that gap:
   from an explicit value when the caller has one, otherwise from conservative title
   keywords, otherwise the job is "unspecified" and counts as open to every level (and is
   flagged as such, so evaluation can see how often the check did nothing).
-* **Role family** - the recommender's own title classifier (``role_family.py``, which starts
-  from the ingestion classifier's families and keywords but puts the occupation and the head
-  of the title first). When it finds nothing, the job's stored ``jobs.category`` is the
-  fallback. "other" is unknown, which counts as compatible.
+* **Role family** - the shared title classifier (``job_hunter.role_family``, which ingestion
+  also uses to fill ``jobs.category``). It works from the title alone and puts the occupation
+  and the head of the title first. "other" is unknown, which counts as compatible.
 
 Every check returns a verdict plus a reason; ``blocks`` is True only for a clear
 mismatch. Unknown never blocks. Years-of-experience inference is deliberately not part
@@ -24,7 +23,7 @@ import re
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
-from .role_family import CLASSIFIER_VERSION, classify_role_family
+from job_hunter.role_family import CLASSIFIER_VERSION, classify_role_family
 
 FEATURES_VERSION = "features-v2"   # stored with the job features so a rule change is visible later
 
@@ -126,11 +125,10 @@ def _family(category: str | None) -> str | None:
 
 def extract_job_features(
     title: str,
-    category: str | None = None,
     stated_seniority: Sequence[str] | None = None,
     classify: Classifier | None = None,
 ) -> JobFeatures:
-    """Features for one job. ``category`` is the stored ``jobs.category``, used only when the title says nothing."""
+    """Features for one job: its levels (stated, else from the title) and its role family (from the title)."""
     stated = _normalise_levels(stated_seniority)
     if stated:
         levels, source = stated, SOURCE_STATED
@@ -138,8 +136,6 @@ def extract_job_features(
         inferred = levels_from_text(title)
         levels, source = (inferred, SOURCE_INFERRED_FROM_TITLE) if inferred else ((), SOURCE_UNSPECIFIED)
     family = _family((classify or _default_classifier)(title)[0]) if title else None
-    if family is None:
-        family = _family(category)
     return JobFeatures(seniority_levels=levels, seniority_source=source, role_family=family)
 
 
