@@ -4,6 +4,7 @@ Callable from code (``backfill_jobs`` / ``backfill_profiles``) or from the comma
 
     python -m job_hunter.embedding.backfill [--jobs] [--profiles] [--user alice] [--limit N] [--force]
     python -m job_hunter.embedding.backfill --text-report [--limit N]     # read-only, embeds nothing
+    python -m job_hunter.embedding.backfill --classification-report        # read-only, embeds nothing
 
 It is idempotent: anything whose text, text version and model are unchanged is skipped, and jobs or profiles
 that are pending or failed are retried. The embedder being down never raises; those items stay pending.
@@ -82,6 +83,39 @@ def text_report(session: Session, *, limit: int | None = None) -> dict:
     return report
 
 
+def classification_report(session: Session) -> dict:
+    """How many open jobs per source carry a role family and a seniority. Read-only; embeds nothing.
+
+    Both are set at ingestion (``jobs.category``, ``jobs.seniority``). A job with no value is never blocked by
+    the role or level check, so a source whose ingestion skipped the classifiers would silently weaken
+    For you: this report makes that visible. ``*_missing`` = never classified (NULL), ``category_other`` =
+    classified but no family matched, ``seniority_unspecified`` = classified, names no level (open to all)."""
+    report: dict = {}
+    for job in session.scalars(select(Job).where(Job.status == "open").order_by(Job.id)):
+        source = f"{job.source}/{job.source_board}" if job.source_board else job.source
+        row = report.setdefault(source, {"jobs": 0, "category_missing": 0, "category_other": 0,
+                                         "seniority_missing": 0, "seniority_unspecified": 0})
+        row["jobs"] += 1
+        if not job.category:
+            row["category_missing"] += 1
+        elif job.category == "other":
+            row["category_other"] += 1
+        if job.seniority is None:
+            row["seniority_missing"] += 1
+        elif not job.seniority:
+            row["seniority_unspecified"] += 1
+    return report
+
+
+def unclassified_jobs(report: dict) -> int:
+    """Open jobs missing a category or a seniority, from ``classification_report``."""
+    return sum(row["category_missing"] + row["seniority_missing"] for row in report.values())
+
+
+RECLASSIFY_HINT = ("some open jobs have no category or seniority yet; run "
+                   "`python -m job_hunter.import_jobs --reclassify` (make reclassify-jobs) or re-run the import")
+
+
 def backfill_profiles(session: Session, embedder, user_ids: Iterable, *, force: bool = False,
                       log: Callable[[str], None] = lambda message: None) -> Counter:
     """Embed each user's confirmed profile version, one transaction per user."""
@@ -109,6 +143,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--force", action="store_true", help="re-embed even if unchanged")
     parser.add_argument("--text-report", action="store_true",
                         help="read-only: how heading detection would do per source (embeds nothing)")
+    parser.add_argument("--classification-report", action="store_true",
+                        help="read-only: open jobs per source with no category or seniority (embeds nothing)")
     args = parser.parse_args(argv)
     do_jobs, do_profiles = args.jobs or not args.profiles, args.profiles or not args.jobs
 
@@ -125,9 +161,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             for source, row in sorted(text_report(session, limit=args.limit).items()):
                 print(f"{source}: {row}")
             return 0
+        if args.classification_report:
+            report = classification_report(session)
+            for source, row in sorted(report.items()):
+                print(f"{source}: {row}")
+            if unclassified_jobs(report):
+                print("note:", RECLASSIFY_HINT)
+            return 0
         if do_jobs:
             print("jobs:", dict(backfill_jobs(session, embedder, batch_size=args.batch_size, limit=args.limit,
                                               force=args.force, log=print)))
+            if unclassified_jobs(classification_report(session)):
+                print("note:", RECLASSIFY_HINT)
         if do_profiles:
             print("profiles:", dict(backfill_profiles(session, embedder, [DEV_USERS[key][0] for key in keys],
                                                       force=args.force, log=print)))

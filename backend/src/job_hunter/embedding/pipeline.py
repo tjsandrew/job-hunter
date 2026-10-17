@@ -2,14 +2,15 @@
 
 Each function takes typed, nullable inputs and does the whole job:
 
-  build the versioned text  ->  save the match features  ->  skip if nothing changed
-  ->  call the embedder  ->  hand the embedding row to storage
+  build the versioned text  ->  skip if nothing changed  ->  call the embedder
+  ->  hand the embedding row to storage
 
 They never raise for expected problems. The outcome carries a status instead:
 ``ready`` (vector stored), ``unchanged`` (skipped), ``pending`` (embedder unavailable, retry
 later), ``failed`` (unusable response or an internal error) or ``no_content`` (nothing to embed).
-Reasons are short and never contain the input text. Match features are saved on every run, even
-when the embedding is skipped or fails, because they describe the job or profile, not the vector.
+Reasons are short and never contain the input text. Role family and seniority are not worked out
+here: a job's are set at ingestion (``jobs.category``, ``jobs.seniority``) and a profile's are read
+live from its preferences when recommendations are built.
 
 The caller supplies the embedder and the store, so the same functions work in tests, in a
 backfill command, inside a request (the caller's database session lives in the store) or
@@ -20,11 +21,10 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 from .client import DIMENSIONS, Embedder, EmbedderUnavailable, InvalidEmbeddingResponse
-from .features import Classifier, extract_job_features, extract_profile_features
 from .job_text import JOB_TEXT_VERSION, JobTextInput, build_job_text
 from .profile_text import PROFILE_TEXT_VERSION, ProfileTextInput, build_profile_text
 from .stores import (
@@ -47,15 +47,13 @@ MAX_BATCH_SIZE = 64   # the embedder service accepts at most 64 texts per reques
 class JobEmbedRequest:
     job_id: str
     job: JobTextInput
-    stated_seniority: Sequence[str] | None = None     # only if the source states a level
 
 
 @dataclass(frozen=True)
 class ProfileEmbedRequest:
     profile_version_id: str
     snapshot: Mapping[str, Any]                       # the confirmed profile snapshot
-    target_roles: Sequence[str] | None = None         # from preferences
-    seniority_preference: str | Sequence[str] | None = None
+    target_roles: Sequence[str] | None = None         # from preferences (part of the profile text)
 
 
 @dataclass(frozen=True)
@@ -74,7 +72,6 @@ class _Prepared:
     version: str                       # always known, even when the text could not be built
     text: str | None
     input_hash: str | None
-    features: dict[str, Any]
     error_status: str | None = None
     error_reason: str | None = None
 
@@ -83,44 +80,30 @@ def _hash(version: str, text: str) -> str:
     return hashlib.sha256(f"{version}\n{text}".encode("utf-8")).hexdigest()
 
 
-def _plain(features: Any) -> dict[str, Any]:
-    """Dataclass -> JSON-friendly dict (tuples become lists)."""
-    return {k: list(v) if isinstance(v, tuple) else v for k, v in asdict(features).items()}
+def _failed_prep(key: str, version: str, exc: Exception) -> _Prepared:
+    return _Prepared(key, version, None, None, STATUS_FAILED, f"preparation error: {type(exc).__name__}")
 
 
-def _failed_prep(key: str, version: str, features: dict[str, Any], exc: Exception) -> _Prepared:
-    return _Prepared(key, version, None, None, features, STATUS_FAILED, f"preparation error: {type(exc).__name__}")
-
-
-def _prepare_job(request: JobEmbedRequest, classify: Classifier | None,
-                 text_version: str = JOB_TEXT_VERSION) -> _Prepared:
+def _prepare_job(request: JobEmbedRequest, text_version: str = JOB_TEXT_VERSION) -> _Prepared:
     key = request.job_id
-    try:
-        features = _plain(extract_job_features(request.job.title, request.stated_seniority, classify))
-    except Exception as exc:
-        return _failed_prep(key, text_version, {}, exc)
     try:
         built = build_job_text(request.job, version=text_version)
     except ValueError as exc:
-        return _Prepared(key, text_version, None, None, features, STATUS_NO_CONTENT, str(exc))
+        return _Prepared(key, text_version, None, None, STATUS_NO_CONTENT, str(exc))
     except Exception as exc:
-        return _failed_prep(key, text_version, features, exc)
-    return _Prepared(key, built.version, built.text, _hash(built.version, built.text), features)
+        return _failed_prep(key, text_version, exc)
+    return _Prepared(key, built.version, built.text, _hash(built.version, built.text))
 
 
-def _prepare_profile(request: ProfileEmbedRequest, classify: Classifier | None) -> _Prepared:
+def _prepare_profile(request: ProfileEmbedRequest) -> _Prepared:
     key = request.profile_version_id
-    try:
-        features = _plain(extract_profile_features(request.target_roles, request.seniority_preference, classify))
-    except Exception as exc:
-        return _failed_prep(key, PROFILE_TEXT_VERSION, {}, exc)
     try:
         built = build_profile_text(ProfileTextInput(snapshot=request.snapshot, target_roles=request.target_roles))
     except ValueError as exc:
-        return _Prepared(key, PROFILE_TEXT_VERSION, None, None, features, STATUS_NO_CONTENT, str(exc))
+        return _Prepared(key, PROFILE_TEXT_VERSION, None, None, STATUS_NO_CONTENT, str(exc))
     except Exception as exc:
-        return _failed_prep(key, PROFILE_TEXT_VERSION, features, exc)
-    return _Prepared(key, built.version, built.text, _hash(built.version, built.text), features)
+        return _failed_prep(key, PROFILE_TEXT_VERSION, exc)
+    return _Prepared(key, built.version, built.text, _hash(built.version, built.text))
 
 
 def _is_current(state: StoredEmbeddingState | None, item: _Prepared, expected_model: str | None) -> bool:
@@ -155,12 +138,6 @@ def _run(prepared: list[_Prepared], embedder: Embedder, store: EmbeddingStore, *
     to_embed: list[int] = []
 
     for index, item in enumerate(prepared):
-        try:
-            if item.features:
-                store.save_features(item.key, item.features)    # features never depend on the vector
-        except Exception as exc:
-            outcomes[index] = _outcome(item, STATUS_FAILED, f"storage error: {type(exc).__name__}")
-            continue
         if item.error_status:
             outcomes[index] = _store_without_vector(store, item, item.error_status, item.error_reason or "")
             continue
@@ -213,35 +190,35 @@ def _run(prepared: list[_Prepared], embedder: Embedder, store: EmbeddingStore, *
 
 
 def embed_jobs(requests: Sequence[JobEmbedRequest], *, embedder: Embedder, store: EmbeddingStore,
-               expected_model: str | None = None, classify: Classifier | None = None, force: bool = False,
+               expected_model: str | None = None, force: bool = False,
                batch_size: int = 32, text_version: str = JOB_TEXT_VERSION) -> list[EmbeddingOutcome]:
     """Embed many jobs, one embedder call per batch. Outcomes are in request order.
 
     ``text_version`` picks the job text format (default ``job-v2``, the whole description); other
     versions are for experiments and are stored as separate rows, so formats can be compared."""
-    prepared = [_prepare_job(r, classify, text_version) for r in requests]
+    prepared = [_prepare_job(r, text_version) for r in requests]
     return _run(prepared, embedder, store, batch_size=batch_size, force=force, expected_model=expected_model)
 
 
 def embed_job(request: JobEmbedRequest, *, embedder: Embedder, store: EmbeddingStore,
-              expected_model: str | None = None, classify: Classifier | None = None,
+              expected_model: str | None = None,
               force: bool = False, text_version: str = JOB_TEXT_VERSION) -> EmbeddingOutcome:
     """The job embedding service: one job in, one outcome out. Never raises for expected problems."""
     return embed_jobs([request], embedder=embedder, store=store, expected_model=expected_model,
-                      classify=classify, force=force, batch_size=1, text_version=text_version)[0]
+                      force=force, batch_size=1, text_version=text_version)[0]
 
 
 def embed_profiles(requests: Sequence[ProfileEmbedRequest], *, embedder: Embedder, store: EmbeddingStore,
-                   expected_model: str | None = None, classify: Classifier | None = None, force: bool = False,
+                   expected_model: str | None = None, force: bool = False,
                    batch_size: int = 32) -> list[EmbeddingOutcome]:
     """Embed several profile versions. The caller owns the per-user database context."""
-    prepared = [_prepare_profile(r, classify) for r in requests]
+    prepared = [_prepare_profile(r) for r in requests]
     return _run(prepared, embedder, store, batch_size=batch_size, force=force, expected_model=expected_model)
 
 
 def embed_profile(request: ProfileEmbedRequest, *, embedder: Embedder, store: EmbeddingStore,
-                  expected_model: str | None = None, classify: Classifier | None = None,
+                  expected_model: str | None = None,
                   force: bool = False) -> EmbeddingOutcome:
     """The profile embedding service: one profile version in, one outcome out."""
     return embed_profiles([request], embedder=embedder, store=store, expected_model=expected_model,
-                          classify=classify, force=force, batch_size=1)[0]
+                          force=force, batch_size=1)[0]

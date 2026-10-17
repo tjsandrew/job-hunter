@@ -21,8 +21,8 @@ from sqlalchemy.orm import Session
 
 from job_hunter.domain.models import Job, ProfileVersion
 
-from .db_tables import job_embeddings, job_match_features, profile_embeddings
-from .features import Classifier, extract_profile_features, role_hint_from_snapshot
+from .db_tables import job_embeddings, profile_embeddings
+from .features import Classifier, extract_profile_features, job_role_family, job_seniority_levels, role_hint_from_snapshot
 from .job_text import JOB_TEXT_VERSION
 from .profile_text import PROFILE_TEXT_VERSION, ProfileTextInput
 from .retrieval import ProfileQuery, RetrievalCandidate, RetrievalResult, eligible_jobs, retrieve
@@ -53,23 +53,24 @@ def load_profile_query(session: Session, profile_version_id: str, *, target_role
 
 def load_job_candidates(session: Session, *, model: str, text_version: str = JOB_TEXT_VERSION,
                         ) -> list[tuple[dict[str, Any], RetrievalCandidate]]:
-    """Every job with a ready vector for this model and text version, with its eligibility fields."""
+    """Every job with a ready vector for this model and text version, with its eligibility fields.
+
+    A job's role family and seniority are read from the job row (``jobs.category``, ``jobs.seniority``), where
+    ingestion put them. An empty, unknown or not-yet-classified value counts as unknown / open to all levels, so
+    it never blocks a job."""
     rows = session.execute(
         select(Job.id, Job.title, Job.company, Job.location, Job.work_mode, Job.status, Job.category,
-               job_embeddings.c.embedding, job_match_features.c.features)
+               Job.seniority, job_embeddings.c.embedding)
         .join(job_embeddings, job_embeddings.c.job_id == Job.id)
-        .outerjoin(job_match_features, job_match_features.c.job_id == Job.id)
         .where(job_embeddings.c.text_version == text_version, job_embeddings.c.status == STATUS_READY,
                job_embeddings.c.model == model)).all()
     loaded = []
-    for job_id, title, company, location, work_mode, status, category, embedding, features in rows:
-        features = features or {}
-        # The role family saved with the job's features when it was embedded (None = unknown, never blocks).
-        family = features.get("role_family")
+    for job_id, title, company, location, work_mode, status, category, seniority, embedding in rows:
         job = {"id": str(job_id), "title": title, "company": company, "location": location,
                "work_mode": work_mode, "status": status, "category": category}
-        loaded.append((job, RetrievalCandidate(job_id=str(job_id), vector=_floats(embedding), role_family=family,
-                                               seniority_levels=tuple(features.get("seniority_levels") or ()))))
+        loaded.append((job, RetrievalCandidate(job_id=str(job_id), vector=_floats(embedding),
+                                               role_family=job_role_family(category),
+                                               seniority_levels=job_seniority_levels(seniority))))
     return loaded
 
 

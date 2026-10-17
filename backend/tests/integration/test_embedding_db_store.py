@@ -22,17 +22,18 @@ from job_hunter.embedding import (
     JOB_TEXT_VERSION, STATUS_FAILED, STATUS_READY, STATUS_UNCHANGED, EmbeddingRecord, EmbeddingResult, JobEmbedRequest, JobTextInput,
     ProfileEmbedRequest, embed_jobs, embed_profile)
 from job_hunter.embedding.db_store import DbJobEmbeddingStore, DbProfileEmbeddingStore
-from job_hunter.embedding.features import extract_job_features
+from job_hunter.seniority import classify_seniority
 
 pytestmark = pytest.mark.skipif(os.getenv("RUN_DB_INTEGRATION") != "1",
                                reason="set RUN_DB_INTEGRATION=1 against local PostgreSQL")
 
-MIGRATION = Path(__file__).resolve().parents[2] / "migrations" / "versions" / "0012_embedding_tables.py"
+VERSIONS = Path(__file__).resolve().parents[2] / "migrations" / "versions"
 NEW_TABLES = {"job_embeddings", "profile_embeddings", "job_match_features"}
+SENIORITY_COLUMNS = {"seniority", "seniority_source", "seniority_evidence"}
 
 
-def load_migration():
-    spec = importlib.util.spec_from_file_location("migration_0012", MIGRATION)
+def load_migration(file="0012_embedding_tables.py"):
+    spec = importlib.util.spec_from_file_location("migration_" + file[:4], VERSIONS / file)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -141,6 +142,50 @@ def test_migration_adds_only_new_tables_changes_nothing_else_and_reverses(schema
     assert tables(connection, schema) - existing_before == NEW_TABLES
 
 
+def test_migration_0013_adds_the_job_seniority_columns_and_reverses(schema_conn):
+    connection, schema = schema_conn.connection, schema_conn.schema
+    migration = load_migration("0013_job_seniority.py")
+    assert migration.down_revision == "0012_embedding_tables"
+
+    def job_columns():
+        return {row[1]: row[2] for row in columns(connection, schema, ["jobs"])}
+
+    run(connection, load_migration().upgrade)
+    assert "job_match_features" in tables(connection, schema)
+    for name in SENIORITY_COLUMNS:           # the test schema is built from the models, which already have them
+        connection.execute(text(f"ALTER TABLE jobs DROP COLUMN {name}"))
+    assert not SENIORITY_COLUMNS & set(job_columns())
+    run(connection, migration.upgrade)
+    found = job_columns()
+    assert SENIORITY_COLUMNS <= set(found) and found["seniority"] == "json"
+    assert found["seniority_source"] == found["seniority_evidence"] == "character varying"
+    assert "job_match_features" not in tables(connection, schema)
+    run(connection, migration.upgrade)                                               # idempotent (IF NOT EXISTS)
+    run(connection, migration.downgrade)
+    assert not SENIORITY_COLUMNS & set(job_columns())
+    assert "job_match_features" in tables(connection, schema)
+    run(connection, migration.upgrade)
+    assert SENIORITY_COLUMNS <= set(job_columns())
+    assert "job_match_features" not in tables(connection, schema)
+
+
+def test_migration_0013_preserves_stated_seniority_before_retiring_features(schema_conn):
+    connection = schema_conn.connection
+    run(connection, load_migration().upgrade)
+    job = Job(title="Senior Engineer", description="x")
+    session = Session(bind=connection)
+    session.add(job)
+    session.flush()
+    connection.execute(text("""INSERT INTO job_match_features (job_id, feature_version, features)
+        VALUES (:job_id, 'features-v2', CAST(:features AS jsonb))"""),
+        {"job_id": job.id, "features": '{"seniority_levels": ["entry"], "seniority_source": "stated"}'})
+    run(connection, load_migration("0013_job_seniority.py").upgrade)
+    values = connection.execute(text("SELECT seniority, seniority_source FROM jobs WHERE id=:job_id"),
+                                {"job_id": job.id}).one()
+    assert values.seniority == ["entry"] and values.seniority_source == "stated"
+    assert "job_match_features" not in tables(connection, schema_conn.schema)
+
+
 # ---- job store ----------------------------------------------------------------------------------
 
 def test_job_store_saves_updates_and_keeps_formats_side_by_side(db):
@@ -180,23 +225,11 @@ def test_pending_rows_have_no_vector_and_the_database_enforces_that(db):
     assert db.connection.execute(text("SELECT 1")).scalar_one() == 1       # and the transaction is still usable
 
 
-def test_job_features_are_upserted_with_a_version(db):
-    store = DbJobEmbeddingStore(db.session)
-    store.save_features(str(db.job_id), {"seniority_levels": [], "seniority_source": "unspecified", "role_family": "engineering"})
-    store.save_features(str(db.job_id), {"seniority_levels": ["senior"], "seniority_source": "inferred_from_title", "role_family": "engineering"})
-    row = db.connection.execute(text("SELECT feature_version, features FROM job_match_features WHERE job_id=:j"),
-                                {"j": db.job_id}).one()
-    assert row[0] == "features-v2" and row[1]["seniority_levels"] == ["senior"]
-    assert db.connection.execute(text("SELECT count(*) FROM job_match_features")).scalar_one() == 1
-
-
-def test_deleting_a_job_removes_its_embeddings_and_features(db):
+def test_deleting_a_job_removes_its_embeddings(db):
     store = DbJobEmbeddingStore(db.session)
     store.save(str(db.job_id), ready())
-    store.save_features(str(db.job_id), {"role_family": "engineering"})
     db.connection.execute(text("DELETE FROM jobs WHERE id=:j"), {"j": db.job_id})
     assert db.connection.execute(text("SELECT count(*) FROM job_embeddings")).scalar_one() == 0
-    assert db.connection.execute(text("SELECT count(*) FROM job_match_features")).scalar_one() == 0
 
 
 def test_bad_keys_are_rejected(db):
@@ -225,11 +258,6 @@ def test_profile_embeddings_are_private_to_their_owner(db):
     assert db.connection.execute(text("SELECT embedding::text FROM profile_embeddings")).scalar_one().startswith("[1,0")
 
 
-def test_profile_store_features_are_a_noop(db):
-    DbProfileEmbeddingStore(db.session).save_features(str(db.version_a), {"role_families": ["engineering"]})
-    assert db.connection.execute(text("SELECT count(*) FROM profile_embeddings")).scalar_one() == 0
-
-
 # ---- the embedding functions on top of the database stores --------------------------------------
 
 def test_embedding_functions_work_end_to_end_and_survive_one_bad_item(db):
@@ -242,8 +270,6 @@ def test_embedding_functions_work_end_to_end_and_survive_one_bad_item(db):
     assert [o.status for o in outcomes] == [STATUS_FAILED, STATUS_READY]
     assert outcomes[0].reason == "storage error: IntegrityError"
     assert store.get_state(str(db.job_id), JOB_TEXT_VERSION).status == "ready"
-    features = db.connection.execute(text("SELECT features FROM job_match_features")).scalar_one()
-    assert features["role_family"] == "engineering"
 
     again = embed_jobs([good], embedder=embedder, store=store, expected_model="fake-model")
     assert again[0].status == STATUS_UNCHANGED and len(embedder.calls) == 1
@@ -253,7 +279,7 @@ def test_profile_function_with_the_database_store(db):
     embedder, store = FakeEmbedder(), DbProfileEmbeddingStore(db.session)
     request = ProfileEmbedRequest(profile_version_id=str(db.version_a),
                                   snapshot={"headline": "Junior backend engineer", "skills": ["Python"]},
-                                  target_roles=["Backend Engineer"], seniority_preference="Junior")
+                                  target_roles=["Backend Engineer"])
     assert embed_profile(request, embedder=embedder, store=store).status == STATUS_READY
     assert embed_profile(request, embedder=embedder, store=store).status == STATUS_UNCHANGED
     assert store.get_state(str(db.version_a), "profile-v2").model == "fake-model"
@@ -271,13 +297,12 @@ def v(*head):
 def test_recommend_for_profile_checks_first_then_ranks_and_never_mixes_models(db):
     from job_hunter.embedding.db_retrieval import recommend_for_profile
 
-    titles: dict[str, str] = {}
-
     def job(title, category, location="Singapore", status="open"):
-        item = Job(title=title, description="x", category=category, location=location, status=status)
+        # what ingestion stores on the job row: the role family and the levels named by the title
+        item = Job(title=title, description="x", category=category, seniority=classify_seniority(title)[0],
+                   location=location, status=status)
         db.session.add(item)
         db.session.flush()
-        titles[str(item.id)] = title
         return str(item.id)
 
     jobs = SimpleNamespace(
@@ -300,11 +325,6 @@ def test_recommend_for_profile_checks_first_then_ranks_and_never_mixes_models(db
             text_version=JOB_TEXT_VERSION, input_hash="h" * 64, vector=vector))
     job_store.save(jobs.pending, EmbeddingRecord(status="pending", model=None, dimensions=None, text_version=JOB_TEXT_VERSION,
                                                  input_hash="h" * 64, vector=None))
-    # what the embedding functions save with each job: its levels and role family, worked out from the title alone
-    for job_id, title in titles.items():
-        found = extract_job_features(title)
-        job_store.save_features(job_id, {"seniority_levels": list(found.seniority_levels),
-                                         "seniority_source": found.seniority_source, "role_family": found.role_family})
     profile_store.save(str(db.version_a), EmbeddingRecord(status="ready", model="m", dimensions=512,
                                                           text_version="profile-v2", input_hash="p" * 64, vector=v(1.0)))
 
@@ -464,13 +484,48 @@ def test_role_check_falls_back_to_the_profile_headline_when_no_roles_are_set(db)
     for key in jobs.values():
         job_store.save(key, EmbeddingRecord(status="ready", model="m", dimensions=512, text_version=JOB_TEXT_VERSION,
                                             input_hash="h" * 64, vector=v(1.0)))
-    job_store.save_features(jobs["eng"], {"role_family": "engineering", "seniority_levels": []})
-    job_store.save_features(jobs["rec"], {"role_family": "people", "seniority_levels": []})
     profile_store.save(str(db.version_a), EmbeddingRecord(status="ready", model="m", dimensions=512,
                                                           text_version="profile-v2", input_hash="p" * 64, vector=v(1.0)))
     result = recommend_for_profile(db.session, str(db.version_a), {"locations": ["Singapore"]})   # no target roles
     assert jobs["rec"] in {b.job_id for b in result.blocked}
     assert jobs["eng"] in {r.job_id for r in result.ranked}
+
+
+def test_a_job_with_no_category_or_seniority_is_never_blocked(db):
+    from job_hunter.embedding.db_retrieval import recommend_for_profile
+
+    _confirmed_profile(db)
+    blank = Job(title="Technical Recruiter", description="x", location="Singapore", category=None, seniority=None)
+    odd = Job(title="Mystery Job", description="x", location="Singapore", category="astronaut", seniority=["bogus"])
+    db.session.add_all([blank, odd])
+    db.session.flush()
+    job_store, profile_store = DbJobEmbeddingStore(db.session), DbProfileEmbeddingStore(db.session)
+    for item in (blank, odd):
+        job_store.save(str(item.id), EmbeddingRecord(status="ready", model="m", dimensions=512, text_version=JOB_TEXT_VERSION,
+                                                     input_hash="h" * 64, vector=v(1.0)))
+    profile_store.save(str(db.version_a), EmbeddingRecord(status="ready", model="m", dimensions=512,
+                                                          text_version="profile-v2", input_hash="p" * 64, vector=v(1.0)))
+    result = recommend_for_profile(db.session, str(db.version_a), {"locations": ["Singapore"], "target_roles": ["Backend Engineer"],
+                                                                   "seniority": "Junior"})
+    assert {str(blank.id), str(odd.id)} <= {r.job_id for r in result.ranked}      # unknown family / level: shown
+    assert not result.blocked
+
+
+def test_classification_report_counts_jobs_missing_a_category_or_seniority_per_source(db):
+    from job_hunter.embedding.backfill import classification_report, unclassified_jobs
+
+    db.session.add_all([
+        Job(title="A", description="x", source="greenhouse", source_board="acme", category="engineering", seniority=["senior"]),
+        Job(title="B", description="x", source="greenhouse", source_board="acme", category="other", seniority=[]),
+        Job(title="C", description="x", source="greenhouse", source_board="acme", category=None, seniority=None),
+        Job(title="D", description="x", source="lever", source_board="x", category="people", seniority=None, status="closed"),
+    ])
+    db.session.flush()
+    report = classification_report(db.session)
+    assert report["greenhouse/acme"] == {"jobs": 3, "category_missing": 1, "category_other": 1,
+                                         "seniority_missing": 1, "seniority_unspecified": 1}
+    assert "lever/x" not in report                                                   # closed jobs are not counted
+    assert unclassified_jobs(report) >= 2
 
 
 def test_text_report_summarises_heading_detection_per_source(db):

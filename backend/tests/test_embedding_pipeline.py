@@ -27,11 +27,6 @@ MODEL = "fake-model"
 JOB_KEY = ("j1", JOB_TEXT_VERSION)
 
 
-def classify(title):
-    t = title.casefold()
-    return ("people" if "recruiter" in t else "engineering" if "engineer" in t else "other", "title_keyword_v1", None)
-
-
 class FakeEmbedder:
     def __init__(self, model=MODEL, error=None, bad_count=False):
         self.model, self.error, self.bad_count = model, error, bad_count
@@ -56,27 +51,26 @@ SNAPSHOT = {"headline": "Junior backend engineer", "summary": "Builds APIs.", "s
             "experience": [{"role": "Intern", "skills": []}], "bullets": [{"text": "Built an API"}]}
 
 
-def profile(version_id="p1", roles=("Backend Engineer",), seniority="Junior", snapshot=None):
+def profile(version_id="p1", roles=("Backend Engineer",), snapshot=None):
     return ProfileEmbedRequest(profile_version_id=version_id, snapshot=snapshot if snapshot is not None else SNAPSHOT,
-                               target_roles=list(roles), seniority_preference=seniority)
+                               target_roles=list(roles))
 
 
 def run_job(request=None, embedder=None, store=None, **kwargs):
     embedder = embedder or FakeEmbedder()
     store = store if store is not None else InMemoryEmbeddingStore()
-    return embed_job(request or job(), embedder=embedder, store=store, classify=classify, **kwargs), embedder, store
+    return embed_job(request or job(), embedder=embedder, store=store, **kwargs), embedder, store
 
 
 # ---- jobs -------------------------------------------------------------------------------------
 
-def test_job_is_embedded_and_stored_with_metadata_and_features_separately():
+def test_job_is_embedded_and_stored_with_its_metadata():
     outcome, embedder, store = run_job()
     assert outcome.status == STATUS_READY and outcome.model == MODEL and outcome.reason is None
     assert embedder.calls == [[build_job_text(job().job).text]]
     record = store.records[JOB_KEY]
     assert record.status == STATUS_READY and record.model == MODEL and record.dimensions == 512
     assert len(record.vector) == 512 and record.text_version == JOB_TEXT_VERSION and len(record.input_hash) == 64
-    assert store.features["j1"] == {"seniority_levels": [], "seniority_source": "unspecified", "role_family": "engineering"}
 
 
 def test_calling_twice_does_nothing_the_second_time():
@@ -108,25 +102,12 @@ def test_a_row_for_an_older_text_version_does_not_count_and_is_kept():
     assert ("j1", "job-v0") in store.records and JOB_KEY in store.records       # both formats coexist
 
 
-def test_features_are_refreshed_even_when_the_vector_is_reused():
-    store = InMemoryEmbeddingStore()
-    _, embedder, _ = run_job(job(title="Backend Engineer"), store=store)
-    assert store.features["j1"]["role_family"] == "engineering"
-    # a retuned classifier changes the stored family without paying for a new embedding
-    def retuned(title):
-        return "operations", "test-v2", None
-    outcome = embed_job(job(title="Backend Engineer"), embedder=embedder, store=store, classify=retuned)
-    assert outcome.status == STATUS_UNCHANGED and len(embedder.calls) == 1
-    assert store.features["j1"]["role_family"] == "operations"
-
-
 def test_embedder_unavailable_gives_pending_without_a_usable_vector_then_recovers():
     store = InMemoryEmbeddingStore()
     outcome, _, _ = run_job(embedder=FakeEmbedder(error=EmbedderUnavailable("down")), store=store)
     assert outcome.status == STATUS_PENDING and outcome.reason == "embedding service unavailable"
     record = store.records[JOB_KEY]
     assert record.status == STATUS_PENDING and record.vector is None
-    assert store.features["j1"]["role_family"] == "engineering"           # features saved regardless
     assert run_job(store=store)[0].status == STATUS_READY                  # a later retry succeeds
 
 
@@ -172,13 +153,8 @@ class BrokenStore(InMemoryEmbeddingStore):
             raise ConnectionError("db down")
         super().save(key, record)
 
-    def save_features(self, key, features):
-        if self.fail_on == "save_features":
-            raise ConnectionError("db down")
-        super().save_features(key, features)
 
-
-@pytest.mark.parametrize("fail_on", ["get_state", "save", "save_features"])
+@pytest.mark.parametrize("fail_on", ["get_state", "save"])
 def test_storage_errors_give_failed_without_leaking_details(fail_on):
     outcome, _, _ = run_job(store=BrokenStore(fail_on))
     assert outcome.status == STATUS_FAILED and outcome.reason == "storage error: ConnectionError"
@@ -191,9 +167,9 @@ def test_batch_skips_unchanged_items_keeps_order_and_splits_into_batches():
     embedder = FakeEmbedder()
     descriptions = {f"j{i}": "Responsibilities\n" + f"Work item number {i} for the platform team. " * 6 for i in range(5)}
     requests = [job(job_id=k, description=v) for k, v in descriptions.items()]
-    embed_job(requests[1], embedder=embedder, store=store, classify=classify)      # j1 already done
+    embed_job(requests[1], embedder=embedder, store=store)      # j1 already done
     embedder.calls.clear()
-    outcomes = embed_jobs(requests, embedder=embedder, store=store, classify=classify, batch_size=2)
+    outcomes = embed_jobs(requests, embedder=embedder, store=store, batch_size=2)
     assert [o.key for o in outcomes] == list(descriptions)
     assert [o.status for o in outcomes] == [STATUS_READY, STATUS_UNCHANGED, STATUS_READY, STATUS_READY, STATUS_READY]
     assert [len(c) for c in embedder.calls] == [2, 2]
@@ -209,7 +185,7 @@ def test_a_failing_batch_only_affects_its_own_items():
 
     requests = [job(job_id=f"j{i}", description="Responsibilities\n" + f"Item {i} needs delivery work here. " * 6)
                 for i in range(4)]
-    outcomes = embed_jobs(requests, embedder=FlakyEmbedder(), store=InMemoryEmbeddingStore(), classify=classify, batch_size=2)
+    outcomes = embed_jobs(requests, embedder=FlakyEmbedder(), store=InMemoryEmbeddingStore(), batch_size=2)
     assert [o.status for o in outcomes] == [STATUS_READY, STATUS_READY, STATUS_PENDING, STATUS_PENDING]
 
 
@@ -221,46 +197,39 @@ def test_invalid_batch_size_is_a_programming_error():
 
 # ---- profiles ---------------------------------------------------------------------------------
 
-def test_profile_is_embedded_with_features_from_preferences():
+def test_profile_is_embedded_with_its_target_roles_in_the_text():
     embedder, store = FakeEmbedder(), InMemoryEmbeddingStore()
-    outcome = embed_profile(profile(), embedder=embedder, store=store, classify=classify)
+    outcome = embed_profile(profile(), embedder=embedder, store=store)
     assert outcome.status == STATUS_READY
     record = store.records[("p1", "profile-v2")]
     assert record.text_version == "profile-v2"
-    assert store.features["p1"] == {"seniority_levels": ["entry"], "role_families": ["engineering"]}
     assert embedder.calls[0][0].startswith("Target role: Backend Engineer")
 
 
-def test_changing_the_target_role_re_embeds_but_changing_only_seniority_does_not():
+def test_changing_the_target_role_re_embeds_but_the_same_profile_does_not():
     embedder, store = FakeEmbedder(), InMemoryEmbeddingStore()
-    embed_profile(profile(), embedder=embedder, store=store, classify=classify)
-    assert embed_profile(profile(roles=("Data Engineer",)), embedder=embedder, store=store,
-                         classify=classify).status == STATUS_READY
-    senior = embed_profile(profile(roles=("Data Engineer",), seniority="Senior"), embedder=embedder, store=store,
-                           classify=classify)
-    assert senior.status == STATUS_UNCHANGED and len(embedder.calls) == 2
-    assert store.features["p1"]["seniority_levels"] == ["senior"]   # features refreshed without a new vector
+    embed_profile(profile(), embedder=embedder, store=store)
+    assert embed_profile(profile(), embedder=embedder, store=store).status == STATUS_UNCHANGED
+    assert embed_profile(profile(roles=("Data Engineer",)), embedder=embedder, store=store).status == STATUS_READY
+    assert len(embedder.calls) == 2
 
 
-def test_empty_profile_has_no_content_but_features_are_still_saved():
+def test_empty_profile_has_no_content():
     embedder, store = FakeEmbedder(), InMemoryEmbeddingStore()
-    outcome = embed_profile(profile(snapshot={"name": "Alice"}, roles=()), embedder=embedder, store=store, classify=classify)
+    outcome = embed_profile(profile(snapshot={"name": "Alice"}, roles=()), embedder=embedder, store=store)
     assert outcome.status == STATUS_NO_CONTENT and embedder.calls == []
-    assert store.records[("p1", "profile-v2")].status == STATUS_NO_CONTENT and "p1" in store.features
+    assert store.records[("p1", "profile-v2")].status == STATUS_NO_CONTENT
 
 
 def test_profiles_batch_works_like_jobs():
     embedder, store = FakeEmbedder(), InMemoryEmbeddingStore()
-    outcomes = embed_profiles([profile("p1"), profile("p2", roles=("Data Engineer",))], embedder=embedder, store=store,
-                              classify=classify)
+    outcomes = embed_profiles([profile("p1"), profile("p2", roles=("Data Engineer",))], embedder=embedder, store=store)
     assert [o.status for o in outcomes] == [STATUS_READY, STATUS_READY] and len(embedder.calls) == 1
 
 
 def test_in_memory_store_roundtrip():
     store = InMemoryEmbeddingStore()
     assert store.get_state("x", "job-v1") is None
-    store.save_features("x", {"a": 1})                 # features exist independently of any embedding row
-    assert store.features["x"] == {"a": 1} and store.get_state("x", "job-v1") is None
     run_job(store=store)
     state = store.get_state("j1", JOB_TEXT_VERSION)
     assert isinstance(state, StoredEmbeddingState) and state.status == STATUS_READY and state.model == MODEL
@@ -272,9 +241,9 @@ def test_job_text_version_can_be_chosen_and_formats_are_stored_side_by_side():
     embedder = FakeEmbedder()
     desc = "Responsibilities\n" + "Build and run APIs for payments. " * 6
     request = job(description=desc)
-    assert embed_job(request, embedder=embedder, store=store, classify=classify).status == STATUS_READY
-    assert embed_job(request, embedder=embedder, store=store, classify=classify, text_version="job-v1").status == STATUS_READY
+    assert embed_job(request, embedder=embedder, store=store).status == STATUS_READY
+    assert embed_job(request, embedder=embedder, store=store, text_version="job-v1").status == STATUS_READY
     assert store.get_state("j1", "job-v2") is not None and store.get_state("j1", "job-v1") is not None
     assert store.records[("j1", "job-v1")].input_hash != store.records[("j1", "job-v2")].input_hash
-    bad = embed_job(request, embedder=embedder, store=store, classify=classify, text_version="job-v9")
+    bad = embed_job(request, embedder=embedder, store=store, text_version="job-v9")
     assert bad.status == STATUS_NO_CONTENT and "unknown job text version" in (bad.reason or "")

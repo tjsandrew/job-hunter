@@ -13,15 +13,14 @@ import it explicitly.
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from .db_tables import job_embeddings, job_match_features, profile_embeddings, profile_versions
-from .features import FEATURES_VERSION
+from .db_tables import job_embeddings, profile_embeddings, profile_versions
 from .stores import EmbeddingRecord, StoredEmbeddingState
 
 
@@ -70,7 +69,7 @@ class _Store:
 
 
 class DbJobEmbeddingStore(_Store):
-    """Job embeddings (shared data) and job match features."""
+    """Job embeddings (shared data)."""
 
     def get_state(self, key: str, text_version: str) -> StoredEmbeddingState | None:
         return self._state(job_embeddings, "job_id", key, text_version)
@@ -82,20 +81,9 @@ class DbJobEmbeddingStore(_Store):
         with self.session.begin_nested():
             self.session.execute(statement)
 
-    def save_features(self, key: str, features: Mapping[str, object]) -> None:
-        statement = pg_insert(job_match_features).values(job_id=_uuid(key), feature_version=FEATURES_VERSION,
-                                                         features=dict(features))
-        statement = statement.on_conflict_do_update(
-            index_elements=["job_id"],
-            set_={"feature_version": statement.excluded.feature_version, "features": statement.excluded.features,
-                  "updated_at": func.now()})
-        with self.session.begin_nested():
-            self.session.execute(statement)
-
 
 class DbProfileEmbeddingStore(_Store):
-    """Profile-version embeddings. Profile match features are read live from preferences, so
-    ``save_features`` is intentionally a no-op."""
+    """Profile-version embeddings. A profile's match features are read live from its preferences."""
 
     def get_state(self, key: str, text_version: str) -> StoredEmbeddingState | None:
         return self._state(profile_embeddings, "profile_version_id", key, text_version)
@@ -114,6 +102,3 @@ class DbProfileEmbeddingStore(_Store):
             statement = statement.on_conflict_do_update(index_elements=["profile_version_id", "text_version"],
                                                         set_=_update_set(statement))
             self.session.execute(statement)
-
-    def save_features(self, key: str, features: Mapping[str, object]) -> None:
-        return None

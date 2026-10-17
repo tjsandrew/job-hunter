@@ -15,7 +15,6 @@ from .client import Embedder, EmbeddingResult, EmbedderUnavailable, InvalidEmbed
 from .features import (
     check_role_family,
     check_seniority,
-    extract_job_features,
     extract_profile_features,
 )
 from .job_text import JOB_TEXT_VERSION, JobTextInput, build_job_text
@@ -43,7 +42,7 @@ from .stores import (
 
 __all__ = [
     "Embedder", "EmbeddingResult", "EmbedderUnavailable", "InvalidEmbeddingResponse", "HttpEmbedder",
-    "check_role_family", "check_seniority", "extract_job_features", "extract_profile_features",
+    "check_role_family", "check_seniority", "extract_profile_features",
     "JOB_TEXT_VERSION", "JobTextInput", "build_job_text",
     "PROFILE_TEXT_VERSION", "ProfileTextInput", "build_profile_text",
     "STATUS_UNCHANGED", "EmbeddingOutcome", "JobEmbedRequest", "ProfileEmbedRequest",

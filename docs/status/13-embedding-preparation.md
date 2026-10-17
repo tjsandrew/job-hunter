@@ -1,17 +1,19 @@
 # Job and profile embedding functions (local)
 
-Implemented 16-17 October 2026 on `noah/embedder-service`. Local commits; nothing pushed. Everything lives in
+Implemented 16-17 October 2026 on `noah/semantic-recommendations`. The ingestion-owned classification changes in this
+section are currently local and uncommitted. The embedding and recommendation code lives in
 `backend/src/job_hunter/embedding/`. It is wired into the app through a small number of hooks (see "Backfill and the flagged
 endpoint"): the confirm and preferences-save hooks, `GET /v1/recommendations/for-you` and the Discover "For you / All jobs"
-toggle. The original keyword ranker stays as `/v1/recommendations` ("All jobs") and as the fallback. The only schema change is
-migration `0012_embedding_tables`, which adds three **new** tables and alters no existing table or column (see Storage).
+toggle. The original keyword ranker stays as `/v1/recommendations` ("All jobs") and as the fallback. Two migrations:
+`0012_embedding_tables` adds three **new** tables and alters nothing, and `0013_job_seniority` adds three nullable columns to `jobs`
+(`seniority`, `seniority_source`, `seniority_evidence`), set at ingestion like `jobs.category` (see Storage and Match features).
 
 ## What it is for
 
 One place owns how a job or a profile becomes text for the embedder, so ingestion and profile code only call a function
 and never need to know the text format. The functions assemble versioned text, call the standalone embedder service
-(through the client in `12-embedding-client.md`), work out a few match features that are deliberately kept *outside* the
-vector, and hand the result to a storage object.
+(through the client in `12-embedding-client.md`) and hand the vector to a storage object. A job's role family and seniority are
+deliberately kept *outside* the vector and are **not** worked out here: ingestion sets them on the job row (see Match features).
 
 ## How to call it
 
@@ -25,13 +27,13 @@ outcome = embed_job(
 
 outcome = embed_profile(
     ProfileEmbedRequest(profile_version_id=str(version.id), snapshot=snapshot,
-                        target_roles=preferences.get("target_roles"), seniority_preference=preferences.get("seniority")),
+                        target_roles=preferences.get("target_roles")),
     embedder=embedder, store=store)
 ```
 
 Batch versions `embed_jobs` and `embed_profiles` embed many items per embedder call (default 32, maximum 64).
 
-`outcome.status` is one of `ready` (vector stored), `unchanged` (nothing to do; match features were refreshed),
+`outcome.status` is one of `ready` (vector stored), `unchanged` (text, text version and model are unchanged; nothing to do),
 `pending` (embedder unavailable, retry later), `failed` (unusable response or internal error) or `no_content` (blank
 title or empty profile). **The functions do not raise for expected problems**, so an embedder outage cannot break an import
 or a profile save. Reasons are short and never contain the input text. The caller supplies the embedder and the store, and
@@ -57,26 +59,37 @@ the caller's database session lives inside the store, which keeps per-user row-l
 
 ## Match features and checks (outside the vector)
 
-- **Seniority:** a five-step ladder (intern, entry, mid, senior, lead) from a stated value or conservative title keywords. A job that
-  names no level counts as open to all levels and is flagged `all_levels`. Only a clear mismatch (two or more steps apart) blocks.
-- **Role family:** worked out from the job title alone by the shared classifier in `backend/src/job_hunter/role_family.py`
-  (`classify_role_family`; the old `embedding/role_family.py` path still imports it). Ingestion calls the **same** classifier
-  (`classify_title()` in `import_jobs.py`, source label `role-family-v1`) to fill `jobs.category`, so `jobs.category` and the
-  recommender's role family always agree, and the keyword tables in `role_family.py` are the one place to tune. The family is
-  worked out when a job is embedded and saved in `job_match_features`; For you reads the saved value (nothing is classified at
-  request time for jobs; a profile's target-role families are worked out from its preferences on each request). Results are
-  same / adjacent / different / unknown; only "different" blocks, and unknown (family "other") never does. The adjacency list is
-  a judgement call (`ADJACENT_FAMILIES` in `features.py`). After the keyword tables change, re-run `make import-jobs` /
-  `make replay-jobs` to refresh `jobs.category` (a changed category counts as an update) and `make backfill` to refresh the saved
-  families (no re-embedding needed).
-- The checks are used by the For you ranking (see below); the old ingestion-category fallback no longer exists.
+A job's **role family** and **seniority** are properties of the job, so they are set once, at **ingestion**, on the job row, and
+everything else reads them from there (no second copy, nothing classified lazily for jobs):
+
+| Column | Set by | Meaning |
+|---|---|---|
+| `jobs.category` (+ `category_source`, `category_evidence`) | `classify_title()` in `import_jobs.py`, which calls `classify_role_family` in `backend/src/job_hunter/role_family.py` (source label `role-family-v1`) | one of 12 families; "other" = no family matched |
+| `jobs.seniority` (+ `seniority_source`, `seniority_evidence`) | `classify_seniority()` in `backend/src/job_hunter/seniority.py` (source `seniority-v1`, or `stated` when the source names the level itself via an optional `stated_seniority` on the record) | JSON list of ladder levels (intern, entry, mid, senior, lead); `[]` = names no level (open to all levels); `NULL` = not classified yet |
+
+- **Reading.** `db_retrieval.load_job_candidates` reads both columns. An empty, "other", unknown, invalid or `NULL` value counts as
+  unknown / open to all levels, so it **never blocks** a job (a source whose ingestion skipped the classifiers therefore weakens the
+  checks silently; `backfill --classification-report` shows per source how many open jobs have no category or seniority).
+- **Profiles.** A profile's target-role families and level are worked out live from its preferences on each request with the same
+  functions (`extract_profile_features`); a stated level of "Executive" counts as the top of the ladder, and "executive" is never
+  read from a job title ("Account Executive" is a sales job).
+- **Checks.** Role family: same / adjacent / different / unknown, only "different" blocks (adjacency is a judgement call,
+  `ADJACENT_FAMILIES` in `features.py`). Seniority: only a clear mismatch (two or more steps apart) blocks; an unspecified job is
+  flagged `all_levels`.
+- **Retuning.** After editing the keyword tables, run `make reclassify-jobs` (`python -m job_hunter.import_jobs --reclassify`): it
+  recomputes both columns from the titles already in the database, without a fetch, and keeps a level a source stated. Re-running
+  `make import-jobs` / `make replay-jobs` also refreshes them (the category and seniority fields count as content). No re-embedding
+  is needed. If the deterministic rules are later replaced (for example by an LLM that returns the level and the family at
+  ingestion), the two classify functions are the only swap point and the columns stay the same.
+- **Ownership.** The two classifier modules are owned by the recommender; ingestion paths call them and do not edit the tables.
 
 ## Storage
 
-`EmbeddingStore` is a small interface (`get_state(key, text_version)`, `save(key, record)`, `save_features(key, features)`) with
+`EmbeddingStore` is a small interface (`get_state(key, text_version)`, `save(key, record)`) with
 an in-memory implementation (tests, offline runs) and database implementations in `db_store.py` (import it explicitly; it needs
 SQLAlchemy). Embeddings live in **separate new tables** (migration `0012_embedding_tables`, chained after `0011`), so `jobs`,
-`profile_versions` and the resume intake flow are not touched:
+`profile_versions` and the resume intake flow are not touched by it (the only change to an existing table is migration `0013`'s
+three nullable seniority columns on `jobs`, see Match features):
 
 - **`job_embeddings`**: one row per job per text format (`unique (job_id, text_version)`): vector, model, dimensions, input hash,
   status and a short reason. A new text format adds a row; a new model replaces the row for that format. Database checks require a
@@ -84,9 +97,9 @@ SQLAlchemy). Embeddings live in **separate new tables** (migration `0012_embeddi
 - **`profile_embeddings`**: the same, per profile version, with a `user_id` and the **same per-user row-level security** as
   `profile_versions`. The owner is read from the profile version itself, so a caller cannot write an embedding for someone else's
   profile.
-- **`job_match_features`**: one row per job (seniority levels and where they came from, role family) as JSON with a feature
-  version. It is saved on every run, independently of whether the embedding succeeded. Profile match features are read live from
-  preferences and need no table.
+- **Legacy `job_match_features`**: migration `0012` created it; migration `0013` copies any saved seniority to `jobs` (preserving
+  `stated` provenance) and drops the table. `0012` is kept unchanged because it may already have been applied. Existing jobs with
+  no legacy feature still need `make reclassify-jobs` after migration.
 
 `DbJobEmbeddingStore` and `DbProfileEmbeddingStore` take the caller's SQLAlchemy `Session` and never commit; every write runs in a
 savepoint, so one bad row cannot poison a batch. The older `embedding` columns on `jobs` and `profile_versions` are left unused.
@@ -117,6 +130,8 @@ later without changing callers.
   user's *confirmed* profile version, commits per batch / per user, skips unchanged items and retries pending or failed ones. The
   embedder URL comes from `EMBEDDER_URL` (default `http://embedder:8100`). In local mode the users come from the development identity
   map; a cloud deployment must pass `user_ids` itself. Also callable as `backfill_jobs` / `backfill_profiles`.
+  `--classification-report` (read-only) lists, per source, open jobs with no category or no seniority, and a normal run prints a note
+  when there are any.
 - **Endpoint:** `GET /v1/recommendations/for-you` (`limit`, `offset`, `q` for the Discover search text), **on by default in compose (`FOR_YOU_ENABLED`, set 0 to switch off)** (404 `FOR_YOU_DISABLED`
   when off; the application default without the variable is off). It excludes saved/dismissed jobs like the existing endpoint, runs
   eligibility, then the role and level checks, then similarity, and returns the existing result shape without a score (only the order
@@ -134,37 +149,52 @@ later without changing callers.
   the backfill retries), an unexpected error is logged and swallowed, and unchanged text skips the embedder entirely. Saving preferences
   without a confirmed profile does nothing. Roles are part of the embedded text, so changing them re-embeds.
 - **Job side:** keeping job vectors current when jobs are ingested is still for the ingestion owner, who calls `embed_job(s)`.
-  A new ingestion path should also fill `jobs.category` with `classify_title(title)` from `import_jobs.py` (or
-  `classify_role_family(title)` from `job_hunter.role_family`); the embedder does not read `jobs.category`, but Andrew's
-  keyword ranker, the job API output, the resume builder and search still do.
+  A new ingestion path must also fill `jobs.category` and `jobs.seniority` (with their `_source` / `_evidence`) by calling
+  `job_hunter.job_classification.classify_job(title, stated_seniority=None)` after title normalization and before saving:
+  the recommender's role and level checks, Andrew's keyword ranker, the job API output, the resume builder
+  and search all read those columns. The embedder itself classifies nothing for jobs.
+- **Preference seniority:** `GET /v1/preferences/seniority-options` serves the backend's five canonical keys and display labels.
+  The UI fetches these when Job preferences opens, while target roles remain free text. `PUT /v1/preferences` validates and
+  stores canonical keys; legacy Junior, Mid-level and Executive labels are accepted and normalized for compatibility.
 - **Role check without target roles** falls back to the profile headline (else the latest role). A stated seniority of "Executive" counts
   as the top of the ladder; "executive" is never read from a job title ("Account Executive" is a sales job).
 
 ## Verified
 
-- The full backend suite (567 tests, including the database integration tests, the OpenAPI contract and the new backfill and for-you tests) passes inside the backend container (`pytest` with `backend/src` mounted
-  and `PYTHONPATH=/app/src`). The text builders and checks also run on the host Python.
-- 10 database integration tests (`backend/tests/integration/test_embedding_db_store.py`, `RUN_DB_INTEGRATION=1`) run in a
-  rolled-back transaction with a throwaway schema and a restricted role, like the existing integration tests: migration adds only the
-  three new tables, changes no existing column, is re-runnable and reversible; stores, constraints, cascades, per-user isolation and
-  the embedding functions on top of the database stores.
-- The whole migration chain (`0001` to `0012`) applied to a throwaway database with a single head, downgraded to `0011` and
-  re-applied; after seeding, the full existing backend suite (498 tests, including the profile and resume integration tests) passed
-  against it. The throwaway database was dropped; the development database was not touched.
+- The new rollback-only `scripts/smoke_semantic_pipeline.py` passed against the local PostgreSQL and Jina service: it applies `0012`
+  and `0013` in a throwaway schema, checks that a legacy stated level survives migration, imports four jobs, embeds and re-backfills
+  them, checks reclassification is idempotent, embeds a profile, checks two semantic matches and two role/level blocks, and runs the keyword ranker. The transaction rolls
+  back, leaving the 71 development jobs unchanged. A source-mounted API on port 8001 answered `200` for health, For you
+  (`semantic`, 35 results) and the keyword endpoint (70 results).
+- Against the 71 existing jobs, source-mounted `backfill --jobs --limit 71` returned 71 `unchanged`, and
+  `import_jobs --reclassify` returned 71 `unchanged`. The classification report found zero missing fields, but 18 `other`
+  categories and 58 jobs with no stated seniority level.
+- The full backend `pytest` suite passes with database integration enabled: **603 passed** (`pytest==9.1.1` and
+  `httpx==0.28.1` installed in a temporary API test container), as do the web suite (227 tests) and the production web
+  build. `scripts/check_profile_bank_migration.py` (the CI migration check: an old schema upgraded through `0013` to a
+  single head, every ORM column created by a migration) passes too.
 - End to end against the local embedder service (Jina, 512-d): 70 real listings embedded in about 10 seconds in batches of 16;
   a second run skipped all 70 in 0.02 seconds. Alice's demo profile embedded with `profile-v2`.
+- 2026-10-17: the development database is at `0013` with category and seniority populated on all 71 jobs; a read-only check
+  confirmed the count. The source-mounted For you route answered `semantic` with 35 results. This does not validate relevance.
 
 ## Not verified / known gaps
 
 - Keeping **job** vectors current when jobs are ingested is for the ingestion owner (`embed_job(s)` after insert/update, or
   `make backfill`); until then new jobs have no vector and do not appear in For you. Profiles are embedded by the confirm and
   preferences-save hooks.
+- Every ingestion path, including Dao Yi's, must classify both fields before embedding. `make backfill` only creates vectors;
+  it does not repair missing category or seniority. After migration or classifier retuning, run `make reclassify-jobs` and check
+  `backfill --classification-report` before treating role/level safeguards as active. Missing or unknown fields currently fail open.
 - All relevance labels so far are assistant-only and non-blind, on 70 listings (48 from one employer, 2 with stated skills).
   The replacement gate (match or beat the keyword ranker on a broader, independently labelled set) has not been met.
-- Role family comes from title keywords (`role_family.py`); about a quarter of titles are "other" (unknown, never blocked).
-  Years of experience are not used to infer seniority, and "associate" and "manager" are not read as levels.
+- Role family and seniority come from title keywords (`role_family.py`, `seniority.py`); about a quarter of titles are "other"
+  (unknown, never blocked) and about 80% of today's jobs name no level in the title (currently treated as open to all levels,
+  not proof that the employer has no level requirement). Years of experience are not used to
+  infer seniority, and "associate" and "manager" are not read as levels. A job source whose ingestion skips the classifiers is
+  invisible to the checks until the coverage report is looked at.
 - The embedding model is English-only (`jina-embeddings-v2-small-en`).
-- The migration has been applied to the development database only; its position in the chain (`0012`, after Andrew's `0011`) must be
-  re-checked if a newer migration lands first.
+- The migrations have been applied to the development database only; their position in the chain (`0012` and `0013`, after Andrew's
+  `0011`) must be re-checked if a newer migration lands first.
 - The profile text includes the target roles from preferences, which can change without a new profile version; the stored input
   hash detects that, and the preferences-save hook re-embeds.

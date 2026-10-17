@@ -2405,6 +2405,22 @@
         "summary": "Update Preferences"
       }
     },
+    "/v1/preferences/seniority-options": {
+      "get": {
+        "operationId": "seniority_options_v1_preferences_seniority_options_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Seniority Options"
+      }
+    },
     "/v1/profile": {
       "get": {
         "operationId": "profile_v1_profile_get",

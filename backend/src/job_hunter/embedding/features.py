@@ -4,13 +4,13 @@ Embeddings find jobs that read alike; they cannot enforce "different occupation"
 "wrong experience level" (a recruiter or a principal-level job can read very close to a
 junior backend profile). These small, transparent rules cover that gap:
 
-* **Seniority** - a five-step ladder (intern, entry, mid, senior, lead). Job levels come
-  from an explicit value when the caller has one, otherwise from conservative title
-  keywords, otherwise the job is "unspecified" and counts as open to every level (and is
-  flagged as such, so evaluation can see how often the check did nothing).
-* **Role family** - the shared title classifier (``job_hunter.role_family``, which ingestion
-  also uses to fill ``jobs.category``). It works from the title alone and puts the occupation
-  and the head of the title first. "other" is unknown, which counts as compatible.
+* **Seniority** - a five-step ladder (intern, entry, mid, senior, lead). A job's levels are classified at
+  ingestion (``job_hunter.seniority``) and stored in ``jobs.seniority``; a job that names no level counts as
+  open to all levels (and is flagged as such, so evaluation can see how often the check did nothing). A
+  profile's level comes from the user's preferences.
+* **Role family** - the shared title classifier (``job_hunter.role_family``). Ingestion fills
+  ``jobs.category`` with it and the recommender reads that column; a profile's target roles are classified with
+  the same function. "other" is unknown, which counts as compatible.
 
 Every check returns a verdict plus a reason; ``blocks`` is True only for a clear
 mismatch. Unknown never blocks. Years-of-experience inference is deliberately not part
@@ -19,35 +19,13 @@ of this first version: mapping "N+ years" to a level is too error-prone to guess
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
-from job_hunter.role_family import CLASSIFIER_VERSION, classify_role_family
+from job_hunter.role_family import CLASSIFIER_VERSION, ROLE_FAMILIES, classify_role_family
+from job_hunter.seniority import SENIORITY_LADDER, levels_from_text, normalise_levels
 
-FEATURES_VERSION = "features-v2"   # stored with the job features so a rule change is visible later
-
-SENIORITY_LADDER: tuple[str, ...] = ("intern", "entry", "mid", "senior", "lead")
-
-SOURCE_STATED = "stated"
-SOURCE_INFERRED_FROM_TITLE = "inferred_from_title"
-SOURCE_UNSPECIFIED = "unspecified"
-
-# Ordered keyword patterns. "associate" and "manager" are deliberately absent: they say
-# little about level ("Product Manager", "Customer Associate"), so we do not guess.
-_SENIORITY_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("intern", re.compile(r"\b(intern|internship|co-?op)\b", re.I)),
-    ("entry", re.compile(r"\b(junior|jr|entry[\s-]*level|new[\s-]*grad(uate)?|graduate|early[\s-]*career|trainee)\b", re.I)),
-    ("mid", re.compile(r"\b(mid[\s-]*level|intermediate)\b", re.I)),
-    ("senior", re.compile(r"\b(senior|sr)\b", re.I)),
-    ("lead", re.compile(
-        r"\b(principal|distinguished|director|vp|vice[\s-]*president|chief|head[\s-]+of)\b"
-        # Added 2026-10-16 after the head-to-head showed "Engineering Manager" roles (people management)
-        # reaching junior profiles. Other "manager" titles are still not read as a level.
-        r"|\bengineering\s+manager\b|\bmanager,\s*engineering\b"
-        r"|\bstaff\s+(?:\w+\s+){0,2}(engineer|developer|scientist|designer|architect)\b"
-        r"|\blead\b(?!\s*gen)", re.I)),
-)
+FEATURES_VERSION = "features-v3"   # part of the ranking version string, so a change to the rules is visible later
 
 Classifier = Callable[[str], "tuple[str, str, str | None]"]
 
@@ -74,43 +52,9 @@ class RoleCheck:
 
 
 @dataclass(frozen=True)
-class JobFeatures:
-    seniority_levels: tuple[str, ...]   # empty means unspecified
-    seniority_source: str
-    role_family: str | None             # None means unknown
-
-
-@dataclass(frozen=True)
 class ProfileFeatures:
     seniority_levels: tuple[str, ...]   # empty means not set
     role_families: tuple[str, ...]      # empty means unknown
-
-
-def levels_from_text(text: str | None) -> tuple[str, ...]:
-    """Seniority levels named in a title or preference string, in ladder order."""
-    if not text:
-        return ()
-    found = [level for level, pattern in _SENIORITY_PATTERNS if pattern.search(text)]
-    return tuple(found)
-
-
-# Plain words that only make sense as a *stated* level (a preference or a structured field), never as a
-# title keyword: "Account Executive" is a sales job, not an executive-level one.
-_STATED_ONLY_LEVELS = {"executive": "lead"}
-
-
-def _normalise_levels(levels: Sequence[str] | None) -> tuple[str, ...]:
-    """Accept ladder names ("entry") or plain wording ("Junior"); ignore anything else."""
-    valid: set[str] = set()
-    for level in levels or ():
-        text = str(level).strip().lower()
-        if text in SENIORITY_LADDER:
-            valid.add(text)
-        elif text in _STATED_ONLY_LEVELS:
-            valid.add(_STATED_ONLY_LEVELS[text])
-        else:
-            valid.update(levels_from_text(text))
-    return tuple(level for level in SENIORITY_LADDER if level in valid)
 
 
 def _default_classifier(title: str) -> "tuple[str, str, str | None]":
@@ -123,20 +67,15 @@ def _family(category: str | None) -> str | None:
     return value if value and value != "other" else None
 
 
-def extract_job_features(
-    title: str,
-    stated_seniority: Sequence[str] | None = None,
-    classify: Classifier | None = None,
-) -> JobFeatures:
-    """Features for one job: its levels (stated, else from the title) and its role family (from the title)."""
-    stated = _normalise_levels(stated_seniority)
-    if stated:
-        levels, source = stated, SOURCE_STATED
-    else:
-        inferred = levels_from_text(title)
-        levels, source = (inferred, SOURCE_INFERRED_FROM_TITLE) if inferred else ((), SOURCE_UNSPECIFIED)
-    family = _family((classify or _default_classifier)(title)[0]) if title else None
-    return JobFeatures(seniority_levels=levels, seniority_source=source, role_family=family)
+def job_role_family(category: str | None) -> str | None:
+    """The role family stored in ``jobs.category``, or None (unknown) when it is empty, "other" or not a known label."""
+    value = _family(category)
+    return value if value in ROLE_FAMILIES else None
+
+
+def job_seniority_levels(value: "Sequence[str] | None") -> tuple[str, ...]:
+    """The levels stored in ``jobs.seniority`` that are on the ladder, in ladder order (empty = open to all levels)."""
+    return normalise_levels(value)
 
 
 def role_hint_from_snapshot(snapshot: "dict | None") -> list[str]:
@@ -160,9 +99,9 @@ def extract_profile_features(
     """Features for one profile, from the user's preferences."""
     if isinstance(seniority_preference, str) or seniority_preference is None:
         levels = levels_from_text(seniority_preference) or (
-            _normalise_levels([seniority_preference]) if seniority_preference else ())
+            normalise_levels([seniority_preference]) if seniority_preference else ())
     else:
-        levels = _normalise_levels(seniority_preference)
+        levels = normalise_levels(seniority_preference)
     families: list[str] = []
     for role in target_roles or ():
         family = _family((classify or _default_classifier)(str(role))[0])
@@ -173,8 +112,8 @@ def extract_profile_features(
 
 def check_seniority(job_levels: Sequence[str] | None, profile_levels: Sequence[str] | None) -> SeniorityCheck:
     """Compare job and profile levels. Unspecified job counts as all levels (flagged)."""
-    job = _normalise_levels(job_levels)
-    profile = _normalise_levels(profile_levels)
+    job = normalise_levels(job_levels)
+    profile = normalise_levels(profile_levels)
     if not job:
         return SeniorityCheck("all_levels", True, "the job does not state a level; counted as open to all levels")
     if not profile:

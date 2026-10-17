@@ -7,7 +7,7 @@ import { api, HttpError } from './api';
 vi.mock('./api', async (importOriginal) => {
   const original = await importOriginal<typeof import('./api')>();
   return { ...original, api: {
-    getBank: vi.fn(), uploads: vi.fn(), imports: vi.fn(), me: vi.fn(), getProfile: vi.fn(), getPreferences: vi.fn(), recommendations: vi.fn(), recommendationsForYou: vi.fn(), applications: vi.fn(), documents: vi.fn(),
+    getBank: vi.fn(), uploads: vi.fn(), imports: vi.fn(), me: vi.fn(), getProfile: vi.fn(), getPreferences: vi.fn(), getSeniorityOptions: vi.fn(), recommendations: vi.fn(), recommendationsForYou: vi.fn(), applications: vi.fn(), documents: vi.fn(),
     uploadResume: vi.fn(), reviewJob: vi.fn(), putProfile: vi.fn(), confirmProfile: vi.fn(), putPreferences: vi.fn(), putApplication: vi.fn(), createDocument: vi.fn(), patchDocument: vi.fn(),
     duplicateDocument: vi.fn(), reviewDocument: vi.fn(), exportDocument: vi.fn(), previewDocument: vi.fn(), downloadExport: vi.fn(),
   } };
@@ -23,6 +23,7 @@ beforeEach(() => {
   mockApi.imports.mockResolvedValue({ items: [], next_cursor: null });
   mockApi.putProfile.mockImplementation(async (draft) => ({ draft, revision: 1, bank_revision: 8, confirmed_revision: null }));
   mockApi.getPreferences.mockResolvedValue({ roles: [], locations: [], work_modes: [], seniority: '', salary_min: null, salary_currency: 'SGD', salary_period: 'year', revision: 0 });
+  mockApi.getSeniorityOptions.mockResolvedValue({items:[{value:'intern',label:'Intern'},{value:'entry',label:'Junior / Entry-level'},{value:'mid',label:'Mid-level'},{value:'senior',label:'Senior'},{value:'lead',label:'Lead / Executive'}]});
   mockApi.recommendations.mockResolvedValue({ items: [{ job: { id: 'role-1', title: 'Product Designer', company: 'Northstar', location: 'Singapore', description: 'Design clear tools for people.' }, score: 0.91, reasons: ['Product design experience'] }], total: 1, next_offset: null, degraded_mode: true });
   mockApi.recommendationsForYou.mockRejectedValue(new Error('for you unavailable in this test'));   // default: exercise the fallback
   mockApi.applications.mockResolvedValue({ items: [] }); mockApi.documents.mockResolvedValue({ items: [] });

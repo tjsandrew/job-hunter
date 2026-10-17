@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import Column, DateTime, Integer, MetaData, String, Table, Text, text
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 
 metadata = MetaData()
 
@@ -37,12 +37,6 @@ profile_embeddings = Table("profile_embeddings", metadata,
                            Column("user_id", PGUUID(as_uuid=True), nullable=False),
                            Column("profile_version_id", PGUUID(as_uuid=True), nullable=False),
                            *_embedding_columns())
-
-job_match_features = Table("job_match_features", metadata,
-                           Column("job_id", PGUUID(as_uuid=True), primary_key=True),
-                           Column("feature_version", String(40), nullable=False),
-                           Column("features", JSONB, nullable=False),
-                           Column("updated_at", DateTime(timezone=True), server_default=text("now()"), nullable=False))
 
 # Read-only reference used to find the owner of a profile version (the table itself belongs to the app).
 profile_versions = Table("profile_versions", metadata,

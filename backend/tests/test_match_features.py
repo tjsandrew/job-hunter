@@ -3,15 +3,15 @@ import pytest
 from job_hunter.embedding.features import (
     ADJACENT_FAMILIES,
     SENIORITY_LADDER,
-    SOURCE_INFERRED_FROM_TITLE,
-    SOURCE_STATED,
-    SOURCE_UNSPECIFIED,
     check_role_family,
     check_seniority,
-    extract_job_features,
     extract_profile_features,
-    levels_from_text,
+    job_role_family,
+    job_seniority_levels,
+    role_hint_from_snapshot,
 )
+from job_hunter.role_family import classify_role_family
+from job_hunter.seniority import classify_seniority
 
 
 def fake_classify(title):
@@ -24,58 +24,26 @@ def fake_classify(title):
     return "other", "title_keyword_v1", None
 
 
-@pytest.mark.parametrize("title,expected", [
-    ("Senior Backend Engineer", ("senior",)),
-    ("Software Engineer, Intern", ("intern",)),
-    ("Internal Auditor", ()),
-    ("Staff Accountant", ()),
-    ("Staff Software Engineer", ("lead",)),
-    ("Lead Generation Specialist", ()),
-    ("Team Lead, Payments", ("lead",)),
-    ("Principal Recruiter", ("lead",)),
-    ("Senior/Staff Engineer", ("senior", "lead")),
-    ("Junior Developer", ("entry",)),
-    ("Software Engineer, New Grad", ("entry",)),
-    ("Global Trainee Program 2027", ("entry",)),
-    ("Operations Manager", ()),
-    ("Product Manager, Payments", ()),
-    ("Engineering Manager, Payments", ("lead",)),
-    ("Manager, Engineering", ("lead",)),
-    ("Senior Engineering Manager", ("senior", "lead")),
-    ("Associate Software Engineer", ()),
-    ("(Senior) Finance Associate - 6 Month Maternity Cover", ("senior",)),
-    ("Head of Data", ("lead",)),
-    ("VP, Sales", ("lead",)),
-    ("Mid-level Data Analyst", ("mid",)),
-    ("Backend Engineer", ()),
-    ("", ()),
-    (None, ()),
+def stored_job(title):
+    """The role family and levels the recommender reads for a job that ingestion classified from its title."""
+    return job_role_family(classify_role_family(title)[0]), job_seniority_levels(classify_seniority(title)[0])
+
+
+@pytest.mark.parametrize("category,expected", [
+    ("engineering", "engineering"), (" Data ", "data"), ("people", "people"),
+    # unknown, empty, "other" or a label the checks do not know all count as unknown, which never blocks
+    ("other", None), ("", None), (None, None), ("astronaut", None),
 ])
-def test_levels_from_title(title, expected):
-    assert levels_from_text(title) == expected
+def test_job_role_family_is_read_from_the_stored_category(category, expected):
+    assert job_role_family(category) == expected
 
 
-def test_job_features_stated_beats_inferred_and_unspecified_is_flagged():
-    # plain wording is understood and unknown words are ignored; a stated value beats the title
-    stated = extract_job_features("Senior Engineer", stated_seniority=["Junior ", "bogus"], classify=fake_classify)
-    assert (stated.seniority_levels, stated.seniority_source) == (("entry",), SOURCE_STATED)
-    stated = extract_job_features("Senior Engineer", stated_seniority=["entry"], classify=fake_classify)
-    assert (stated.seniority_levels, stated.seniority_source) == (("entry",), SOURCE_STATED)
-    # a stated value that means nothing falls back to the title
-    fallback = extract_job_features("Senior Engineer", stated_seniority=["bogus"], classify=fake_classify)
-    assert (fallback.seniority_levels, fallback.seniority_source) == (("senior",), SOURCE_INFERRED_FROM_TITLE)
-    inferred = extract_job_features("Senior Engineer", classify=fake_classify)
-    assert (inferred.seniority_levels, inferred.seniority_source) == (("senior",), SOURCE_INFERRED_FROM_TITLE)
-    unspecified = extract_job_features("Backend Engineer", classify=fake_classify)
-    assert (unspecified.seniority_levels, unspecified.seniority_source) == ((), SOURCE_UNSPECIFIED)
-
-
-def test_job_role_family_comes_from_the_title_alone():
-    assert extract_job_features("Backend Engineer", classify=fake_classify).role_family == "engineering"
-    assert extract_job_features("Data Analyst", classify=fake_classify).role_family == "data"
-    # a title the classifier says nothing about is unknown (None), which never blocks
-    assert extract_job_features("Fraud Strategist", classify=fake_classify).role_family is None
-    assert extract_job_features("", classify=fake_classify).role_family is None
+@pytest.mark.parametrize("stored,expected", [
+    (None, ()), ([], ()), (["senior"], ("senior",)), (["lead", "senior"], ("senior", "lead")),
+    (["bogus", "entry"], ("entry",)), (["Senior"], ("senior",)),
+])
+def test_job_seniority_levels_are_read_from_the_stored_column(stored, expected):
+    assert job_seniority_levels(stored) == expected
 
 
 def test_profile_features():
@@ -137,16 +105,16 @@ def test_adjacency_table_is_symmetric_and_uses_known_families():
 
 
 def test_recruiter_and_seniority_traps_are_caught_without_hurting_good_jobs():
-    profile = extract_profile_features(["Backend Engineer"], "Junior", classify=fake_classify)
-    trap = extract_job_features("Principal Recruiter", classify=fake_classify)
-    assert check_role_family(trap.role_family, profile.role_families).blocks is True
-    assert check_seniority(trap.seniority_levels, profile.seniority_levels).blocks is True
-    senior = extract_job_features("Senior Backend Engineer", classify=fake_classify)
-    assert check_role_family(senior.role_family, profile.role_families).blocks is False
-    assert check_seniority(senior.seniority_levels, profile.seniority_levels).blocks is True
-    good = extract_job_features("Backend Engineer, Payments", classify=fake_classify)
-    assert check_role_family(good.role_family, profile.role_families).verdict == "same"
-    assert check_seniority(good.seniority_levels, profile.seniority_levels).verdict == "all_levels"
+    profile = extract_profile_features(["Backend Engineer"], "Junior")
+    family, levels = stored_job("Principal Recruiter")
+    assert check_role_family(family, profile.role_families).blocks is True
+    assert check_seniority(levels, profile.seniority_levels).blocks is True
+    family, levels = stored_job("Senior Backend Engineer")
+    assert check_role_family(family, profile.role_families).blocks is False
+    assert check_seniority(levels, profile.seniority_levels).blocks is True
+    family, levels = stored_job("Backend Engineer, Payments")
+    assert check_role_family(family, profile.role_families).verdict == "same"
+    assert check_seniority(levels, profile.seniority_levels).verdict == "all_levels"
 
 
 def test_real_classifier_agrees_on_the_trap_titles():
@@ -157,23 +125,16 @@ def test_real_classifier_agrees_on_the_trap_titles():
         "Senior Data Scientist": "data",
     }
     for title, family in jobs.items():
-        assert extract_job_features(title).role_family == family
-    profile = extract_profile_features(["Backend Engineer"], "Junior")
-    assert profile.role_families == ("engineering",)
+        assert stored_job(title)[0] == family
+    assert extract_profile_features(["Backend Engineer"], "Junior").role_families == ("engineering",)
 
 
-def test_executive_is_a_stated_level_only_never_a_title_keyword():
-    # a user picking "Executive" in preferences means the top of the ladder ...
+def test_executive_in_a_preference_is_the_top_of_the_ladder():
     assert extract_profile_features(["Head of Data"], "Executive", classify=fake_classify).seniority_levels == ("lead",)
     assert extract_profile_features(None, ["Executive"], classify=fake_classify).seniority_levels == ("lead",)
-    # ... but "Account Executive" is a sales job, not an executive-level one
-    assert levels_from_text("Account Executive") == ()
-    assert extract_job_features("Account Executive", classify=fake_classify).seniority_levels == ()
 
 
 def test_role_hint_from_snapshot():
-    from job_hunter.embedding.features import role_hint_from_snapshot
-
     assert role_hint_from_snapshot({"headline": " Data & Backend Engineer "}) == ["Data & Backend Engineer"]
     assert role_hint_from_snapshot({"headline": "", "experience": [{"role": "Data Analyst"}]}) == ["Data Analyst"]
     assert role_hint_from_snapshot({"experience": [{"title": "Engineer"}]}) == ["Engineer"]

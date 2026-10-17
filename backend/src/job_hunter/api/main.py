@@ -12,7 +12,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response, Re
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -34,6 +34,7 @@ from job_hunter.api.resume_build import build_router as build_resume_router
 from job_hunter.profile_bank.build import blank_document_parts
 from job_hunter.profile_bank.importing import ImportFailure
 from job_hunter.profile_bank.importing.docx import CONTENT_TYPES, declared_file_problem, detect_resume_file, extract_docx
+from job_hunter.seniority import SENIORITY_LADDER, SENIORITY_OPTIONS, normalise_levels
 
 app = FastAPI(title="Job Hunter API", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=[x.strip() for x in settings.cors_origins.split(",")],
@@ -102,6 +103,17 @@ class PreferencesWrite(BaseModel):
     salary_currency: str | None = "SGD"
     salary_period: str | None = "year"
     expected_revision: int
+
+    @field_validator("seniority")
+    @classmethod
+    def validate_seniority(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        normalized = normalise_levels(value)
+        if len(normalized) == 1 and (value.strip().casefold() in SENIORITY_LADDER or
+                                     value.strip().casefold() in {"junior", "mid-level", "executive"}):
+            return normalized[0]
+        raise ValueError("seniority must be one of the supported levels")
 
 class ReviewWrite(BaseModel):
     decision: str
@@ -255,7 +267,17 @@ app.include_router(build_router(db_for))
 @app.get("/v1/preferences")
 def get_preferences(db: Session = Depends(db_for)):
     item = db.get(Preference, current_user(db).id)
-    return {**(item.data if item else {}), "revision": item.revision if item else 0}
+    data = dict(item.data) if item else {}
+    seniority = data.get("seniority")
+    if isinstance(seniority, str):
+        normalized = normalise_levels(seniority)
+        if len(normalized) == 1:
+            data["seniority"] = normalized[0]
+    return {**data, "revision": item.revision if item else 0}
+
+@app.get("/v1/preferences/seniority-options")
+def seniority_options():
+    return {"items": SENIORITY_OPTIONS}
 
 @app.put("/v1/preferences")
 def update_preferences(body: PreferencesWrite, db: Session = Depends(db_for)):

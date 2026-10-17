@@ -1,8 +1,8 @@
 """Job title -> role family: the one classifier for ingestion and for the recommender.
 
-Ingestion calls it (``classify_title`` in ``import_jobs.py``) to fill ``jobs.category``; the embedding
-pipeline calls it to save a job's role family in ``job_match_features``. Both therefore always agree, and the
-keyword tables below are the single place to tune. It uses twelve families (the eleven keyword families plus
+Ingestion calls it (``classify_title`` in ``import_jobs.py``) to fill ``jobs.category``;
+the recommender reads that column rather than classifying jobs a second time. The keyword tables below are
+the single place to tune. It uses twelve families (the eleven keyword families plus
 "other"), and two ordering rules found by the evaluation runs:
 
 * **The occupation comes first.** Taking the first family in a fixed order whose keyword appears anywhere in
@@ -48,6 +48,11 @@ CATEGORY_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("people", ("human resources", "people operations", "recruiter", "recruiting", "talent acquisition")),
     ("legal", ("legal", "compliance", "privacy counsel")),
 )
+
+# Every label the classifier can return; anything else read from the database is treated as unknown.
+ROLE_FAMILIES: frozenset[str] = frozenset(
+    family for family, _ in (*OCCUPATION_RULES, *CATEGORY_RULES)) | {"other"}
+
 
 # The head of a title ends at the first comma, semicolon, pipe, slash-free dash or bracket.
 _HEAD_END = re.compile(r"\s[-–—]\s|[,;|(\[]")

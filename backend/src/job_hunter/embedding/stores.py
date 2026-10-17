@@ -10,8 +10,8 @@ The layout mirrors a separate-tables design:
 * **Embedding rows** are keyed by ``(key, text_version)``: one row per entity per text format,
   holding the vector and its metadata. Re-embedding with a new model overwrites the row for that
   text version; a new text version creates a new row, so formats can be compared side by side.
-* **Match features** (seniority, role family) are keyed by ``key`` only. They describe the job or
-  profile, not a particular vector, so they are saved independently and refreshed on every run.
+* **Match features** (a job's role family and seniority) are not stored here: they are properties of the job,
+  set at ingestion in ``jobs.category`` and ``jobs.seniority``. A profile's are read live from its preferences.
 
 The key is whatever identifies the entity: a job id, or a profile version id.
 """
@@ -19,7 +19,7 @@ The key is whatever identifies the entity: a job id, or a profile version id.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Mapping, Protocol
+from typing import Protocol
 
 STATUS_READY = "ready"            # vector computed and stored
 STATUS_PENDING = "pending"        # embedder unavailable; retry later (no usable vector)
@@ -57,17 +57,12 @@ class EmbeddingStore(Protocol):
         """Insert or replace the embedding row for (key, record.text_version)."""
         ...
 
-    def save_features(self, key: str, features: Mapping[str, object]) -> None:
-        """Insert or replace the match features for key, independent of any embedding row."""
-        ...
-
 
 @dataclass
 class InMemoryEmbeddingStore:
     """Dictionary-backed store for tests and offline runs."""
 
     records: dict[tuple[str, str], EmbeddingRecord] = field(default_factory=dict)
-    features: dict[str, Mapping[str, object]] = field(default_factory=dict)
 
     def get_state(self, key: str, text_version: str) -> StoredEmbeddingState | None:
         record = self.records.get((key, text_version))
@@ -77,6 +72,3 @@ class InMemoryEmbeddingStore:
 
     def save(self, key: str, record: EmbeddingRecord) -> None:
         self.records[(key, record.text_version)] = record
-
-    def save_features(self, key: str, features: Mapping[str, object]) -> None:
-        self.features[key] = dict(features)

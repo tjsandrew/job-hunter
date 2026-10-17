@@ -1,6 +1,6 @@
 # Common local tasks. Run `make` or `make help` to list them.
 .DEFAULT_GOAL := help
-.PHONY: help up down logs reset test test-web test-backend smoke import-jobs replay-jobs reset-demo embedder-up embedder-down test-embedder backfill
+.PHONY: help up down logs reset test test-web test-backend smoke import-jobs replay-jobs reclassify-jobs reset-demo embedder-up embedder-down test-embedder backfill
 
 help: ## List available commands
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-14s %s\n", $$1, $$2}'
@@ -37,6 +37,9 @@ import-jobs: ## Import live Singapore jobs (manual, one-shot)
 replay-jobs: ## Re-import the last saved job snapshot without contacting sources
 	docker compose exec api python -m job_hunter.import_jobs \
 		--snapshot-in /data/job-import-snapshots/latest.json --location Singapore
+
+reclassify-jobs: ## Recompute every job's category and seniority from its title (no fetch; after tuning role_family.py or seniority.py)
+	docker compose exec api python -m job_hunter.import_jobs --reclassify
 
 reset-demo: ## Reset Alice's demo profile, resume and application
 	docker compose run --rm --no-deps -v "$(CURDIR)/backend/src:/app/src:ro" \

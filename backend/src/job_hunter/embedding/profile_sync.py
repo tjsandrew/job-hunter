@@ -41,8 +41,7 @@ def embed_user_profile(session: Session, user_id: Any, embedder, *, force: bool 
     data = preferences.data if preferences else {}
     return embed_profile(
         ProfileEmbedRequest(profile_version_id=str(version.id), snapshot=version.data,
-                            target_roles=ProfileTextInput.from_preferences({}, data).target_roles,
-                            seniority_preference=data.get("seniority")),
+                            target_roles=ProfileTextInput.from_preferences({}, data).target_roles),
         embedder=embedder, store=DbProfileEmbeddingStore(session), force=force)
 
 
