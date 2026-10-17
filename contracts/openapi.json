@@ -2405,6 +2405,22 @@
         "summary": "Update Preferences"
       }
     },
+    "/v1/preferences/seniority-options": {
+      "get": {
+        "operationId": "seniority_options_v1_preferences_seniority_options_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Seniority Options"
+      }
+    },
     "/v1/profile": {
       "get": {
         "operationId": "profile_v1_profile_get",
@@ -3720,6 +3736,92 @@
           }
         },
         "summary": "Recommendations"
+      }
+    },
+    "/v1/recommendations/for-you": {
+      "get": {
+        "description": "Semantic recommendations (eligibility, role/seniority checks, then similarity), behind FOR_YOU_ENABLED.\n\nFalls back to the keyword ranker, and says so in ``ranking_mode`` / ``fallback_reason``, whenever the\nprofile has no confirmed version or no vector. The existing /v1/recommendations is unchanged.",
+        "operationId": "recommendations_for_you_v1_recommendations_for_you_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 1000000,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-dev-user",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Dev-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Recommendations For You"
       }
     },
     "/v1/resume-builds/suggest": {

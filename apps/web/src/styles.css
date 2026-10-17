@@ -159,4 +159,4 @@
   .layout-controls select{max-width:125px;min-width:0}
   .job-card,.job-main,.tracker-responsive-card,.tracker-responsive-head{min-width:0}
   .tracker-responsive-head>div{min-width:0}
-}
+}.mode-toggle{display:inline-flex;gap:3px;padding:3px;border:1px solid #e3e5df;border-radius:8px;background:#fff;margin-bottom:12px}.mode-toggle button{border:0;background:transparent;border-radius:6px;padding:7px 14px;font-size:11px;font-weight:600;color:#6f746d}.mode-toggle button.on{background:#edf3eb;color:#234f3d}.mode-toggle button:focus-visible{outline:2px solid #87a58a}

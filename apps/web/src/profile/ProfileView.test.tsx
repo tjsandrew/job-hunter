@@ -27,6 +27,7 @@ beforeEach(() => {
   bank = { basics: profile.draft, items: [experience()], grouped: { experience: [], project: [], education: [], skill: [], certification: [], award: [], volunteering: [], custom: [] }, bank_revision: 9, confirmed_revision: 8, profile_epoch: 0 };
   mockApi.getBank.mockImplementation(async () => copy(bank));
   mockApi.getProfile.mockImplementation(async () => copy(profile));
+  mockApi.getSeniorityOptions.mockResolvedValue({items:[{value:'intern',label:'Intern'},{value:'junior',label:'Junior / Entry-level'},{value:'mid',label:'Mid-level'},{value:'senior',label:'Senior'},{value:'lead',label:'Lead'},{value:'executive',label:'Executive'}]});
   mockApi.uploads.mockResolvedValue({ items: [], next_cursor: null });
   mockApi.imports.mockResolvedValue({ items: [], next_cursor: null });
   mockApi.getItem.mockImplementation(async id => copy(bank.items.find(item => item.id === id)!));
@@ -51,6 +52,24 @@ async function setup() {
 }
 
 describe('Profile bank', () => {
+  it('loads canonical seniority options and keeps target roles free-text', async () => {
+    const user = await setup();
+    expect(await screen.findByRole('option', {name:'Junior / Entry-level'})).toHaveValue('junior');
+    expect(screen.getByRole('option', {name:'Executive'})).toHaveValue('executive');
+    await user.selectOptions(screen.getByLabelText('Seniority'), 'junior');
+    expect(callbacks.setPreferences).toHaveBeenCalledWith(expect.objectContaining({seniority:'junior'}));
+    expect(screen.getByText('Roles or job titles')).toBeInTheDocument();
+  });
+
+  it('disables seniority selection and offers retry when options fail', async () => {
+    mockApi.getSeniorityOptions.mockRejectedValueOnce(new Error('offline'));
+    const user = await setup();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not load seniority levels');
+    expect(screen.getByLabelText('Seniority')).toBeDisabled();
+    await user.click(screen.getByRole('button', {name:'Retry'}));
+    expect(await screen.findByRole('option', {name:'Junior / Entry-level'})).toHaveValue('junior');
+    expect(screen.getByLabelText('Seniority')).toBeEnabled();
+  });
   it('shows the five latest resume sources and expands on request', async () => {
     mockApi.uploads.mockResolvedValue({ items: Array.from({ length: 7 }, (_, index) => ({ upload_id: `upload-${index}`, filename: `fictional-${index}.pdf`, status: 'ready_for_review' })), next_cursor: null } as never);
     const user = userEvent.setup();

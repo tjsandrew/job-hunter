@@ -12,12 +12,13 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response, Re
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from job_hunter.config import settings
 from job_hunter.recommendations import rank_jobs, RANKING_VERSION
+from job_hunter.embedding import for_you as semantic, profile_sync, settings as embedding_settings
 from job_hunter.adapters.database import get_db
 from job_hunter.domain.identity import DEV_USERS
 from job_hunter.domain.models import (User, Profile, Preference, Job, JobReview, Application,
@@ -33,6 +34,7 @@ from job_hunter.api.resume_build import build_router as build_resume_router
 from job_hunter.profile_bank.build import blank_document_parts
 from job_hunter.profile_bank.importing import ImportFailure
 from job_hunter.profile_bank.importing.docx import CONTENT_TYPES, declared_file_problem, detect_resume_file, extract_docx
+from job_hunter.seniority import SENIORITY_LADDER, SENIORITY_OPTIONS, normalise_levels
 
 app = FastAPI(title="Job Hunter API", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=[x.strip() for x in settings.cors_origins.split(",")],
@@ -101,6 +103,17 @@ class PreferencesWrite(BaseModel):
     salary_currency: str | None = "SGD"
     salary_period: str | None = "year"
     expected_revision: int
+
+    @field_validator("seniority")
+    @classmethod
+    def validate_seniority(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        normalized = normalise_levels(value)
+        if len(normalized) == 1 and (value.strip().casefold() in SENIORITY_LADDER or
+                                     value.strip().casefold() in {"entry", "mid-level"}):
+            return normalized[0]
+        raise ValueError("seniority must be one of the supported levels")
 
 class ReviewWrite(BaseModel):
     decision: str
@@ -245,14 +258,26 @@ def update_profile(body: ProfileWrite, db: Session = Depends(db_for)):
 
 @app.post("/v1/profile/confirm")
 def confirm_profile(body: ConfirmWrite, db: Session = Depends(db_for)):
-    return bank_services.confirm_bank(db, body.expected_bank_revision)
+    result = bank_services.confirm_bank(db, body.expected_bank_revision)
+    profile_sync.embed_after_save(db, current_user(db).id)   # best effort: a failed embed never fails the confirm
+    return result
 
 app.include_router(build_router(db_for))
 
 @app.get("/v1/preferences")
 def get_preferences(db: Session = Depends(db_for)):
     item = db.get(Preference, current_user(db).id)
-    return {**(item.data if item else {}), "revision": item.revision if item else 0}
+    data = dict(item.data) if item else {}
+    seniority = data.get("seniority")
+    if isinstance(seniority, str):
+        normalized = normalise_levels(seniority)
+        if len(normalized) == 1:
+            data["seniority"] = normalized[0]
+    return {**data, "revision": item.revision if item else 0}
+
+@app.get("/v1/preferences/seniority-options")
+def seniority_options():
+    return {"items": SENIORITY_OPTIONS}
 
 @app.put("/v1/preferences")
 def update_preferences(body: PreferencesWrite, db: Session = Depends(db_for)):
@@ -263,6 +288,7 @@ def update_preferences(body: PreferencesWrite, db: Session = Depends(db_for)):
     else:
         if item.revision != body.expected_revision: raise HTTPException(409, detail={"code": "REVISION_CONFLICT", "message": "Preferences changed"})
         item.data = body.model_dump(exclude={"expected_revision"}); item.revision += 1
+    profile_sync.embed_after_save(db, current_user(db).id)   # best effort; no-op without a confirmed profile
     return {**item.data, "revision": item.revision}
 
 @app.get("/v1/recommendations")
@@ -286,7 +312,34 @@ def recommendations(db: Session = Depends(db_for), limit: int = Query(20, ge=1, 
     return {"items": items, "total": len(ranked),
             "next_offset": offset + limit if offset + limit < len(ranked) else None,
             "degraded_mode": True, "ranking_version": RANKING_VERSION,
-            "ranking_status": "Local text similarity and skill matching; semantic embeddings are not enabled"}
+            "ranking_status": "Keyword text similarity and skill matching (the For you list uses semantic matching)"}
+
+@app.get("/v1/recommendations/for-you")
+def recommendations_for_you(db: Session = Depends(db_for), limit: int = Query(20, ge=1, le=100),
+                            offset: int = Query(0, ge=0, le=1000000),
+                            q: str | None = Query(None, max_length=200)):
+    """Semantic recommendations (eligibility, role/seniority checks, then similarity), behind FOR_YOU_ENABLED.
+
+    Falls back to the keyword ranker, and says so in ``ranking_mode`` / ``fallback_reason``, whenever the
+    profile has no confirmed version or no vector. The existing /v1/recommendations is unchanged."""
+    if not embedding_settings.for_you_enabled():
+        raise HTTPException(404, detail={"code": "FOR_YOU_DISABLED", "message": "Semantic recommendations are not enabled"})
+    user_id = current_user(db).id
+    prefs = db.get(Preference, user_id)
+    skipped = [str(r.job_id) for r in db.scalars(select(JobReview)).all() if r.decision in {"saved", "dismissed"}]
+    confirmed = bank_services.get_confirmed_snapshot(db)
+    result, reason = semantic.semantic_for_you(db, confirmed, prefs.data if prefs else {}, skipped)
+    if result is None:
+        base = recommendations(db=db, limit=limit, offset=offset, q=q)
+        return {**base, "ranking_mode": "keyword_fallback", "fallback_reason": reason}
+    ranked = semantic.matching(db, result.ranked, q, job_out)
+    total = len(ranked)
+    return {"items": semantic.page_items(db, ranked, offset, limit, job_out, snapshot=confirmed[2],
+                                         preferences=prefs.data if prefs else {}), "total": total,
+            "next_offset": offset + limit if offset + limit < total else None,
+            "degraded_mode": False, "ranking_version": semantic.RANKING_VERSION, "ranking_mode": "semantic",
+            "fallback_reason": None, "blocked_by_checks": len(result.blocked),
+            "ranking_status": "Semantic similarity after role and level checks; the order is meaningful, not the scores"}
 
 def job_out(job: Job) -> dict:
     return {"id": str(job.id), "title": job.title, "company": job.company,

@@ -9,7 +9,8 @@ Updated 5 October 2026 (Singapore). Baseline: the group's submitted preliminary 
 | Singapore job discovery | Bounded public employer feeds, normalized source/location/provenance fields and idempotent imports; 70 live source listings currently |
 | Job reading and shortlisting | Search/pagination, full source description view, role-focused excerpt, source links, Save/Pass |
 | Personal profile | Editable contact, headline, summary, skills and preferences; explicit save and confirmation; PDF text extraction as a review candidate |
-| Local recommendation baseline | Explainable content similarity and explicit skills/role relevance, location eligibility, cold-start fallback; no large-model runtime needed |
+| Local recommendation baseline | Explainable content similarity and explicit skills/role relevance, location eligibility, cold-start fallback; no large-model runtime needed. Shown as "All jobs" and used as the fallback for "For you" |
+| Semantic "For you" recommendations | Embedding-based list: eligibility filters, then role and seniority checks, then similarity ranking; profile embedded on confirm and preferences save, jobs embedded by `make backfill`; falls back to the keyword list. See [13-embedding-preparation.md](13-embedding-preparation.md) |
 | Synthetic demo cases | One populated fictional Alex Tan profile and complete application resume; no sample chooser. QA resumes are archived out of the library. |
 | Resume Studio | Manual creation, job-specific copies, sections/entries/bullets, autosave, revision checks, undo/redo, two templates |
 | Resume customization | Font family and size, margins, line spacing, A4/Letter; honored by server PDF output |
@@ -28,7 +29,7 @@ Implemented and tested locally: job detail, ranking, application preparation/mat
 |---|---|---|
 | Multi-source Singapore jobs, periodic retrieval | Two ATS providers work, but narrow employer coverage; no scheduled refresh or closure rules | Keep broadening permitted coverage and add refresh/expiry before a live pilot. MCF/Adzuna are examples, not a reason to block on an unverified API |
 | Normalize/deduplicate and process each job once | Source identity upsert exists; cross-provider dedup, content versions and richer skills/seniority extraction incomplete | Keep as core work; test against labelled duplicate fixtures, not just same-ID re-import |
-| Keyword + semantic matching | Lightweight lexical/content baseline can run locally; no real semantic embeddings/evaluation yet | Build/evaluate baseline now. Keep semantic matching for a later real embedding adapter; do not label TF-IDF as semantic |
+| Keyword + semantic matching | Keyword baseline and a local-embedding semantic list both run locally; semantic quality is evaluated only on assistant-labelled data, so no accuracy claim yet | Build/evaluate baseline now. Keep semantic matching for a later real embedding adapter; do not label TF-IDF as semantic |
 | Swipe-based review | Save/Pass buttons support the decision flow | Keep buttons for POC; gesture animation can be left out unless user tests identify a need |
 | Deeper AI fit/gap analysis | Not implemented | Keep on final product roadmap; defer model integration until provider access and grounding/evaluation are ready |
 | AI-tailored CV and cover letter, editable | Manual editing/materials work; generation/provenance not implemented | Keep generation as required later. Manual cover letters and job-specific copies let us test the flow locally now |

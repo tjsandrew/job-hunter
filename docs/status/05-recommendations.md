@@ -33,3 +33,13 @@ Result: 9 passed. These are correctness checks on labelled synthetic examples, n
 The parent integrated the ranker into `/v1/recommendations`. It ranks eligible unreviewed postings using the user's saved profile and preferences, then applies text search and offset pagination. Responses retain `reasons` for the frontend and add ranking version, score label, evidence and component scores. The UI must not convert these scores to match percentages. The frontend's sample profile actions populate an editable draft; users still choose Save.
 
 A read-only local spot check over the 70 imported postings used fictional SQL analyst and ML engineer profiles. SQL's top result was Stripe's Data Analyst, Global Growth; ML's top result was also that data role, followed by broader adjacent roles. The narrow pool has few dedicated ML openings, and company-description boilerplate can contribute lexical matches. This is evidence the path runs, not evidence of measured recommendation quality. One process observed roughly 57–70 ms for rank computation over this pool; that excludes HTTP/database time and is not a latency benchmark or percentile claim. Evaluate with user-labelled relevance and broader job coverage before asserting recommendation quality.
+
+## Semantic "For you" (added 16-17 October 2026)
+
+A second, embedding-based ranker sits beside this one. It is documented in [11-embedder-service.md](11-embedder-service.md),
+[12-embedding-client.md](12-embedding-client.md) and [13-embedding-preparation.md](13-embedding-preparation.md). In short:
+`GET /v1/recommendations/for-you` applies the same eligibility rules as `rank_jobs` (open, location, work mode, not already
+reviewed), then role-family and seniority checks, then orders by embedding similarity; the Discover page offers it as "For you"
+(default) next to "All jobs" (this ranker). When the profile has no confirmed version or no vector the endpoint falls back to
+`rank_jobs` and says so. `recommendations.py` is unchanged apart from being imported for its skill-matching helpers
+(`_profile_parts`, `_find_skill_evidence`), which "For you" uses to word its "why it matches" reasons, and by the resume builder.

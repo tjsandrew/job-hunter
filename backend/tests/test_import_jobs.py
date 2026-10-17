@@ -9,6 +9,7 @@ from job_hunter.import_jobs import (
     classify_title,
     import_report,
     load_snapshot,
+    reclassify_jobs,
     save_snapshot,
     upsert_records,
 )
@@ -19,7 +20,8 @@ FIELDS = (
     "source", "external_id", "dedup_key", "title", "company", "location", "work_mode",
     "description", "url", "status", "salary_min", "salary_max", "salary_currency",
     "salary_period", "posted_at", "expires_at", "source_board", "source_url", "fetched_at",
-    "category", "category_source", "category_evidence", "updated_at",
+    "category", "category_source", "category_evidence", "seniority", "seniority_source", "seniority_evidence",
+    "updated_at",
 )
 
 
@@ -174,9 +176,24 @@ def test_overlong_source_fields_are_rejected_without_truncation():
     ("Account Executive, APAC", "sales", "account executive"),
     ("Senior Software Engineer", "engineering", "engineer"),
     ("Graduate Programme", "other", None),
+    # the occupation beats a domain word elsewhere in the title
+    ("Technical Recruiter, Backend Engineering", "people", "recruiter"),
+    ("Recruiter, Data Analytics", "people", "recruiter"),
+    ("Internal Auditor - APAC Regulatory & Financial Operations", "finance", "auditor"),
 ])
 def test_deterministic_title_category_is_labelled_and_has_evidence(title, expected, evidence):
-    assert classify_title(title) == (expected, "title_keyword_v1", evidence)
+    assert classify_title(title) == (expected, "role-family-v1", evidence)
+
+
+def test_the_recommender_reads_the_family_ingestion_stored():
+    from job_hunter.embedding.features import job_role_family
+
+    titles = ["Senior Data Engineer", "Product Designer", "Account Executive, Product - Local Payment Methods",
+              "Technical Recruiter, Backend Engineering", "Recruiter, Data Analytics", "Fraud Strategist",
+              "Database Administrator", "Customer Success Account Manager", "Product Counsel (APAC)", ""]
+    for title in titles:
+        category = classify_title(title)[0]
+        assert job_role_family(category) == (None if category == "other" else category), title
 
 
 def test_imported_category_is_marked_as_inferred():
@@ -184,8 +201,63 @@ def test_imported_category_is_marked_as_inferred():
     upsert_records(repo, [record(title="Senior Data Engineer")], job_model=FakeJob)
     job = repo.jobs[("greenhouse", "sample-board", "100")]
     assert job.category == "data"
-    assert job.category_source == "title_keyword_v1"
+    assert job.category_source == "role-family-v1"
     assert job.category_evidence == "data engineer"
+    assert (job.seniority, job.seniority_source, job.seniority_evidence) == (["senior"], "seniority-v1", "Senior")
+
+
+def test_imported_seniority_comes_from_the_title_or_from_a_level_the_source_states():
+    repo = MemoryRepository()
+    upsert_records(repo, [record(title="Senior Data Engineer"),
+                          record(external_id="101", dedup_key="greenhouse:sample-board:101", title="Data Engineer",
+                                 stated_seniority=["Junior"]),
+                          record(external_id="102", dedup_key="greenhouse:sample-board:102", title="Data Engineer")],
+                   job_model=FakeJob)
+    titled = repo.jobs[("greenhouse", "sample-board", "100")]
+    assert (titled.seniority, titled.seniority_source, titled.seniority_evidence) == (["senior"], "seniority-v1", "Senior")
+    stated = repo.jobs[("greenhouse", "sample-board", "101")]
+    assert (stated.seniority, stated.seniority_source) == (["junior"], "stated")
+    # no level anywhere: classified as open to all levels ([]), which is different from NULL (never classified)
+    unspecified = repo.jobs[("greenhouse", "sample-board", "102")]
+    assert (unspecified.seniority, unspecified.seniority_source, unspecified.seniority_evidence) == ([], "seniority-v1", None)
+
+
+def test_reimport_fills_seniority_on_a_row_ingested_before_the_column_existed():
+    repo = MemoryRepository()
+    upsert_records(repo, [record(title="Senior Data Engineer")], job_model=FakeJob)
+    job = repo.jobs[("greenhouse", "sample-board", "100")]
+    job.seniority = job.seniority_source = job.seniority_evidence = None          # NULL after the migration
+    stats = upsert_records(repo, [record(title="Senior Data Engineer")], job_model=FakeJob)
+    assert (stats.updated, stats.unchanged) == (1, 0) and job.seniority == ["senior"]
+
+
+def test_reclassify_recomputes_from_the_title_and_keeps_a_stated_level():
+    old = FakeJob(title="Recruiter, Data Analytics", category="data", category_source="title_keyword_v1",
+                  category_evidence="analytics", seniority=None)
+    stated = FakeJob(title="Data Engineer", category="data", category_source="role-family-v1", category_evidence="data engineer",
+                     seniority=["junior"], seniority_source="stated", seniority_evidence="Junior")
+    current = FakeJob(title="Senior Data Engineer", category="data", category_source="role-family-v1",
+                      category_evidence="data engineer", seniority=["senior"], seniority_source="seniority-v1",
+                      seniority_evidence="Senior")
+    counts = reclassify_jobs([old, stated, current])
+    assert counts == {"jobs": 3, "updated": 1, "unchanged": 2, "kept_stated_seniority": 1}
+    assert (old.category, old.category_source, old.category_evidence) == ("people", "role-family-v1", "recruiter")
+    assert (old.seniority, old.seniority_source) == ([], "seniority-v1")
+    assert (stated.seniority, stated.seniority_source) == (["junior"], "stated")      # not overwritten from the title
+    assert reclassify_jobs([old, stated, current])["updated"] == 0                    # and it settles
+
+
+def test_reimport_refreshes_a_category_written_by_the_old_classifier():
+    repo = MemoryRepository()
+    upsert_records(repo, [record(title="Recruiter, Data Analytics")], job_model=FakeJob)
+    job = repo.jobs[("greenhouse", "sample-board", "100")]
+    # a row ingested before the shared classifier: wrong family and the old source label
+    job.category, job.category_source, job.category_evidence = "data", "title_keyword_v1", "analytics"
+    stats = upsert_records(repo, [record(title="Recruiter, Data Analytics")], job_model=FakeJob)
+    assert (stats.updated, stats.unchanged) == (1, 0)
+    assert (job.category, job.category_source, job.category_evidence) == ("people", "role-family-v1", "recruiter")
+    # and the next import has nothing left to change
+    assert upsert_records(repo, [record(title="Recruiter, Data Analytics")], job_model=FakeJob).unchanged == 1
 
 
 class BrokenModel(FakeJob):

@@ -68,11 +68,17 @@ export const api = {
   uploads: () => request<{items: UploadedResume[]; next_cursor: null}>('/uploads'),
   downloadUpload: (id: string) => request<Blob>(`/uploads/${encodeURIComponent(id)}/download`),
   getPreferences: () => request<any>('/preferences'),
+  getSeniorityOptions: () => request<{items: {value: string; label: string}[]}>('/preferences/seniority-options'),
   putPreferences: (values: unknown) => request('/preferences', json('PUT', values)),
   recommendations: (q = '', offset = 0, limit = 20) => {
     const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
     if (q.trim()) params.set('q', q.trim());
     return request<{ items: Recommendation[]; total: number; next_offset: number | null; degraded_mode?: boolean; ranking_status?: string; ranking_mode?: string }>(`/recommendations?${params}`);
+  },
+  recommendationsForYou: (q = '', offset = 0, limit = 20) => {
+    const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
+    if (q.trim()) params.set('q', q.trim());
+    return request<{ items: Recommendation[]; total: number; next_offset: number | null; degraded_mode?: boolean; ranking_status?: string; ranking_mode?: 'semantic' | 'keyword_fallback'; fallback_reason?: string | null; blocked_by_checks?: number }>(`/recommendations/for-you?${params}`);
   },
   reviewJob: (id: string, decision: 'saved' | 'dismissed' | 'none') => request(`/jobs/${encodeURIComponent(id)}/review`, json('PUT', { decision })),
   applications: () => request<{ items: Application[] }>('/applications'),

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, HttpError } from '../api';
-import { Field, Icon, Loading, Pill, SelectField } from '../ui';
+import { ChoiceChips, Field, Icon, Loading, Pill, SelectField, TagInput } from '../ui';
 import { ImportReview } from './ImportReview';
 import type { ImportDecision, ImportResult, ImportSource, ProfileImport, ItemData, ItemKind, ProfileBank, ProfileDraft, ProfileItem, ProfilePoint, ProfileResponse, Resume, UploadedResume } from '../types';
 import './profile.css';
@@ -317,8 +317,25 @@ function Skills({items,busy,write,onMove}: {items: ProfileItem[]; busy: boolean;
 }
 
 function Preferences({preferences,setPreferences,onSave,busy}: {preferences:any;setPreferences:(value:any)=>void;onSave:()=>void;busy:boolean}) {
-  const value=(key:string,text:string) => preferences[text] ?? (Array.isArray(preferences[key]) ? preferences[key].join(', ') : preferences[key] || '');
-  return <section className="panel bank-preferences"><div className="panel-heading"><h2>Job preferences</h2></div><Field label="Roles or job titles" value={value('roles','rolesText')} onChange={rolesText => setPreferences({...preferences,rolesText})} /><Field label="Preferred locations" value={value('locations','locationsText')} onChange={locationsText => setPreferences({...preferences,locationsText})} /><Field label="Work modes" value={value('work_modes','workModesText')} onChange={workModesText => setPreferences({...preferences,workModesText})} /><SelectField label="Seniority" value={preferences.seniority || ''} options={['','Intern','Junior','Mid-level','Senior','Lead','Executive']} onChange={seniority => setPreferences({...preferences,seniority})} /><Field label="Minimum salary" type="number" value={String(preferences.salary_min ?? '')} onChange={salary_min => setPreferences({...preferences,salary_min})} /><div className="form-grid"><SelectField label="Currency" value={preferences.salary_currency || 'SGD'} options={['SGD','USD','AUD','GBP','EUR']} onChange={salary_currency => setPreferences({...preferences,salary_currency})} /><SelectField label="Salary period" value={preferences.salary_period || 'year'} options={['year','month','hour']} onChange={salary_period => setPreferences({...preferences,salary_period})} /></div><p className="bank-empty">Roles, locations and work modes affect local results. Salary and seniority filters are planned.</p><button className="button primary" disabled={busy} onClick={onSave}>Save preferences</button></section>;
+  const list=(key:string):string[] => Array.isArray(preferences[key]) ? preferences[key] : [];
+  const [seniorityOptions, setSeniorityOptions] = useState<{value:string;label:string}[]>([]);
+  const [optionsError, setOptionsError] = useState(false);
+  const [optionsLoading, setOptionsLoading] = useState(true);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    setOptionsLoading(true);
+    setOptionsError(false);
+    api.getSeniorityOptions().then(result => {
+      if (alive) setSeniorityOptions(result.items);
+    }).catch(() => {
+      if (alive) setOptionsError(true);
+    }).finally(() => {
+      if (alive) setOptionsLoading(false);
+    });
+    return () => { alive = false; };
+  }, [retry]);
+  return <section className="panel bank-preferences"><div className="panel-heading"><h2>Job preferences</h2></div><TagInput label="Roles or job titles" placeholder="e.g. Backend Engineer, then press Enter" values={list('roles')} onChange={roles => setPreferences({...preferences,roles})} /><TagInput label="Preferred locations" placeholder="e.g. Singapore, then press Enter" values={list('locations')} onChange={locations => setPreferences({...preferences,locations})} /><ChoiceChips label="Work modes" options={[{value:'remote',label:'Remote'},{value:'hybrid',label:'Hybrid'},{value:'onsite',label:'On-site'}]} values={list('work_modes')} onChange={work_modes => setPreferences({...preferences,work_modes})} /><label className="field"><span>Seniority</span><select value={preferences.seniority || ''} disabled={optionsLoading || optionsError} onChange={event => setPreferences({...preferences,seniority:event.target.value})}><option value="">{optionsLoading ? 'Loading levels…' : optionsError ? 'Levels unavailable' : 'Select one'}</option>{seniorityOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>{optionsError && <p role="alert">Could not load seniority levels. <button type="button" onClick={() => setRetry(value => value + 1)}>Retry</button></p>}<Field label="Minimum salary" type="number" value={String(preferences.salary_min ?? '')} onChange={salary_min => setPreferences({...preferences,salary_min})} /><div className="form-grid"><SelectField label="Currency" value={preferences.salary_currency || 'SGD'} options={['SGD','USD','AUD','GBP','EUR']} onChange={salary_currency => setPreferences({...preferences,salary_currency})} /><SelectField label="Salary period" value={preferences.salary_period || 'year'} options={['year','month','hour']} onChange={salary_period => setPreferences({...preferences,salary_period})} /></div><p className="bank-empty">Roles, locations, work modes and seniority affect For you results. Salary filtering is planned.</p><button className="button primary" disabled={busy} onClick={onSave}>Save preferences</button></section>;
 }
 
 function DeleteDialog({busy,onCancel,onDelete}: {busy:boolean;onCancel:()=>void;onDelete:(settings:boolean)=>void}) {

@@ -11,7 +11,21 @@ Job Hunter helps job seekers in Singapore discover openings, shortlist them agai
 - Resume Studio: structured editor, autosave, undo/redo, two templates, server-rendered PDF export
 - Application tracker with an attached reviewed resume PDF and cover letter
 
-AI generation and semantic ranking are not connected yet. The full list and its gaps are in [docs/status/FEATURES.md](docs/status/FEATURES.md).
+AI generation is not connected yet. Semantic ranking is available as the "For you" list on the Discover page (see below). The full list and its gaps are in [docs/status/FEATURES.md](docs/status/FEATURES.md).
+
+A standalone embedder service in `services/embedder/` starts with the stack (`make up`). The backend embeds the confirmed
+profile after "Update my matches" and after saving preferences (best effort: a failed embed never fails the save), and
+`GET /v1/recommendations/for-you` ranks jobs semantically, falling back to the keyword ranker (which stays the default
+`/v1/recommendations`) when there is no profile vector. Job vectors are filled by `make backfill` until ingestion calls
+`embed_job(s)`. A job's role family and seniority are set at ingestion (`jobs.category`, `jobs.seniority`); the `0013`
+migration adds seniority columns and retires the old match-features table. After migrating existing jobs or changing the
+keyword tables, run `make reclassify-jobs` and inspect the classification report (`python -m job_hunter.embedding.backfill
+--classification-report`). Backfill makes vectors but does not classify jobs. Switches: `FOR_YOU_ENABLED`, `EMBED_ON_SAVE`
+(both default on in compose). See
+[embedder status](docs/status/11-embedder-service.md), [backend client status](docs/status/12-embedding-client.md) and
+[embedding preparation](docs/status/13-embedding-preparation.md).
+
+Ingestion can call `job_hunter.job_classification.classify_job(title, stated_seniority=None)` before saving a job; it returns the six category/seniority columns. Job preferences keep free-text target roles. The seniority dropdown loads canonical keys and labels from `GET /v1/preferences/seniority-options`; `PUT /v1/preferences` saves a canonical key (`intern`, `junior`, `mid`, `senior`, `lead`, `executive`; the old `entry` key and the old labels are accepted and converted). The match checks treat `lead` and `executive` as one step for now. If the options endpoint is unavailable, only the seniority selector is disabled and can be retried.
 
 ## Quick start
 

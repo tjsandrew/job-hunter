@@ -6,6 +6,8 @@ from job_hunter.domain.models import Base, User, Profile, Preference, Job, Profi
 from job_hunter.domain.identity import DEV_USERS
 from job_hunter.demo import PROFILE, PROFILE_ITEMS
 from job_hunter.profile_bank import validate_item_data
+from job_hunter.role_family import CLASSIFIER_VERSION, classify_role_family
+from job_hunter.seniority import classify_seniority
 
 def seed():
     url = os.getenv("MIGRATION_DATABASE_URL") or settings.database_url
@@ -45,8 +47,13 @@ def seed_session(db):
     ]
     for title, company, location, mode, skills, description in jobs:
         if not db.scalar(select(Job).where(Job.title == title, Job.company == company)):
+            # Classified like an imported job, so the demo rows carry a category and seniority too.
+            category, category_evidence = classify_role_family(title)
+            levels, seniority_source, seniority_evidence = classify_seniority(title)
             db.add(Job(title=title, company=company, location=location, work_mode=mode,
-                skills=skills, description=description, source="synthetic", url="https://example.invalid/jobs"))
+                skills=skills, description=description, source="synthetic", url="https://example.invalid/jobs",
+                category=category, category_source=CLASSIFIER_VERSION, category_evidence=category_evidence,
+                seniority=levels, seniority_source=seniority_source, seniority_evidence=seniority_evidence))
 
 if __name__ == "__main__":
     seed()

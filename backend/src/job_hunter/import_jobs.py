@@ -14,12 +14,15 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Mapping, Protocol, Sequence
+from typing import Any, Iterable, Mapping, Protocol, Sequence
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from job_hunter.ingestion.discovery import DiscoveryConfig, DiscoveryReport, discover_report
+from job_hunter.job_classification import classify_job
+from job_hunter.role_family import CLASSIFIER_VERSION, classify_role_family
+from job_hunter.seniority import SENIORITY_STATED
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +79,9 @@ CONTENT_FIELDS = (
     "category",
     "category_source",
     "category_evidence",
+    "seniority",
+    "seniority_source",
+    "seniority_evidence",
     "dedup_key",
     "status",
 )
@@ -93,31 +99,39 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
-# Stable title-only inference. These values are explicitly marked as inferred;
-# category evidence is the exact matched phrase from the listing title.
-CATEGORY_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("data", ("data scientist", "data engineer", "data analyst", "analytics", "machine learning", " ml ", "artificial intelligence", "business intelligence")),
-    ("design", ("designer", "design", " ux", "ux ", "user experience", "visual design")),
-    ("product", ("product manager", "product owner", "product lead", "product management")),
-    ("sales", ("sales", "account executive", "business development", "partnerships")),
-    ("customer_success", ("customer success", "client success", "customer support", "customer service", "account manager")),
-    ("engineering", ("engineer", "developer", "software", "infrastructure", "platform", "devops", "sre", "quality assurance", " qa ", "cybersecurity")),
-    ("operations", ("operations", "strategy", "program manager", "project manager", "supply chain", "logistics")),
-    ("marketing", ("marketing", "communications", "public relations", "content", "brand")),
-    ("finance", ("finance", "accounting", "accountant", "treasury", "audit")),
-    ("people", ("human resources", "people operations", "recruiter", "recruiting", "talent acquisition")),
-    ("legal", ("legal", "compliance", "privacy counsel")),
-)
-
-
+# Title-only inference with the shared role-family classifier (``job_hunter.role_family``), which is also what
+# the recommender uses, so ``jobs.category`` and the recommender's role family always agree. These values are
+# explicitly marked as inferred; category evidence is the exact matched phrase from the listing title.
 def classify_title(title: str) -> tuple[str, str, str | None]:
     """Return (category, source label, title evidence); categories are inferred."""
-    normalized = f" {title.casefold()} "
-    for category, phrases in CATEGORY_RULES:
-        for phrase in phrases:
-            if phrase in normalized:
-                return category, "title_keyword_v1", phrase.strip()
-    return "other", "title_keyword_v1", None
+    category, evidence = classify_role_family(title)
+    return category, CLASSIFIER_VERSION, evidence
+
+
+def reclassify_jobs(jobs: Iterable[Any]) -> dict[str, int]:
+    """Recompute category and seniority from each job's title, in place (no source fetch).
+
+    Use it after the keyword tables in ``role_family.py`` / ``seniority.py`` change, or to fill rows that were
+    never classified. A level the job source itself stated (``seniority_source == "stated"``) is kept."""
+    counts = {"jobs": 0, "updated": 0, "unchanged": 0, "kept_stated_seniority": 0}
+    for job in jobs:
+        counts["jobs"] += 1
+        title = job.title or ""
+        values: dict[str, Any] = classify_job(title)
+        if job.seniority_source == SENIORITY_STATED and job.seniority is not None:
+            counts["kept_stated_seniority"] += 1
+            for field_name in ("seniority", "seniority_source", "seniority_evidence"):
+                values.pop(field_name)
+        changed = {key: value for key, value in values.items() if getattr(job, key, None) != value}
+        for key, value in changed.items():
+            setattr(job, key, value)
+        if changed:
+            if hasattr(job, "updated_at"):
+                job.updated_at = _now_utc()
+            counts["updated"] += 1
+        else:
+            counts["unchanged"] += 1
+    return counts
 
 
 def _parse_datetime(value: Any) -> datetime | None:
@@ -157,12 +171,7 @@ def _job_values(record: Mapping[str, Any], job_model: type) -> dict[str, Any]:
         "posted_at": _parse_datetime(record.get("posted_at")),
         "expires_at": _parse_datetime(record.get("expires_at")),
     }
-    category, category_source, category_evidence = classify_title(values["title"])
-    values.update({
-        "category": category,
-        "category_source": category_source,
-        "category_evidence": category_evidence,
-    })
+    values.update(classify_job(values["title"], stated_seniority=record.get("stated_seniority")))
     available = set(job_model.__mapper__.attrs.keys())
     values["source_board"] = record.get("source_board")
     values["source_url"] = record["source_url"]
@@ -307,11 +316,14 @@ def _arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--max-pages", type=int, default=10)
     parser.add_argument("--max-records", type=int, default=1000)
     parser.add_argument("--singapore-only", action="store_true")
+    parser.add_argument("--reclassify", action="store_true",
+                        help="recompute category and seniority for every job from its title (no fetch, no import)")
     args = parser.parse_args(argv)
     args.greenhouse = args.greenhouse or [v.strip() for v in os.getenv("GREENHOUSE_BOARDS", "").split(",") if v.strip()]
     args.lever = args.lever or [v.strip() for v in os.getenv("LEVER_BOARDS", "").split(",") if v.strip()]
     args.smartrecruiters = args.smartrecruiters or [v.strip() for v in os.getenv("SMARTRECRUITERS_BOARDS", "").split(",") if v.strip()]
-    if not args.snapshot_in and not args.greenhouse and not args.lever and not args.smartrecruiters:
+    if (not args.reclassify and not args.snapshot_in and not args.greenhouse and not args.lever
+            and not args.smartrecruiters):
         parser.error("configure --greenhouse, --lever, or --smartrecruiters")
     return args
 
@@ -327,6 +339,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise SystemExit("MIGRATION_DATABASE_URL is required for shared job imports")
 
     from sqlalchemy import create_engine
+
+    if args.reclassify:
+        engine = create_engine(owner_url, pool_pre_ping=True, pool_size=1, max_overflow=0)
+        try:
+            with Session(engine) as session:
+                with session.begin():
+                    job_model = _load_job_model()
+                    counts = reclassify_jobs(session.scalars(select(job_model).order_by(job_model.id)))
+        finally:
+            engine.dispose()
+        print(json.dumps({"reclassified": counts}, ensure_ascii=False, indent=2))
+        return 0
 
     if args.snapshot_in:
         report = load_snapshot(args.snapshot_in)
