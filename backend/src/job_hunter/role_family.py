@@ -54,7 +54,10 @@ CATEGORY_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("marketing", ("marketing", "communications", "public relations", "content", "brand", " crm ",
                    "public affairs", "social media", "creative strategist", "ad creative")),
     ("finance", ("finance", "accounting", "accountant", "treasury", "audit", " tax ", "trader", " trading ",
-                 "portfolio manager", "investment research", "pricing")),
+                 "portfolio manager", "investment research", "pricing",
+                 # "financial" is not a substring of "finance", so "Financial Analyst" fell through to "other" and a
+                 # finance profile had no role check at all. Specific phrases only: "Financial Crime" stays legal.
+                 "financial analyst", "financial planning", "financial reporting", "financial manager", "fp&a", "fp & a")),
     ("people", ("human resources", "people operations", "recruiter", "recruiting", "talent acquisition", " hr ")),
     ("legal", ("legal", "compliance", "privacy counsel", "risk analyst", "risk manager", "risk director",
                "cdd", " kyc", " aml", "governance manager", "governance specialist", "risk programs")),
