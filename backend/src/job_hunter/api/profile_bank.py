@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import ValidationError
 from fastapi.responses import JSONResponse
 from pathlib import Path
+from job_hunter.adapters import storage
 from sqlalchemy import select
 from job_hunter.domain.models import Upload
 from job_hunter.profile_bank.export import export_profile
@@ -155,10 +156,18 @@ def build_router(db_dependency):
     @router.get('/uploads/{upload_id}/download')
     def download_upload(upload_id: UUID, db: Session = Depends(db_dependency)):
         row = db.scalar(select(Upload).where(Upload.id == upload_id, Upload.user_id == db.info['current_user'].id))
-        if row is None or not Path(row.file_path).is_file():
+        if row is None:
             raise HTTPException(404, detail={'code': 'NOT_FOUND', 'message': 'Resource not found'})
+        if row.sha256 is None:
+            raise HTTPException(409, detail={'code': 'UPLOAD_NOT_CAPTURED', 'message': 'Finish uploading this resume first'})
         docx = row.content_type == DOCX_CONTENT_TYPE
-        return Response(Path(row.file_path).read_bytes(), media_type=DOCX_CONTENT_TYPE if docx else 'application/pdf',
+        if row.file_path.startswith('s3://'):
+            return JSONResponse({'url': storage.download_url(row.file_path, 'resume.docx' if docx else 'resume.pdf', row.content_type)}, headers={'Cache-Control': 'no-store'})
+        try:
+            data = storage.read(row.file_path)
+        except FileNotFoundError:
+            raise HTTPException(404, detail={'code': 'NOT_FOUND', 'message': 'Resource not found'})
+        return Response(data, media_type=DOCX_CONTENT_TYPE if docx else 'application/pdf',
                         headers={'Content-Disposition': f'attachment; filename="resume.{"docx" if docx else "pdf"}"'})
 
     @router.get('/profile/bank')

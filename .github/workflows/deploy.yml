@@ -1,0 +1,104 @@
+name: Deploy staging
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: staging-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: vars.AWS_ROLE_ARN != '' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AWS_REGION: ap-southeast-1
+      AMPLIFY_APP_ID: ${{ vars.AMPLIFY_APP_ID }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+      API_FUNCTION: ${{ vars.API_FUNCTION }}
+      MIGRATION_FUNCTION: ${{ vars.MIGRATION_FUNCTION }}
+      VITE_AUTH_MODE: cognito
+      VITE_COGNITO_ISSUER: ${{ vars.VITE_COGNITO_ISSUER }}
+      VITE_COGNITO_CLIENT_ID: ${{ vars.VITE_COGNITO_CLIENT_ID }}
+      VITE_COGNITO_DOMAIN: ${{ vars.VITE_COGNITO_DOMAIN }}
+      VITE_API_SCOPE: jobhunter/use
+      VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Validate and build frontend
+        working-directory: apps/web
+        run: npm ci && npm test && npm run build
+      - name: Full backend checks
+        run: |
+          docker compose up --build --wait -d api
+          make test-backend
+          docker compose run --rm --no-deps -v "$PWD/scripts:/app/scripts:ro" api python /app/scripts/check_profile_bank_migration.py
+          python3 scripts/smoke.py
+      - name: Stop manual release test services
+        if: always()
+        run: docker compose down --volumes
+      - name: Reject superseded commits
+        run: |
+          latest=$(git ls-remote origin refs/heads/main | cut -f1)
+          test "$(git rev-parse HEAD)" = "$latest" || { echo 'A newer main commit exists; deploy that revision instead.'; exit 1; }
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ap-southeast-1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -c backend/requirements.lock boto3
+      - name: Release and manual-control regression checks
+        run: python -m unittest discover -s scripts/tests -v
+      - uses: docker/setup-qemu-action@v3
+        if: env.ECR_REPOSITORY != ''
+      - uses: docker/setup-buildx-action@v3
+        if: env.ECR_REPOSITORY != ''
+      - uses: aws-actions/amazon-ecr-login@v2
+        if: env.ECR_REPOSITORY != ''
+      - name: Build and publish immutable API image
+        id: image
+        if: env.ECR_REPOSITORY != ''
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/Dockerfile.lambda
+          platforms: linux/arm64
+          provenance: false
+          load: true
+          push: true
+          # Immutable ECR tags must remain unique on retries.
+          tags: ${{ vars.ECR_REPOSITORY }}:${{ github.run_id }}-${{ github.run_attempt }}
+          cache-from: type=gha,scope=jobhunter-lambda
+          cache-to: type=gha,mode=max,scope=jobhunter-lambda
+      - name: Verify production Lambda package before migration
+        if: env.ECR_REPOSITORY != ''
+        env:
+          IMAGE_TAG: ${{ vars.ECR_REPOSITORY }}:${{ github.run_id }}-${{ github.run_attempt }}
+        run: >-
+          docker run --rm --entrypoint python "$IMAGE_TAG"
+          -c 'from pathlib import Path; from job_hunter.adapters.aws_config import RDS_CA; from job_hunter.api.lambda_handler import handler; from job_hunter.migrate_aws import handler as migrate; from job_hunter.preparation import rendering; assert Path(RDS_CA).is_file(); assert list(Path(rendering.__file__).parent.glob("fonts/*.ttf"))'
+      - name: Record immutable image for infrastructure bootstrap
+        if: env.ECR_REPOSITORY != ''
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: echo "Backend image for Terraform api_image_uri = $ECR_REPOSITORY@$IMAGE_DIGEST" >> "$GITHUB_STEP_SUMMARY"
+      - name: Migrate, deploy API and check anonymous access
+        if: env.API_FUNCTION != ''
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: python scripts/deploy_aws.py --image "$ECR_REPOSITORY@$IMAGE_DIGEST"
+      - name: Deploy tested website to Amplify
+        run: python scripts/deploy_aws.py --web apps/web/dist

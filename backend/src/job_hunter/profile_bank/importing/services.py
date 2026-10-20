@@ -4,6 +4,7 @@ import logging
 from hashlib import sha256
 import json
 from pathlib import Path
+from job_hunter.adapters import storage
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -64,7 +65,7 @@ def _run(db,row,settings):
         if row.source_type=='upload':
             upload=db.scalar(select(Upload).where(Upload.id==row.upload_id,Upload.user_id==bank._user_id(db)))
             if upload is None: raise ImportFailure('SOURCE_DELETED','The source file is no longer available')
-            data=Path(upload.file_path).read_bytes()
+            data=storage.read(upload.file_path)
             if sha256(data).hexdigest()!=row.input_ref['sha256']: raise ImportFailure('SOURCE_CHANGED','The captured file changed')
             # Content decides the type: stored names and MIME types are not trusted.
             extracted=extract_text(data) if detect_resume_file(data)=='pdf' else extract_docx(data)

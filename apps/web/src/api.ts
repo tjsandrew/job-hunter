@@ -1,4 +1,5 @@
 import type { Application, Me, ProfileDraft, Recommendation, Resume, ProfileResponse, ProfileBank, ProfileItem, ItemKind, ItemData, ItemChanges, PointWrite, PointUpdate, UserSettings, UploadedResume, ProfileExport, ProfileImport, ImportSource, ImportDecision, ImportResult } from './types';
+import { accessToken, cloudAuth } from './auth';
 
 const base = (import.meta.env.VITE_API_BASE_URL || '/v1').replace(/\/$/, '');
 export const devUserStorageKey = 'jh-dev-user';
@@ -12,31 +13,43 @@ export class HttpError extends Error {
   code?: string;
   constructor(message: string, status: number, code?: string) { super(message); this.status = status; this.code = code; }
 }
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  headers.set('X-Dev-User', getDevUser());
+  if (cloudAuth) headers.set('Authorization', `Bearer ${await accessToken()}`);
+  else headers.set('X-Dev-User', getDevUser());
   if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   let response: Response;
   try { response = await fetch(`${base}${path}`, { ...init, headers }); }
-  catch { throw new HttpError('Could not reach the Job Hunter API. Check that the local services are running.', 0); }
+  catch (cause) {
+    if (init.signal?.aborted) throw cause;
+    throw new HttpError(cloudAuth ? 'Could not reach Job Hunter. Please try again.' : 'Could not reach the Job Hunter API. Check that the local services are running.', 0);
+  }
   if (!response.ok) {
     let body: any = {};
     try { body = await response.json(); } catch { /* response may not contain JSON */ }
-    throw new HttpError(body?.error?.message || body?.detail || `Request failed (${response.status}).`, response.status, body?.error?.code);
+    throw new HttpError(body?.error?.message || body?.detail?.message || (typeof body?.detail === 'string' ? body.detail : undefined) || (response.status === 401 ? 'Your session expired. Please sign in again.' : response.status === 429 ? 'Too many requests. Please wait a moment and try again.' : `Request failed (${response.status}).`), response.status, body?.error?.code);
   }
   if (response.status === 204) return undefined as T;
   const type = response.headers.get('content-type') || '';
-  if (type.includes('application/pdf')) return (await response.blob()) as T;
-  return response.json() as Promise<T>;
+  if (type.includes('application/json')) return response.json() as Promise<T>;
+  return (await response.blob()) as T;
 }
 // The browser's MIME type for .docx is sometimes empty, so the type sent follows the extension (the server re-checks the bytes).
 export const resumeContentType = (file: { name: string }) => file.name.toLowerCase().endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : '';
 const json = (method: string, body?: unknown): RequestInit => ({ method, body: body === undefined ? undefined : JSON.stringify(body) });
 
 export const api = {
-  me: () => request<Me>('/me'),
+  me: (signal?: AbortSignal) => request<Me>('/me', {signal}),
   uploadResume: async (file: File) => {
-    const created = await request<{ upload_id: string; upload_url: string }>('/uploads', json('POST', { filename: file.name, content_type: resumeContentType(file), size_bytes: file.size }));
+    const created = await request<{ upload_id: string; upload_url: string; finalize_url?: string }>('/uploads', json('POST', { filename: file.name, content_type: resumeContentType(file), size_bytes: file.size }));
+    if (created.finalize_url) {
+      const response = await fetch(created.upload_url, { method: 'PUT', headers: { 'Content-Type': resumeContentType(file) }, body: file });
+      if (!response.ok) throw new HttpError('Resume upload failed. Please try again.', response.status);
+      const uploaded = await request<{ upload_id: string; status: string; page_count: number | null; error_code: string | null; message: string; ai_available: boolean }>(`/uploads/${encodeURIComponent(created.upload_id)}/finalize`, json('POST'));
+      const extracted = await request<{ filename: string; extracted_text: string | null }>(`/uploads/${encodeURIComponent(created.upload_id)}`);
+      return { ...uploaded, ...extracted };
+    }
     const path = created.upload_url.startsWith(base) ? created.upload_url.slice(base.length) : created.upload_url.replace(/^\/v1/, '');
     const uploaded = await request<{ upload_id: string; status: string; page_count: number | null; error_code: string | null; message: string; ai_available: boolean }>(path, { method: 'PUT', headers: { 'Content-Type': resumeContentType(file) }, body: file });
     const extracted = await request<{ upload_id: string; filename: string; status: string; page_count: number | null; extracted_text: string | null; error_code: string | null }>(`/uploads/${encodeURIComponent(created.upload_id)}`);
@@ -66,7 +79,7 @@ export const api = {
   deleteProfile: (values: {confirmation: 'DELETE'; delete_settings: boolean}) => request<{deleted: boolean; bank_revision: number; profile_epoch: number}>('/profile/data', json('DELETE', values)),
   exportProfile: () => request<ProfileExport>('/profile/export.json'),
   uploads: () => request<{items: UploadedResume[]; next_cursor: null}>('/uploads'),
-  downloadUpload: (id: string) => request<Blob>(`/uploads/${encodeURIComponent(id)}/download`),
+  downloadUpload: (id: string) => request<Blob | {url: string}>(`/uploads/${encodeURIComponent(id)}/download`),
   getPreferences: () => request<any>('/preferences'),
   getSeniorityOptions: () => request<{items: {value: string; label: string}[]}>('/preferences/seniority-options'),
   putPreferences: (values: unknown) => request('/preferences', json('PUT', values)),
@@ -92,5 +105,5 @@ export const api = {
   reviewDocument: (id: string, expected_revision: number) => request<Resume>(`/documents/${encodeURIComponent(id)}/review`, json('POST', { expected_revision })),
   exportDocument: (id: string) => request<{ export_id: string; revision: number; download_url: string }>(`/documents/${encodeURIComponent(id)}/exports`, json('POST')),
   previewDocument: (id: string) => request<Blob>(`/documents/${encodeURIComponent(id)}/preview.pdf`),
-  downloadExport: (id: string) => request<Blob>(`/exports/${encodeURIComponent(id)}`),
+  downloadExport: (id: string) => request<Blob | {url: string}>(`/exports/${encodeURIComponent(id)}`),
 };
