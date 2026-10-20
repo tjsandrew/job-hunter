@@ -1,0 +1,6 @@
+bucket              = "jobhunter-ACCOUNT_ID-tfstate"
+key                 = "staging/terraform.tfstate"
+region              = "ap-southeast-1"
+encrypt             = true
+use_lockfile        = true
+allowed_account_ids = ["ACCOUNT_ID"]

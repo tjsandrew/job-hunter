@@ -90,9 +90,17 @@ For acceptance, leave the app untouched and close database clients for at least 
 1. Complete the independent review of the current working tree, especially IAM bootstrap, migration ownership, tenant RLS and signed file access.
 2. Verify signed-download navigation, Gateway CORS and API rollback in AWS; local implementations and recovery tests are present.
 3. Pin workflow actions and review the GitHub OIDC trust boundary. CI now builds the production ARM64 Lambda image on PRs; release image publication also works before the backend functions exist.
-4. Configure a protected shared Terraform state backend and nominate its owner. Merges to `main` run checks only. Deploy by running **GitHub → Actions → Deploy staging → Run workflow**, selecting `main`. Terraform applies remain a separate reviewed operation.
+4. Bootstrap the S3 state backend (see Terraform state). Merges to `main` run checks only. Deploy by running **GitHub → Actions → Deploy staging → Run workflow**, selecting `main`. Terraform applies remain a separate reviewed operation.
 5. Supply the user's budget alert email and require alerts before enabling paid infrastructure. Review S3/ECR retention without deleting document versions still referenced by the database.
 6. Review a full Terraform plan and refreshed cost estimate. No apply is authorized yet.
+
+## Terraform state
+
+State lives in a private, versioned, encrypted S3 bucket (`jobhunter-<account>-tfstate`) created by the separate `infra/state` stack. The bucket has `prevent_destroy`, so app teardown never deletes it. Copy each `*.example` file (`terraform.tfvars`, `backend.hcl`, and for the first run `infra/state/bootstrap_override.tf`) to its real name; the real files are gitignored. The state owner is the operator who runs the applies.
+
+1. First bootstrap only: with `infra/state/bootstrap_override.tf` present, `terraform -chdir=infra/state init`, `plan`, then `apply` to create the bucket using local state.
+2. Delete `infra/state/bootstrap_override.tf`, then `terraform -chdir=infra/state init -migrate-state -backend-config=backend.hcl` to move the bucket's own state into it. Delete the leftover local `terraform.tfstate*` files only after `terraform -chdir=infra/state plan` shows no changes.
+3. `terraform -chdir=infra/aws init -backend-config=backend.hcl` (add `-reconfigure` if it was previously initialized without a backend). Every later plan/apply of the app stack reads and locks state in S3.
 
 ## Initial rollout after review
 
