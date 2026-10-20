@@ -23,10 +23,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
-from job_hunter.role_family import CLASSIFIER_VERSION, ROLE_FAMILIES, classify_role_family
+from job_hunter.role_family import (ADJACENT_SUBROLES, CLASSIFIER_VERSION, ROLE_FAMILIES, classify_engineering_subrole,
+                                    classify_role_family)
 from job_hunter.seniority import SENIORITY_LADDER, check_rank, levels_from_text, normalise_levels
 
-FEATURES_VERSION = "features-v3"   # part of the ranking version string, so a change to the rules is visible later
+FEATURES_VERSION = "features-v4"   # part of the ranking version string, so a change to the rules is visible later
 
 Classifier = Callable[[str], "tuple[str, str, str | None]"]
 
@@ -56,6 +57,7 @@ class RoleCheck:
 class ProfileFeatures:
     seniority_levels: tuple[str, ...]   # empty means not set
     role_families: tuple[str, ...]      # empty means unknown
+    engineering_subroles: tuple[str, ...] = ()   # sub-roles named by the target roles (backend, frontend, ...); empty means none named
 
 
 def _default_classifier(title: str) -> "tuple[str, str, str | None]":
@@ -108,7 +110,12 @@ def extract_profile_features(
         family = _family((classify or _default_classifier)(str(role))[0])
         if family and family not in families:
             families.append(family)
-    return ProfileFeatures(seniority_levels=levels, role_families=tuple(families))
+    subroles: list[str] = []
+    for role in target_roles or ():
+        sub = classify_engineering_subrole(str(role))
+        if sub and sub not in subroles:
+            subroles.append(sub)
+    return ProfileFeatures(seniority_levels=levels, role_families=tuple(families), engineering_subroles=tuple(subroles))
 
 
 def check_seniority(job_levels: Sequence[str] | None, profile_levels: Sequence[str] | None) -> SeniorityCheck:
@@ -152,3 +159,21 @@ def check_role_family(job_family: str | None, profile_families: Sequence[str] | 
         if frozenset((job, family)) in ADJACENT_FAMILIES:
             return RoleCheck("adjacent", f"{job} is adjacent to {family}")
     return RoleCheck("different", f"job is {job}; profile targets {', '.join(profile)}")
+
+
+def check_engineering_subrole(job_family: str | None, job_subrole: str | None, profile_families: Sequence[str] | None,
+                              profile_subroles: Sequence[str] | None) -> RoleCheck:
+    """Within engineering: does the job's named sub-role fit the sub-roles the profile's target roles name?
+
+    Only decides when the job is an engineering job, the profile targets engineering, and BOTH sides name a sub-role;
+    anything else is unknown and never blocks. A job whose sub-role matches or is adjacent to any of the profile's passes."""
+    if _family(job_family) != "engineering" or "engineering" not in [_family(f) for f in (profile_families or ())]:
+        return RoleCheck("unknown", "not an engineering-to-engineering comparison")
+    profile = [s for s in (profile_subroles or ()) if s]
+    if not job_subrole or not profile:
+        return RoleCheck("unknown", "the job or the profile names no engineering sub-role")
+    if job_subrole in profile:
+        return RoleCheck("same", f"both are {job_subrole} engineering")
+    if any(frozenset((job_subrole, s)) in ADJACENT_SUBROLES for s in profile):
+        return RoleCheck("adjacent", f"{job_subrole} is adjacent to {', '.join(profile)}")
+    return RoleCheck("different", f"job is {job_subrole} engineering; profile targets {', '.join(profile)}")

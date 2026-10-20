@@ -96,3 +96,38 @@ def classify_role_family(title: str | None) -> "tuple[str, str | None]":
             if hit:
                 return hit
     return "other", None
+
+
+# ---- Engineering sub-roles ----------------------------------------------------------------------------------------------
+# "engineering" is one family, so a backend profile saw support, frontend and QA engineers as the same kind of role. The
+# sub-role is read from the title only, and only a title that names one counts: "Software Engineer" has none (unknown, never
+# blocks). Checked on the head of the title first, like the family.
+SUBROLE_VERSION = "engineering-subrole-v1"
+ENGINEERING_SUBROLE_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("support", ("technical support", "support engineer", "support specialist", "customer engineer")),
+    ("fullstack", ("full stack", "full-stack", "fullstack")),
+    ("frontend", ("frontend", "front-end", "front end", "ui engineer", "web developer")),
+    ("mobile", (" ios", "android", "mobile")),
+    ("backend", ("backend", "back-end", "back end")),
+    ("infra", ("devops", " sre", "site reliability", "infrastructure", "platform engineer", "cloud engineer")),
+    ("security", ("security engineer", "cybersecurity", "application security", "appsec")),
+    ("qa", ("quality assurance", " qa ", "sdet", "test engineer", "test automation")),
+)
+
+# Pairs that are close enough to be a plausible move rather than a different job. Everything else, when both sides name a
+# sub-role, is a clear mismatch.
+ADJACENT_SUBROLES: frozenset[frozenset[str]] = frozenset(frozenset(pair) for pair in (
+    ("fullstack", "backend"), ("fullstack", "frontend"), ("fullstack", "mobile"), ("fullstack", "infra"),
+    ("backend", "infra"), ("frontend", "mobile"), ("infra", "security"), ("qa", "fullstack"),
+))
+
+
+def classify_engineering_subrole(title: str | None) -> "str | None":
+    """The engineering sub-role a title names (backend, frontend, fullstack, mobile, infra, security, qa, support), or None."""
+    if not title or not title.strip():
+        return None
+    for text in (_head(title), title):
+        hit = _first_match(text, ENGINEERING_SUBROLE_RULES)
+        if hit:
+            return hit[0]
+    return None

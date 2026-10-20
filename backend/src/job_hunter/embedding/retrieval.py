@@ -20,7 +20,7 @@ import math
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence
 
-from .features import check_role_family, check_seniority
+from .features import check_engineering_subrole, check_role_family, check_seniority
 
 # The ranker's own eligibility helpers (private there). A test pins ``is_eligible`` to the exact set of
 # jobs ``rank_jobs`` returns, so any drift is caught.
@@ -32,6 +32,7 @@ class ProfileQuery:
     vector: Sequence[float]
     role_families: Sequence[str] = ()
     seniority_levels: Sequence[str] = ()
+    engineering_subroles: Sequence[str] = ()
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,7 @@ class RetrievalCandidate:
     vector: Sequence[float]
     role_family: str | None = None
     seniority_levels: Sequence[str] = ()
+    engineering_subrole: str | None = None
 
 
 @dataclass(frozen=True)
@@ -123,6 +125,10 @@ def retrieve(query: ProfileQuery, candidates: Iterable[RetrievalCandidate], *, l
         considered += 1
         similarity = cosine(query.vector, candidate.vector)
         role = check_role_family(candidate.role_family, query.role_families)
+        subrole = check_engineering_subrole(candidate.role_family, candidate.engineering_subrole, query.role_families,
+                                            query.engineering_subroles)
+        if subrole.blocks:   # a clearly different kind of engineering job (support vs backend, frontend vs backend, ...)
+            role = subrole
         level = check_seniority(candidate.seniority_levels, query.seniority_levels)
         reasons = _reasons(role.verdict, level.verdict)
         if apply_checks and (role.blocks or level.blocks):

@@ -114,3 +114,30 @@ def test_eligibility_matches_the_existing_rankers_filter_exactly(preferences):
 def test_exclusions_remove_reviewed_jobs():
     assert {j["id"] for j in eligible_jobs(JOBS, {}, exclude_job_ids=["1", "4"])} == {"3", "5", "6"}
     assert is_eligible(JOBS[0], None) is True and is_eligible(JOBS[1], None) is False
+
+
+# ---- engineering sub-role check (added 2026-10-20) -----------------------------------------------------------------
+def sub_cand(job_id, vector, subrole):
+    return RetrievalCandidate(job_id=job_id, vector=vector, role_family="engineering", engineering_subrole=subrole)
+
+
+def test_a_different_engineering_subrole_is_blocked_but_unknown_and_adjacent_pass():
+    query = ProfileQuery(vector=vec(1.0), role_families=("engineering",), engineering_subroles=("backend",))
+    result = retrieve(query, [sub_cand("support", vec(1.0), "support"), sub_cand("front", vec(1.0), "frontend"),
+                              sub_cand("back", vec(0.9, 0.1), "backend"), sub_cand("infra", vec(0.8, 0.2), "infra"),
+                              sub_cand("generic", vec(0.7, 0.3), None)])
+    assert {r.job_id for r in result.ranked} == {"back", "infra", "generic"}
+    assert {b.job_id for b in result.blocked} == {"support", "front"}
+    assert all(b.role == "different" for b in result.blocked)
+
+
+def test_no_subrole_on_the_profile_never_blocks():
+    query = ProfileQuery(vector=vec(1.0), role_families=("engineering",))
+    result = retrieve(query, [sub_cand("support", vec(1.0), "support")])
+    assert [r.job_id for r in result.ranked] == ["support"] and result.blocked == ()
+
+
+def test_the_subrole_check_ignores_non_engineering_jobs():
+    query = ProfileQuery(vector=vec(1.0), role_families=("engineering",), engineering_subroles=("backend",))
+    data_job = RetrievalCandidate(job_id="d", vector=vec(1.0), role_family="data", engineering_subrole="frontend")
+    assert [r.job_id for r in retrieve(query, [data_job]).ranked] == ["d"]

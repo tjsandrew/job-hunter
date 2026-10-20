@@ -76,3 +76,28 @@ def test_the_old_import_path_still_works():
 
     assert old.classify_role_family is classify_role_family
     assert old.CLASSIFIER_VERSION == "role-family-v1"
+
+
+# ---- engineering sub-roles (added 2026-10-20) ----------------------------------------------------------------------
+from job_hunter.role_family import classify_engineering_subrole  # noqa: E402
+
+
+@pytest.mark.parametrize("title,subrole", [
+    ("Senior Software Engineer, Backend", "backend"),
+    ("Engineer, Backend (Payments)", "backend"),
+    ("Technical Support Engineer, Metronome", "support"),
+    ("Staff/Senior Staff Frontend Engineer - Growth", "frontend"),
+    ("Full Stack Engineer", "fullstack"),
+    ("iOS Developer", "mobile"),
+    ("Software Engineer (Android)", "mobile"),
+    ("DevOps Engineer", "infra"),
+    ("Quality Assurance Engineer", "qa"),
+    ("Application Security Engineer", "security"),
+    # a title that names no sub-role has none (unknown, never blocks)
+    ("Software Engineer", None),
+    ("Senior Staff Engineer, Payment", None),
+    ("Audio Engineer", None),
+    ("", None),
+])
+def test_engineering_subrole(title, subrole):
+    assert classify_engineering_subrole(title) == subrole
