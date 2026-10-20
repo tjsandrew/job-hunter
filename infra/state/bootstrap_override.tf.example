@@ -1,0 +1,5 @@
+# FIRST BOOTSTRAP ONLY: copy to bootstrap_override.tf before the bucket exists.
+# After the approved bootstrap apply, remove the copy and init -migrate-state.
+terraform {
+  backend "local" {}
+}

@@ -36,9 +36,16 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
-      - name: Validate and build frontend
+      - name: Test frontend
         working-directory: apps/web
-        run: npm ci && npm test && npm run build
+        # Tests stub cloud settings themselves; the job-level cognito mode would
+        # break the local-mode tests, exactly as CI runs them without it.
+        env:
+          VITE_AUTH_MODE: local
+        run: npm ci && npm test
+      - name: Build frontend for staging
+        working-directory: apps/web
+        run: npm run build
       - name: Full backend checks
         run: |
           docker compose up --build --wait -d api

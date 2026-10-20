@@ -23,6 +23,9 @@ resource "aws_amplify_app" "web" {
           - key: X-Frame-Options
             value: DENY
   HEADERS
+  # Amplify stores these headers as JSON, so the YAML above always shows a diff.
+  # To change headers, remove this ignore for that one apply.
+  lifecycle { ignore_changes = [custom_headers] }
 }
 resource "aws_amplify_branch" "main" {
   app_id            = aws_amplify_app.web.id

@@ -44,3 +44,5 @@ test-results/
 !*.tfvars.example
 plan.json
 crash.log
+**/backend.hcl
+infra/state/bootstrap_override.tf

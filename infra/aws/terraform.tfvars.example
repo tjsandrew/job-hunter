@@ -1,0 +1,5 @@
+account_id            = "ACCOUNT_ID"
+budget_alert_emails   = ["owner@example.com"]
+activity_alert_emails = ["owner@example.com"]
+monthly_budget_usd    = 40
+enable_backend        = false
