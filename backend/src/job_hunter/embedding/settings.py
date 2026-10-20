@@ -21,3 +21,8 @@ def for_you_enabled() -> bool:
 def embed_on_save_enabled() -> bool:
     """Embedding the profile after confirm / preferences save is off unless EMBED_ON_SAVE is 1/true/yes/on."""
     return _on("EMBED_ON_SAVE")
+
+
+def for_you_fusion_enabled() -> bool:
+    """For you merges the keyword ranking into the semantic one unless FOR_YOU_FUSION is 0/false/no/off (on by default)."""
+    return (os.getenv("FOR_YOU_FUSION") or "").strip().lower() not in {"0", "false", "no", "off"}

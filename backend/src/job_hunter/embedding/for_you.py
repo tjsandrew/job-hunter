@@ -22,9 +22,12 @@ from .db_retrieval import recommend_for_profile
 from .features import FEATURES_VERSION
 from .job_text import JOB_TEXT_VERSION
 from .profile_text import PROFILE_TEXT_VERSION
-from .retrieval import RankedJob, RetrievalResult
+from .retrieval import FUSION_VERSION, RankedJob, RetrievalResult, fuse_rankings
 
 RANKING_VERSION = f"semantic:{JOB_TEXT_VERSION}+{PROFILE_TEXT_VERSION}+{FEATURES_VERSION}"
+FUSED_RANKING_VERSION = f"{RANKING_VERSION}+{FUSION_VERSION}"
+SEMANTIC_STATUS = "Semantic similarity after role and level checks; the order is meaningful, not the scores"
+FUSED_STATUS = "Keyword and semantic matching combined after role and level checks; the order is meaningful, not the scores"
 NO_PROFILE = "No confirmed profile yet, so the keyword ranker was used."
 NO_VECTOR = "The profile has not been embedded yet (run the backfill), so the keyword ranker was used."
 SEARCH_FIELDS = ("title", "company", "description", "location", "category", "skills")
@@ -41,6 +44,11 @@ def semantic_for_you(db: Session, confirmed: "tuple[str, int, Any] | None", pref
     if result is None:
         return None, NO_VECTOR
     return result, None
+
+
+def fuse_with_keyword(ranked: Sequence[RankedJob], keyword_ranked: Sequence[Mapping[str, Any]]) -> tuple[RankedJob, ...]:
+    """Merge the keyword ranker's output (``rank_jobs`` rows, best first) into the checked semantic ranking."""
+    return fuse_rankings(ranked, [str(row["job"]["id"]) for row in keyword_ranked])
 
 
 def _load_jobs(db: Session, job_ids: Sequence[str]) -> dict[str, Job]:

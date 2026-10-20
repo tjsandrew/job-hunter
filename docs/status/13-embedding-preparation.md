@@ -139,6 +139,12 @@ later without changing callers.
   is meaningful) plus `ranking_mode` (`semantic` or `keyword_fallback`), `fallback_reason` and `blocked_by_checks`. With no confirmed
   profile or no profile vector it returns the keyword ranker's result and says why. `/v1/recommendations` is unchanged and the OpenAPI
   contract has the one extra path.
+- **Keyword fusion (on by default, `FOR_YOU_FUSION=0` switches it off):** after the checks, the semantic order is merged with the keyword
+  ranker's order by reciprocal-rank fusion (`fuse_rankings`, k = 60, no tuned weight). Fusion only reorders the jobs that passed the checks;
+  it never adds or drops one, and `ranking_mode` stays `semantic`. The response adds `ranking_fusion` (`rrf-v1` or null) and the ranking
+  version ends in `+rrf-v1`. If the keyword ranking cannot be computed the page logs it and serves the semantic order. Evidence: on 15
+  fictional profiles and 356 judged pairs the fused list scored nDCG@10 0.76 against 0.61 (keyword) and 0.67 (semantic with checks); see
+  the 2026-10-20 "round 2c" entry of `RECOMMENDER-EVALUATION-LOG.md`. LLM-judged labels only.
 - **Discover page:** a "For you / All jobs" toggle (For you is the default). For you calls `/v1/recommendations/for-you` (it accepts `q` for typed search);
   All jobs is the original keyword list. If the For you request errors, the page falls back to All jobs with a note; if the server itself fell
   back, it shows the server's reason. `reasons` on For you cards are user-facing positives only (matched skills, role/level checks that

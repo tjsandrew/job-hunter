@@ -20,7 +20,7 @@ profile after "Update my matches" and after saving preferences (best effort: a f
 `embed_job(s)`. A job's role family and seniority are set at ingestion (`jobs.category`, `jobs.seniority`); the `0013`
 migration adds seniority columns and retires the old match-features table. After migrating existing jobs or changing the
 keyword tables, run `make reclassify-jobs` and inspect the classification report (`python -m job_hunter.embedding.backfill
---classification-report`). Backfill makes vectors but does not classify jobs. Switches: `FOR_YOU_ENABLED`, `EMBED_ON_SAVE`
+--classification-report`). Backfill makes vectors but does not classify jobs. Switches: `FOR_YOU_ENABLED`, `FOR_YOU_FUSION`, `EMBED_ON_SAVE`
 (both default on in compose). See
 [embedder status](docs/status/11-embedder-service.md), [backend client status](docs/status/12-embedding-client.md) and
 [embedding preparation](docs/status/13-embedding-preparation.md).

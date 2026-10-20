@@ -17,7 +17,7 @@ Everything here is pure and in memory. ``db_retrieval.py`` loads candidates from
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Iterable, Mapping, Sequence
 
 from .features import check_engineering_subrole, check_role_family, check_seniority
@@ -144,3 +144,30 @@ def retrieve(query: ProfileQuery, candidates: Iterable[RetrievalCandidate], *, l
                              reasons=row[4]) for position, row in enumerate(ranked_rows, start=1))
     blocked.sort(key=lambda item: (-item.similarity, item.job_id))
     return RetrievalResult(ranked=ranked, blocked=tuple(blocked), considered=considered)
+
+
+FUSION_VERSION = "rrf-v1"
+FUSION_K = 60   # the constant from the original reciprocal-rank-fusion paper; deliberately not tuned on our data
+
+
+def fuse_rankings(ranked: Sequence[RankedJob], keyword_order: Sequence[str], k: int = FUSION_K) -> tuple[RankedJob, ...]:
+    """Reciprocal-rank fusion of the semantic ranking with the keyword ranking, over the jobs that passed the checks.
+
+    ``ranked`` is the checked, similarity-ordered result of :func:`retrieve`; ``keyword_order`` is the keyword ranker's job
+    ids, best first. Only jobs already in ``ranked`` can appear, so the checks still decide who is eligible: fusion changes
+    the order, never the membership. Each job scores 1/(k+semantic position) + 1/(k+keyword position among those jobs); a job
+    the keyword ranker did not list gets only the semantic term. Ties keep the semantic order. Check verdicts and reasons are
+    kept; ranks are renumbered 1..n.
+    """
+    semantic_position = {row.job_id: i for i, row in enumerate(ranked, start=1)}
+    keyword_position: dict[str, int] = {}
+    for job_id in keyword_order:
+        if job_id in semantic_position and job_id not in keyword_position:
+            keyword_position[job_id] = len(keyword_position) + 1
+    def score(row: RankedJob) -> float:
+        total = 1.0 / (k + semantic_position[row.job_id])
+        if row.job_id in keyword_position:
+            total += 1.0 / (k + keyword_position[row.job_id])
+        return total
+    ordered = sorted(ranked, key=lambda row: (-score(row), semantic_position[row.job_id]))
+    return tuple(replace(row, rank=position) for position, row in enumerate(ordered, start=1))

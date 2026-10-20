@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 import hashlib
 import json
+import logging
 import math
 from io import BytesIO
 from pathlib import Path
@@ -19,6 +20,7 @@ from sqlalchemy.orm import Session
 from job_hunter.config import settings
 from job_hunter.recommendations import rank_jobs, RANKING_VERSION
 from job_hunter.embedding import for_you as semantic, profile_sync, settings as embedding_settings
+from job_hunter.embedding.retrieval import FUSION_VERSION
 from job_hunter.adapters.database import get_db
 from job_hunter.domain.identity import DEV_USERS
 from job_hunter.domain.models import (User, Profile, Preference, Job, JobReview, Application,
@@ -332,14 +334,24 @@ def recommendations_for_you(db: Session = Depends(db_for), limit: int = Query(20
     if result is None:
         base = recommendations(db=db, limit=limit, offset=offset, q=q)
         return {**base, "ranking_mode": "keyword_fallback", "fallback_reason": reason}
-    ranked = semantic.matching(db, result.ranked, q, job_out)
+    ordered, fused = result.ranked, False
+    if embedding_settings.for_you_fusion_enabled():
+        try:   # merge the keyword ranking in; if it cannot be computed, keep the semantic order rather than fail the page
+            open_jobs = db.scalars(select(Job).where(Job.status == "open")).all()
+            keyword_ranked = rank_jobs([job_out(job) for job in open_jobs if str(job.id) not in set(skipped)],
+                                       bank_services.build_profile_snapshot(db), prefs.data if prefs else {})
+            ordered, fused = semantic.fuse_with_keyword(result.ranked, keyword_ranked), True
+        except Exception:
+            logging.getLogger(__name__).exception("For you: keyword fusion failed; serving the semantic order")
+    ranked = semantic.matching(db, ordered, q, job_out)
     total = len(ranked)
     return {"items": semantic.page_items(db, ranked, offset, limit, job_out, snapshot=confirmed[2],
                                          preferences=prefs.data if prefs else {}), "total": total,
             "next_offset": offset + limit if offset + limit < total else None,
-            "degraded_mode": False, "ranking_version": semantic.RANKING_VERSION, "ranking_mode": "semantic",
+            "degraded_mode": False, "ranking_mode": "semantic", "ranking_fusion": FUSION_VERSION if fused else None,
+            "ranking_version": semantic.FUSED_RANKING_VERSION if fused else semantic.RANKING_VERSION,
             "fallback_reason": None, "blocked_by_checks": len(result.blocked),
-            "ranking_status": "Semantic similarity after role and level checks; the order is meaningful, not the scores"}
+            "ranking_status": semantic.FUSED_STATUS if fused else semantic.SEMANTIC_STATUS}
 
 def job_out(job: Job) -> dict:
     return {"id": str(job.id), "title": job.title, "company": job.company,
