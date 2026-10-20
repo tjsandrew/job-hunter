@@ -21,12 +21,6 @@ jobs:
       ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
       API_FUNCTION: ${{ vars.API_FUNCTION }}
       MIGRATION_FUNCTION: ${{ vars.MIGRATION_FUNCTION }}
-      VITE_AUTH_MODE: cognito
-      VITE_COGNITO_ISSUER: ${{ vars.VITE_COGNITO_ISSUER }}
-      VITE_COGNITO_CLIENT_ID: ${{ vars.VITE_COGNITO_CLIENT_ID }}
-      VITE_COGNITO_DOMAIN: ${{ vars.VITE_COGNITO_DOMAIN }}
-      VITE_API_SCOPE: jobhunter/use
-      VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,13 +32,18 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
       - name: Test frontend
         working-directory: apps/web
-        # Tests stub cloud settings themselves; the job-level cognito mode would
-        # break the local-mode tests, exactly as CI runs them without it.
-        env:
-          VITE_AUTH_MODE: local
+        # Same environment as CI: no VITE_* cloud settings, which tests stub themselves.
         run: npm ci && npm test
       - name: Build frontend for staging
         working-directory: apps/web
+        # Cloud settings exist only for the build, so they can never leak into tests.
+        env:
+          VITE_AUTH_MODE: cognito
+          VITE_COGNITO_ISSUER: ${{ vars.VITE_COGNITO_ISSUER }}
+          VITE_COGNITO_CLIENT_ID: ${{ vars.VITE_COGNITO_CLIENT_ID }}
+          VITE_COGNITO_DOMAIN: ${{ vars.VITE_COGNITO_DOMAIN }}
+          VITE_API_SCOPE: jobhunter/use
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
         run: npm run build
       - name: Full backend checks
         run: |
@@ -106,6 +105,7 @@ jobs:
         if: env.API_FUNCTION != ''
         env:
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
         run: python scripts/deploy_aws.py --image "$ECR_REPOSITORY@$IMAGE_DIGEST"
       - name: Deploy tested website to Amplify
         run: python scripts/deploy_aws.py --web apps/web/dist
