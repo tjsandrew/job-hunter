@@ -46,7 +46,7 @@ Solid arrows show application traffic or credential retrieval. Dashed arrows sho
 | Amplify Hosting | Serve the React build over HTTPS without operating a VM or purchasing a domain. |
 | Cognito | Separate user accounts, managed login and access tokens; public browser client with authorization code/PKCE. Team-only access through operator-created accounts; no public sign-up or social login. Website users do not need IAM accounts. |
 | API Gateway and Python Lambda | Reuse FastAPI and existing resume/PDF features; request-driven execution with concurrency and request limits. |
-| Aurora PostgreSQL Serverless v2 | Keep the existing relational schema, Alembic migrations, pgvector and tenant RLS. Configure 0–1 ACU and auto-pause after five idle minutes for intermittent project use. PostgreSQL compatibility reduces future migration work, but moving to standard RDS still requires data transfer and a tested cutover. |
+| Aurora PostgreSQL Serverless v2 | Keep the existing relational schema, Alembic migrations, pgvector and tenant RLS. Configure 0–1 ACU and auto-pause after 30 idle minutes for intermittent project use. PostgreSQL compatibility reduces future migration work, but moving to standard RDS still requires data transfer and a tested cutover. |
 | Private S3 | Durable uploads and exports across Lambda replacements; versioned files and short-lived signed URLs. |
 | Password database authentication | Separate API and migration credentials, retrieved by the release runner and injected into Lambda configuration. No runtime Secrets Manager request or paid interface endpoint. IAM database login is denied by this account’s organization policy. |
 | GitHub Actions / ECR / Terraform | Test and publish immutable application artifacts; use GitHub OIDC instead of stored AWS keys. Terraform provisions infrastructure separately from application releases. |
@@ -70,7 +70,7 @@ The master password remains AWS-managed for operator recovery. A second Secrets 
 
 ## Cost model
 
-Singapore Aurora Standard planning rates (inspected 20 October): **USD 0.20/ACU-hour**, **USD 0.11/GB-month** of consumed database storage, and **USD 0.22 per million I/O requests**. The configuration has one writer, a minimum of 0 ACU, a maximum of 1 ACU, and a five-minute idle auto-pause interval.
+Singapore Aurora Standard planning rates (inspected 20 October): **USD 0.20/ACU-hour**, **USD 0.11/GB-month** of consumed database storage, and **USD 0.22 per million I/O requests**. The configuration has one writer, a minimum of 0 ACU, a maximum of 1 ACU, and a 30-minute idle auto-pause interval.
 
 **A maximum of 0.5 ACU is not supported.** AWS requires a maximum of at least 1 ACU, and the installed Terraform provider enforces that limit. USD 73/month is therefore a continuous 0.5-ACU *usage example*, not an enforceable worst-case cap. The owner selected 0–1 ACU, team-only access and a notification-only alarm after this was verified.
 
@@ -80,7 +80,7 @@ Singapore Aurora Standard planning rates (inspected 20 October): **USD 0.20/ACU-
 | 0.5 ACU continuously for 730 hours | 73.00 |
 | 1 ACU continuously for 730 hours | 146.00 |
 
-At 20 GB average consumed storage, add approximately USD 2.20/month; 10 million I/O requests add USD 2.20. These are examples, not preallocated storage or I/O allowances. Two secrets (master plus deployment credentials) add approximately USD 0.80/month, plus API requests. Hosting, requests, logs, the CloudWatch alarm/SNS, backups beyond allowances, transfer and taxes are additional. Compute is uncharged while actually paused, but storage continues to be billed. Five-minute idle intervals, resume activity and administrative/maintenance work can contribute to compute usage. The 1 ACU ceiling limits capacity, not the whole account bill.
+At 20 GB average consumed storage, add approximately USD 2.20/month; 10 million I/O requests add USD 2.20. These are examples, not preallocated storage or I/O allowances. Two secrets (master plus deployment credentials) add approximately USD 0.80/month, plus API requests. Hosting, requests, logs, the CloudWatch alarm/SNS, backups beyond allowances, transfer and taxes are additional. Compute is uncharged while actually paused, but storage continues to be billed. 30-minute idle intervals, resume activity and administrative/maintenance work can contribute to compute usage. The 1 ACU ceiling limits capacity, not the whole account bill.
 
 Deployment-injected passwords avoid the approximately USD 9.49/month Secrets Manager interface endpoint. Secrets Manager storage is still used: one master secret and one combined API/migration credential secret, approximately USD 0.80/month total plus requests. No NAT gateway or paid interface endpoint is needed.
 
@@ -107,7 +107,7 @@ The final **Checks passed** job fails if any selected dependency fails or is can
 
 After review, deployment-variable configuration and merging the workflow to `main`, open **GitHub → Actions → Pause or resume staging backend → Run workflow**. Select branch `main` and mode `pause` or `resume`.
 
-- **Pause:** sets only the API Lambda's reserved concurrency to **0**, blocking new API executions. Aurora can auto-pause after the existing work/connections drain and the five-minute idle interval elapses. This does not directly stop the database, interrupt every existing session, disable Cognito/Amplify, or remove storage charges. `/v1/health` is still database-free, but it cannot execute while its API Lambda is paused; expect API errors during a deliberate pause.
+- **Pause:** sets only the API Lambda's reserved concurrency to **0**, blocking new API executions. Aurora can auto-pause after the existing work/connections drain and the 30-minute idle interval elapses. This does not directly stop the database, interrupt every existing session, disable Cognito/Amplify, or remove storage charges. `/v1/health` is still database-free, but it cannot execute while its API Lambda is paused; expect API errors during a deliberate pause.
 - **Resume:** restores reserved concurrency to **10**, never unlimited concurrency. The next signed-in request can resume Aurora through the existing bounded `/me` gate. No activity-alarm state automatically enables or disables the API.
 - The workflow is manual-only, uses GitHub OIDC and is restricted to `main`. It shares the `staging-release` concurrency group with deployment so the two workflows do not run simultaneously. It verifies the resulting API reservation through `GetFunction`.
 - The release role gains only `lambda:PutFunctionConcurrency` on the **API function ARN** for these controls; its existing `GetFunction` read permission supplies verification. It cannot change concurrency on the migration function or remove the reservation to allow unbounded concurrency.
@@ -124,7 +124,7 @@ The controls are defined locally and have not been run against AWS. Verify pause
 - Initial cloud entry waits for one authenticated `/me` request before the workspace sends parallel requests. Only that GET retries temporary failures, with a **45-second total deadline** and cancellation when leaving the screen. No writes or periodic wake-ups are automatically retried. API reserved concurrency remains 10 for the subsequent request burst.
 - Close SQL consoles and administrator sessions after use. Review auto-pause compatibility before introducing RDS Proxy, replication or other database features. Valid or invalid connection attempts can wake Aurora; direct access is therefore private and restricted to the Lambda security group.
 
-For acceptance, leave the app untouched and close database clients for at least ten minutes. Observe `DatabaseConnections` and `ServerlessDatabaseCapacity` through CloudWatch/RDS metrics and confirm they reach zero after idle. Checking with SQL would wake the database. Verify that a tab left open without edits produces no API keep-alive traffic. Test a real resume, password connectivity, memory headroom and PDF/import workloads at the configured ceiling. No scheduled shutdown or hard spending limit is configured.
+For acceptance, leave the app untouched and close database clients for at least 35 minutes. Observe `DatabaseConnections` and `ServerlessDatabaseCapacity` through CloudWatch/RDS metrics and confirm they reach zero after idle. Checking with SQL would wake the database. Verify that a tab left open without edits produces no API keep-alive traffic. Test a real resume, password connectivity, memory headroom and PDF/import workloads at the configured ceiling. No scheduled shutdown or hard spending limit is configured.
 
 ## Before deployment
 
@@ -184,3 +184,9 @@ Local checks after release hardening: **632 backend tests**, **244 frontend test
 3. Run `scripts/bootstrap_database.py` with the master secret and deployment-secret ARNs. It generates passwords only if the deployment secret has no value, persists them before SQL changes, removes `rds_iam` membership and initializes the roles/schema. Reruns reuse the same passwords. If master login remains blocked, stop and request administrator recovery; do not replace the database.
 4. Publish `terraform output -json deployment` through `scripts/configure_github_deploy.py`, then run **Deploy staging** on main. It injects the migration password before migrations and the runtime password before updating the API image.
 5. Verify an authenticated two-account workflow, PDF downloads and Aurora idle behavior. The public health check alone does not prove database login.
+
+## Responsiveness tuning
+
+Applied on 21 October 2026: Terraform raises the shared authenticated API throttle to 20 requests/second with burst 40, keeps the health route at 1/second with burst 2 and retains API Lambda concurrency at 10. These are shared limits, not per-user quotas. Aurora's idle auto-pause interval is 30 minutes (1,800 seconds), trading some additional idle compute for fewer wake-ups during team testing. For example, an extra 25 idle minutes at 0.5 ACU adds about USD 0.042; capacity and workload affect actual usage. The deployed API Gateway stage and Aurora scaling configuration were verified after apply.
+
+The frontend changes currently under local review share concurrent identical reads within the same identity, invalidates shared reads when a write starts, and gives cancellable calls their own request. Writes are never combined or automatically repeated. Profile content renders independently of resume-source/import-history loading. Import from file accepts PDF/Word and opens review after upload; JSON backup actions are under Profile backups.

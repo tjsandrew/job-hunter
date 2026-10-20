@@ -84,7 +84,7 @@ resource "aws_rds_cluster" "app" {
   serverlessv2_scaling_configuration {
     min_capacity             = 0
     max_capacity             = 1
-    seconds_until_auto_pause = 300
+    seconds_until_auto_pause = 1800
   }
   # Do not try to downgrade a minor version applied by AWS maintenance.
   # Deliberate engine upgrades require reviewing/removing this ignore rule.
@@ -247,8 +247,8 @@ resource "aws_apigatewayv2_stage" "app" {
   name        = "$default"
   auto_deploy = true
   default_route_settings {
-    throttling_burst_limit = 10
-    throttling_rate_limit  = 5
+    throttling_burst_limit = 40
+    throttling_rate_limit  = 20
   }
   route_settings {
     route_key              = aws_apigatewayv2_route.public["GET /v1/health"].route_key
