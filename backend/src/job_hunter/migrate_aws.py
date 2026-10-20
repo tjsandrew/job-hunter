@@ -48,8 +48,12 @@ def handler(event, context):
             connection.execute(text("SELECT pg_advisory_xact_lock(5224001)"))
             if action == "bootstrap":
                 if not connection.scalar(text("SELECT 1 FROM pg_roles WHERE rolname='jobhunter_app'")):
-                    connection.execute(text("CREATE ROLE jobhunter_app LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD NULL"))
-                connection.execute(text("ALTER ROLE jobhunter_app NOSUPERUSER NOBYPASSRLS PASSWORD NULL"))
+                    connection.execute(text("CREATE ROLE jobhunter_app LOGIN PASSWORD NULL"))
+                connection.execute(text("ALTER ROLE jobhunter_app PASSWORD NULL"))
+                # The RDS/Aurora admin is not a superuser, so it may not even restate
+                # NOSUPERUSER/NOBYPASSRLS. New roles default to both; verify instead.
+                if connection.scalar(text("SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname='jobhunter_app'")):
+                    raise RuntimeError("jobhunter_app must not be a superuser or bypass row-level security")
                 connection.execute(text("GRANT rds_iam TO jobhunter_app"))
                 connection.execute(text("GRANT rds_iam TO jobhunter_admin"))
             connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))

@@ -73,8 +73,27 @@ def test_migrations_share_the_iam_or_bootstrap_transaction(monkeypatch, action):
         iam.assert_not_called()
         assert "GRANT rds_iam TO jobhunter_app" in statements
         assert "GRANT rds_iam TO jobhunter_admin" in statements
+        # Aurora's admin cannot change SUPERUSER/BYPASSRLS, even to restate "NO".
+        assert not any("SUPERUSER" in s or "BYPASSRLS" in s for s in statements)
     else:
         iam.assert_called_once()
         bootstrap.assert_not_called()
         assert not any("CREATE ROLE" in statement for statement in statements)
+    engine.dispose.assert_called_once()
+
+
+def test_bootstrap_refuses_a_privileged_runtime_role(monkeypatch):
+    for key, value in {"DATABASE_HOST": "cluster", "DATABASE_NAME": "jobhunter", "DATABASE_USERNAME": "jobhunter_admin"}.items():
+        monkeypatch.setenv(key, value)
+    connection = Mock()
+    connection.scalar.side_effect = [1, True]  # Role exists; it is a superuser or bypasses RLS.
+    engine = Mock()
+    engine.begin.return_value.__enter__ = Mock(return_value=connection)
+    engine.begin.return_value.__exit__ = Mock(return_value=False)
+    monkeypatch.setattr(migrate_aws, "bootstrap_engine", Mock(return_value=engine))
+    upgrade = Mock()
+    monkeypatch.setattr(migrate_aws.command, "upgrade", upgrade)
+    with pytest.raises(RuntimeError, match="row-level security"):
+        migrate_aws.handler({"action": "bootstrap", "credentials": {"username": "jobhunter_admin", "password": "test-only"}}, None)
+    upgrade.assert_not_called()
     engine.dispose.assert_called_once()
