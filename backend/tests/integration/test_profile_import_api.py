@@ -315,3 +315,33 @@ def test_hostile_and_unsupported_uploads_are_refused(isolated_users):
     assert captured.status_code == 422 and error_code(captured) == "DOCX_ZIP_BOMB"
     _, captured = upload_file("resume.docx", DOCX_TYPE, b"plain text, not a document")
     assert captured.status_code == 422 and error_code(captured) == "UNSUPPORTED_FILE"
+
+
+def test_delete_uploaded_original_preserves_imported_facts_and_documents(isolated_users):
+    from pathlib import Path
+    upload_id = upload_pdf()
+    row = start({"upload_id": upload_id})
+    decisions = [{"candidate_id": item["candidate_id"], "action": "add"}
+                 for item in row["candidates"] if item["kind"] != "basics"]
+    assert apply(row, decisions).status_code == 200
+    before = bank()
+    document = new_document()
+    engine, user_ids = isolated_users
+    with Session(engine) as db:
+        db.execute(text("SELECT set_config('app.user_id', :uid, true)"), {"uid": str(user_ids['alice'])})
+        path = db.execute(text("SELECT file_path FROM uploads WHERE id=:id"), {"id": upload_id}).scalar_one()
+    assert Path(path).exists()
+    assert client.delete(f"/v1/uploads/{upload_id}", headers=CASEY).status_code == 404
+    assert Path(path).exists()
+    response = client.delete(f"/v1/uploads/{upload_id}", headers=ALICE)
+    assert response.status_code == 204, response.text
+    assert not Path(path).exists()
+    assert bank() == before
+    assert client.get(f"/v1/documents/{document['id']}", headers=ALICE).status_code == 200
+    assert all(item['upload_id'] != upload_id for item in client.get('/v1/uploads', headers=ALICE).json()['items'])
+    for suffix in ('', '/download'):
+        assert client.get(f"/v1/uploads/{upload_id}{suffix}", headers=ALICE).status_code == 404
+    assert client.delete(f"/v1/uploads/{upload_id}", headers=ALICE).status_code == 404
+    with Session(engine) as db:
+        db.execute(text("SELECT set_config('app.user_id', :uid, true)"), {"uid": str(user_ids['alice'])})
+        assert db.execute(text("SELECT upload_id FROM profile_imports WHERE id=:id"), {"id": row['id']}).scalar_one() is None

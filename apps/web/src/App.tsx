@@ -12,7 +12,7 @@ import { Studio } from './studio/Studio';
 import { applyDefaults } from './studio/build/defaults';
 
 type Page = 'discover' | 'profile' | 'tracker' | 'studio';
-const pageNames: Record<Page, string> = { discover: 'Discover', profile: 'Profile', tracker: 'Application tracker', studio: 'Resume studio' };
+const pageNames: Record<Page, string> = { discover: 'Discover', profile: 'Profile', tracker: 'Application tracker', studio: 'My resumes' };
 const statusOptions = ['saved', 'preparing', 'applied', 'interviewing', 'offer', 'rejected', 'withdrawn'];
 
 function initials(name: string) { return name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'JH'; }
@@ -96,6 +96,7 @@ export default function App() {
 
   useEffect(() => {
     let alive = true;
+    if (page !== 'discover') { setRecommendationLoading(false); return; }
     const revision = ++searchRequestRevision.current;
     setLoadingMoreJobs(false); setRecommendationLoading(true);
     const timer = window.setTimeout(() => {
@@ -107,7 +108,7 @@ export default function App() {
       }).catch((error: Error) => alive && setFatal(error.message)).finally(() => alive && setRecommendationLoading(false));
     }, 250);
     return () => { alive = false; clearTimeout(timer); if (searchRequestRevision.current === revision) searchRequestRevision.current += 1; };
-  }, [user, query, refresh, bootstrapAttempt, discoverMode]);
+  }, [user, query, refresh, bootstrapAttempt, discoverMode, page]);
 
   useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => { setToast(''); setToastAction(null); }, toastAction ? 9000 : 3200); return () => window.clearTimeout(timer); }, [toast, toastAction]);
   const announce = (message: string) => { setToast(message); setToastAction(null); };
@@ -346,11 +347,17 @@ export default function App() {
   };
   const reloadResume = async () => { if (!activeResume) return; try { const docs = await api.documents(); const latest = docs.items.find((doc) => doc.id === activeResume.id); if (latest) { setResumes(docs.items); openResume(latest); announce('Latest server version loaded.'); } } catch (error) { announce((error as Error).message); } };
 
+  const openResumeLibrary = () => {
+    if (activeResume && saveLabel !== 'Saved') { announce('Wait for your resume changes to save before opening the library.'); return; }
+    setActiveResume(null); setResumeAttachTarget(null); setPage('studio');
+    document.scrollingElement?.scrollTo?.({top: 0, left: 0});
+  };
+
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark">j</div><div><strong>job hunter</strong><span>CAREER WORKSPACE</span></div></div>
       <div className="workspace-label">WORKSPACE</div>
-      <nav aria-label="Main navigation">{(['discover', 'profile', 'tracker', 'studio'] as Page[]).map((item) => <button key={item} aria-label={pageNames[item]} className={`nav-link ${page === item ? 'active' : ''}`} onClick={() => setPage(item)}><Icon name={item} /><span>{pageNames[item]}</span>{item === 'tracker' && apps.length > 0 && <b className="nav-count">{apps.length}</b>}</button>)}</nav>
+      <nav aria-label="Main navigation">{(['discover', 'profile', 'tracker', 'studio'] as Page[]).map((item) => <button key={item} aria-label={pageNames[item]} className={`nav-link ${page === item ? 'active' : ''}`} onClick={() => item === 'studio' ? openResumeLibrary() : setPage(item)}><Icon name={item} /><span>{pageNames[item]}</span>{item === 'tracker' && apps.length > 0 && <b className="nav-count">{apps.length}</b>}</button>)}</nav>
       <div className="sidebar-bottom">
         <div className="ai-card"><span className="ai-icon">✳</span><div><strong>AI assistant</strong><p>Generation is unavailable in this local POC.</p><span className="status-dot" /> Offline</div></div>
         <div className="account-row"><div className="avatar">{initials(me?.display_name || user)}</div><div className="account-name"><strong>{me?.display_name || user}</strong><span>{cloudAuth ? "Personal workspace" : `${user}@local.dev`}</span></div>{cloudAuth ? <button onClick={() => { if (window.confirm("Sign out? Wait for any pending resume save before continuing.")) void signOut(); }}>Sign out</button> : (<select aria-label="Development user" value={user} onChange={(e) => switchUser(e.target.value as 'alice' | 'casey')}><option value="alice">Alice</option><option value="casey">Casey</option></select>)}</div>
@@ -358,13 +365,13 @@ export default function App() {
       </div>
     </aside>
     <main className="main-area">
-      <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span className="crumb-sep">/</span><strong>{activeResume && page === 'studio' ? activeResume.title : pageNames[page]}</strong></div><div className="topbar-right"><Pill color="green">{cloudAuth ? "Project preview" : "Local POC"}</Pill><button className="help-button" title="Refresh workspace" aria-label="Refresh workspace" onClick={() => setRefresh((x) => x + 1)}>↻</button>{cloudAuth ? <button onClick={() => { if (window.confirm("Sign out? Wait for any pending resume save before continuing.")) void signOut(); }}>Sign out</button> : (<select className="top-user-switch" aria-label="Development user" value={user} onChange={(e) => switchUser(e.target.value as 'alice' | 'casey')}><option value="alice">Alice</option><option value="casey">Casey</option></select>)}<div className="avatar small">{initials(me?.display_name || user)}</div></div></header>
+      <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span className="crumb-sep">/</span><strong>{activeResume && page === 'studio' ? activeResume.title : pageNames[page]}</strong></div><div className="topbar-right"><Pill color="green">{cloudAuth ? "Project preview" : "Local POC"}</Pill><button className="help-button" title="Refresh workspace" aria-label="Refresh workspace" disabled={busy || recordsLoading || recommendationLoading} aria-busy={recordsLoading || recommendationLoading} onClick={() => setRefresh((x) => x + 1)}>↻</button>{!busy && recordsLoading && <span role="status">Refreshing…</span>}{cloudAuth ? <button onClick={() => { if (window.confirm("Sign out? Wait for any pending resume save before continuing.")) void signOut(); }}>Sign out</button> : (<select className="top-user-switch" aria-label="Development user" value={user} onChange={(e) => switchUser(e.target.value as 'alice' | 'casey')}><option value="alice">Alice</option><option value="casey">Casey</option></select>)}<div className="avatar small">{initials(me?.display_name || user)}</div></div></header>
       <div className="content-area">
         {fatal && <div className="fatal"><div className="fatal-icon">!</div><div><strong>Could not load your workspace</strong><p>{fatal}</p><button className="button secondary small-button" onClick={() => { setFatal(''); setBootstrapAttempt((x) => x + 1); setRefresh((x) => x + 1); }}>Try again</button></div></div>}
         {!fatal && busy && <Loading label="Connecting to your workspace…" />}
         {!fatal && !busy && <>
           {page === 'discover' && <Discover jobs={jobs} loading={recommendationLoading} total={recommendationTotal} hasMore={nextJobOffset !== null} loadingMore={loadingMoreJobs} onLoadMore={loadMoreJobs} query={query} setQuery={setQuery} busyJob={busyJob} onReview={review} onDetails={setJobDetail} degraded={recommendationsDegraded} rankingStatus={rankingStatus} mode={discoverMode} setMode={setDiscoverMode} forYouNote={forYouNote} thinProfile={!(preferences.roles || []).length || !preferences.seniority} />}
-          {page === 'profile' && <ProfileView key={user} userKey={user} onChanged={() => setRefresh(value => value + 1)} onBasicsSaved={draft => setProfile(profileToForm(draft))} onOpenResume={openResume} preferences={preferences} setPreferences={setPreferences} savePreferences={savePreferences} savingPreferences={prefSaving} uploading={uploading} uploadMessage={uploadMessage} extractedResumeText={extractedResumeText} onUpload={uploadProfileResume} resumes={resumes} onBusyChange={setProfileBusy} />}
+          {page === 'profile' && <ProfileView key={user} userKey={user} onChanged={() => setRefresh(value => value + 1)} onBasicsSaved={draft => setProfile(profileToForm(draft))} onOpenResume={openResume} onOpenLibrary={openResumeLibrary} preferences={preferences} setPreferences={setPreferences} savePreferences={savePreferences} savingPreferences={prefSaving} uploading={uploading} uploadMessage={uploadMessage} extractedResumeText={extractedResumeText} onUpload={uploadProfileResume} resumes={resumes} onBusyChange={setProfileBusy} />}
           {page === 'tracker' && <Tracker apps={filteredApps} loading={recordsLoading} query={trackerQuery} setQuery={setTrackerQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onEdit={setTrackerEdit} />}
           {page === 'studio' && <Studio onDelete={deleteResume} resumes={resumes} loading={recordsLoading} active={activeResume} attachTarget={resumeAttachTarget} tab={studioTab} setTab={setStudioTab} busy={busyResumeAction} saving={saving} saveLabel={saveLabel} history={history} future={future} onCreate={createResume} onOpen={openResume} onCreateTailoredCopy={createTailoredCopy} onCopyResume={copyResume} onBuilt={resumeBuilt} onApplyDefaults={applyStyleDefaults} jobs={buildJobs} onAttach={attachResumeToApplication} onReturn={returnToApplication} onBack={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before leaving the editor.'); return; } setActiveResume(null); }} onUpdate={updateResume} onContent={pushContent} onUndo={undo} onRedo={redo} onDuplicate={duplicateResume} onReview={reviewResume} onExport={exportResume} onPreview={previewResume} onReload={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before reloading.'); return; } reloadResume(); }} />}
         </>}

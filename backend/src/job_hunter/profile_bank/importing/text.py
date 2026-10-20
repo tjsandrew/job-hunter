@@ -57,6 +57,41 @@ def from_text(text, source_sha256=None):
     return ExtractedText(tuple(SourceLine(1, line.strip(), top=index) for index, line in enumerate(text.splitlines()) if line.strip()), source_sha256 or sha256(text.encode()).hexdigest())
 
 
+def _join_pdf_bullets(lines):
+    """Rejoin floating glyphs and indented wraps without flattening columns."""
+    joined = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if line.text.strip() in {'•', '◦', '▪', '●'} and index + 1 < len(lines):
+            following = lines[index + 1]
+            if (line.page == following.page and 0 <= following.top - line.top <= 6
+                    and 0 < following.x0 - line.x0 < 35):
+                line = SourceLine(line.page, line.text.strip() + ' ' + following.text,
+                                  line.x0, following.top)
+                index += 1
+        joined.append(line)
+        index += 1
+    outer_indent = min((line.x0 for line in joined if line.text.startswith('• ')), default=0)
+    has_nested_bullets = any(re.match(r'^[◦•▪●*-]\s+', line.text)
+                             and line.x0 > outer_indent + 3 for line in joined)
+    paragraphs = []
+    last_top = 0
+    for line in joined:
+        previous = paragraphs[-1] if paragraphs else None
+        if (previous and re.match(r'^[◦•▪●*-]\s+', previous.text)
+                and (not has_nested_bullets or previous.x0 > outer_indent + 3)
+                and previous.page == line.page and 0 < line.top - last_top <= 24
+                and line.x0 > previous.x0 + 3
+                and not re.match(r'^[◦•▪●*-](?:\s|$)', line.text)):
+            paragraphs[-1] = SourceLine(previous.page, previous.text + ' ' + line.text,
+                                        previous.x0, previous.top)
+        else:
+            paragraphs.append(line)
+        last_top = line.top
+    return paragraphs
+
+
 def extract_text(pdf: bytes):
     import pdfplumber
     from pypdf import PdfReader
@@ -97,7 +132,7 @@ def extract_text(pdf: bytes):
                 right = [line for line in chunks if line.x0 > page.width * .52]
                 if len(right) >= 3 and any(re.fullmatch(r'(?i)(skills|education|projects)', line.text.strip()) for line in right):
                     chunks.sort(key=lambda line: (line.x0 > page.width * .52, line.top, line.x0))
-                lines.extend(chunks)
+                lines.extend(_join_pdf_bullets(chunks))
         if sum(len(line.text) for line in lines) > MAX_TEXT_CHARS:
             raise ImportFailure('TEXT_LIMIT_EXCEEDED', 'This PDF has too much text; split it into smaller resumes')
         if not lines:

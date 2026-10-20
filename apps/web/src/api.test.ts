@@ -40,3 +40,38 @@ it('sends the right content type for Word resumes and surfaces server refusals',
   await expect(api.uploadResume(new File(['x'], 'resume.pdf', { type: 'application/pdf' }))).rejects.toThrow('Save it as PDF or .docx and upload again.');
   expect(fetch.mock.calls[4][1].headers.get('Content-Type')).toBe('application/pdf');
 });
+
+
+it('shares identical in-flight reads but fetches fresh data after completion', async () => {
+  let resolve!: (value: Response) => void;
+  const fetch = vi.fn().mockImplementationOnce(() => new Promise<Response>(done => { resolve = done; }))
+    .mockResolvedValueOnce(new Response('{"revision":2}', {headers: {'Content-Type': 'application/json'}}));
+  vi.stubGlobal('fetch', fetch); setDevUser('alice');
+  const first = api.getProfile(); const second = api.getProfile();
+  expect(fetch).toHaveBeenCalledTimes(1);
+  resolve(new Response('{"revision":1}', {headers: {'Content-Type': 'application/json'}}));
+  expect(await first).toEqual({revision:1}); expect(await second).toEqual({revision:1});
+  expect(await api.getProfile()).toEqual({revision:2});
+  expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+it('keeps concurrent reads separate across users', async () => {
+  const fetch = vi.fn().mockImplementation(() => Promise.resolve(new Response('{}', {headers: {'Content-Type': 'application/json'}})));
+  vi.stubGlobal('fetch', fetch); setDevUser('alice');
+  const alice = api.getProfile(); setDevUser('casey'); const casey = api.getProfile();
+  await Promise.all([alice, casey]);
+  expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+it('does not reuse a read started before a write', async () => {
+  let finishOld!: (value: Response) => void;
+  const reply = () => new Response('{}', {headers: {'Content-Type': 'application/json'}});
+  const fetch = vi.fn().mockImplementationOnce(() => new Promise<Response>(done => { finishOld = done; }))
+    .mockResolvedValueOnce(reply()).mockResolvedValueOnce(reply());
+  vi.stubGlobal('fetch', fetch); setDevUser('alice');
+  const old = api.getProfile();
+  await api.putProfile({}, 1);
+  await api.getProfile();
+  expect(fetch).toHaveBeenCalledTimes(3);
+  finishOld(reply()); await old;
+});

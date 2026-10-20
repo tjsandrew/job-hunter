@@ -14,13 +14,35 @@ export class HttpError extends Error {
   constructor(message: string, status: number, code?: string) { super(message); this.status = status; this.code = code; }
 }
 
+// Share concurrent reads only. Keys include identity, and writes invalidate the
+// pool so a read after saving cannot reuse a request started before that save.
+const pendingReads = new Map<string, Promise<Response>>();
+async function fetchApi(url: string, init: RequestInit): Promise<Response> {
+  const method = (init.method || 'GET').toUpperCase();
+  if (method !== 'GET') {
+    pendingReads.clear();
+    return fetch(url, init);
+  }
+  // A caller with cancellation owns its request independently.
+  if (init.signal) return fetch(url, init);
+  const key = JSON.stringify([url, [...new Headers(init.headers).entries()]]);
+  let task = pendingReads.get(key);
+  if (!task) {
+    task = fetch(url, init);
+    pendingReads.set(key, task);
+    const clear = () => { if (pendingReads.get(key) === task) pendingReads.delete(key); };
+    void task.then(clear, clear);
+  }
+  return (await task).clone();
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (cloudAuth) headers.set('Authorization', `Bearer ${await accessToken()}`);
   else headers.set('X-Dev-User', getDevUser());
   if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   let response: Response;
-  try { response = await fetch(`${base}${path}`, { ...init, headers }); }
+  try { response = await fetchApi(`${base}${path}`, { ...init, headers }); }
   catch (cause) {
     if (init.signal?.aborted) throw cause;
     throw new HttpError(cloudAuth ? 'Could not reach Job Hunter. Please try again.' : 'Could not reach the Job Hunter API. Check that the local services are running.', 0);
@@ -78,6 +100,7 @@ export const api = {
   putSettings: (values: Omit<UserSettings, 'revision'> & {expected_revision: number}) => request<UserSettings>('/settings', json('PUT', {resume_defaults: values.resume_defaults, expected_revision: values.expected_revision})),
   deleteProfile: (values: {confirmation: 'DELETE'; delete_settings: boolean}) => request<{deleted: boolean; bank_revision: number; profile_epoch: number}>('/profile/data', json('DELETE', values)),
   exportProfile: () => request<ProfileExport>('/profile/export.json'),
+  deleteUpload: (id: string) => request<void>(`/uploads/${encodeURIComponent(id)}`, json('DELETE')),
   uploads: () => request<{items: UploadedResume[]; next_cursor: null}>('/uploads'),
   downloadUpload: (id: string) => request<Blob | {url: string}>(`/uploads/${encodeURIComponent(id)}/download`),
   getPreferences: () => request<any>('/preferences'),

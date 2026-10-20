@@ -9,8 +9,8 @@ from pydantic import ValidationError
 from fastapi.responses import JSONResponse
 from pathlib import Path
 from job_hunter.adapters import storage
-from sqlalchemy import select
-from job_hunter.domain.models import Upload
+from sqlalchemy import select, update as sql_update
+from job_hunter.domain.models import Upload, ProfileImport
 from job_hunter.profile_bank.export import export_profile
 from job_hunter.profile_bank.importing import services as imports
 from job_hunter.profile_bank.importing.docx import DOCX_CONTENT_TYPE
@@ -152,6 +152,20 @@ def build_router(db_dependency):
         rows = db.scalars(select(Upload).where(Upload.user_id == db.info['current_user'].id).order_by(Upload.created_at.desc()).limit(100)).all()
         return {'items': [{'upload_id': str(row.id), 'filename': row.filename, 'status': row.status,
                           'page_count': row.page_count, 'created_at': row.created_at} for row in rows], 'next_cursor': None}
+
+    @router.delete('/uploads/{upload_id}', status_code=204)
+    def delete_upload(upload_id: UUID, db: Session = Depends(db_dependency, scope="function")):
+        owner = db.info['current_user'].id
+        row = db.scalar(select(Upload).where(Upload.id == upload_id, Upload.user_id == owner).with_for_update())
+        if row is None:
+            raise HTTPException(404, detail={'code': 'NOT_FOUND', 'message': 'Resource not found'})
+        # Keep import evidence and already-applied profile facts, without a dangling FK.
+        db.execute(sql_update(ProfileImport).where(ProfileImport.upload_id == upload_id,
+                                              ProfileImport.user_id == owner).values(upload_id=None))
+        db.delete(row)
+        # Remove bytes only after the database transaction has committed successfully.
+        db.info.setdefault('profile_upload_cleanup', []).append(row.file_path)
+        return Response(status_code=204)
 
     @router.get('/uploads/{upload_id}/download')
     def download_upload(upload_id: UUID, db: Session = Depends(db_dependency, scope="function")):

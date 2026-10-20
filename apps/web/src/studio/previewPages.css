@@ -1,0 +1,15 @@
+.resume-pages { width: 100%; max-width: 560px; min-width: 0; flex-shrink: 0; }
+.resume-page { margin-bottom: 24px; }
+.resume-page-label { font-size: 11px; color: var(--muted); text-align: center; padding: 0 0 8px; }
+.resume-page-frame { position: relative; margin: 0 auto; }
+.resume-page-frame > .resume-paper { position: absolute; inset: 0 auto auto 0; box-sizing: border-box; overflow: hidden; }
+.paper-page-window { overflow: hidden; }
+.paper-flow { position: relative; }
+.paper-flow .paper-section h2 { break-after: avoid; }
+.paper-flow .paper-entry, .paper-flow .paper-header, .paper-flow .paper-summary, .paper-flow li { break-inside: avoid; }
+.editor-page-marker { margin: 12px 0; padding: 8px 0; border-top: 1px dashed #8a98ad; border-bottom: 1px dashed #8a98ad; color: #526176; font-size: 12px; text-align: center; }
+.editor-page-hint { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+.editor-page .editor-pane-head, .editor-page .preview-head { height: auto; min-height: 76px; padding-block: 12px; gap: 12px; }
+.editor-page .editor-pane-head > div, .editor-page .preview-head > div { min-width: 0; flex: 1; }
+.editor-page .editor-pane-head .button, .editor-page .preview-head .page-count { flex-shrink: 0; }

@@ -6,3 +6,14 @@
 .field.has-action { position: relative; }
 .field-action { position: absolute; top: -9px; right: 0; }
 .field-action .button { height: 26px; font-size: 12px; }
+
+.uploaded-resumes { margin: 24px 0 32px; }
+.uploaded-resume-list { display: grid; gap: 10px; }
+.uploaded-resume-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px; background: white; border: 1px solid var(--line); border-radius: 12px; }
+.uploaded-resume-row > div { min-width: 0; }
+.uploaded-resume-row strong { display: block; overflow-wrap: anywhere; }
+.uploaded-resume-row small { display: block; margin-top: 5px; color: var(--muted); }
+
+.resume-card-download { padding: 10px 12px 14px; }
+.resume-card-download .button { width: 100%; }
+.resume-card-download p { color: #b42318; font-size: 12px; overflow-wrap: anywhere; }

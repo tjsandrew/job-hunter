@@ -99,7 +99,7 @@ describe('Job Hunter user journey', () => {
   it('provides a manual resume path and communicates AI unavailability', async () => {
     const user = userEvent.setup(); render(<App />);
     await screen.findByText('Product Designer');
-    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Resume studio' }));
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'My resumes' }));
     expect(screen.getByText(/Your resume library is empty/)).toBeInTheDocument();
     mockApi.createDocument.mockResolvedValue({ id: 'resume-1', title: 'Untitled resume', kind: 'resume', revision: 1, template: 'classic', content: { name: 'Alice Tan', email: 'alice@example.com', phone: '', location: 'Singapore', summary: '', sections: [] }, layout: { font_size: 11, margin: 18 }, reviewed_revision: null });
     await user.click(screen.getByRole('button', { name: /create your first resume/i }));
@@ -123,7 +123,7 @@ describe('Job Hunter user journey', () => {
     await waitFor(() => expect(mockApi.putProfile).toHaveBeenCalled());
   });
 
-  it('shows the saved profile without a sample chooser and refreshes recommendations after save', async () => {
+  it('refreshes recommendations after saving only when returning to Discover', async () => {
     const user = userEvent.setup(); render(<App />);
     await screen.findByText('Product Designer');
     await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Profile' }));
@@ -133,13 +133,15 @@ describe('Job Hunter user journey', () => {
     await user.type(screen.getByPlaceholderText('e.g. Alex Tan'), 'Alex Tan');
     await user.click(screen.getByRole('button', { name: 'Save profile' }));
     await waitFor(() => expect(mockApi.putProfile).toHaveBeenCalledWith(expect.objectContaining({ name: 'Alex Tan' }), 0));
+    expect(mockApi.recommendations).toHaveBeenCalledTimes(1);
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Discover' }));
     await waitFor(() => expect(mockApi.recommendations).toHaveBeenCalledTimes(2));
   });
 
   it('keeps local resume edits on a revision conflict and blocks account switching while dirty', async () => {
     const user = userEvent.setup(); render(<App />);
     await screen.findByText('Product Designer');
-    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Resume studio' }));
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'My resumes' }));
     mockApi.createDocument.mockResolvedValue({ id: 'resume-2', title: 'Untitled resume', kind: 'resume', revision: 1, template: 'classic', content: { name: 'Alice Tan', email: '', phone: '', location: '', summary: '', sections: [] }, layout: { font_size: 11, margin: 18 }, reviewed_revision: null });
     await user.click(screen.getByRole('button', { name: /create your first resume/i }));
     await user.click(screen.getByRole('button', { name: /^Blank/ }));
@@ -160,7 +162,7 @@ describe('Job Hunter user journey', () => {
   it('rebases typing made during a slow save and autosaves it against the accepted revision', async () => {
     const user = userEvent.setup(); render(<App />);
     await screen.findByText('Product Designer');
-    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Resume studio' }));
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'My resumes' }));
     const baseResume = { id: 'resume-slow', title: 'Untitled resume', kind: 'resume' as const, revision: 1, template: 'classic' as const, content: { name: 'Alice Tan', email: '', phone: '', location: '', summary: '', sections: [] }, layout: { font_size: 11, margin: 18 }, reviewed_revision: null };
     mockApi.createDocument.mockResolvedValue(baseResume);
     await user.click(screen.getByRole('button', { name: /create your first resume/i }));

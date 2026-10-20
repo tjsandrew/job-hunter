@@ -34,7 +34,7 @@ const goTo = async (user: ReturnType<typeof userEvent.setup>, name: string) => u
 describe('build flow inside the app', () => {
   it('builds a resume for a saved job from the chooser and opens it in the editor with the attach banner', async () => {
     const user = userEvent.setup(); render(<App />);
-    await goTo(user, 'Resume studio');
+    await goTo(user, 'My resumes');
     await user.click(await screen.findByRole('button', { name: /create your first resume/i }));
     expect(screen.getAllByRole('button').filter((button) => button.classList.contains('start-card'))).toHaveLength(4);
     await user.click(screen.getByRole('button', { name: /^For a job/ }));
@@ -68,7 +68,7 @@ describe('build flow inside the app', () => {
   it('creates a free-build resume with no job and no attach banner', async () => {
     const user = userEvent.setup(); render(<App />);
     mockCreate.mockResolvedValue(resume({ id: 'general', title: 'Resume from my profile', job_id: null }));
-    await goTo(user, 'Resume studio');
+    await goTo(user, 'My resumes');
     await user.click(await screen.findByRole('button', { name: /create your first resume/i }));
     await user.click(screen.getByRole('button', { name: /^From my profile/ }));
     await user.click(await screen.findByRole('button', { name: 'Create resume' }));
@@ -81,7 +81,7 @@ describe('build flow inside the app', () => {
     const user = userEvent.setup(); render(<App />);
     mockApi.getSettings.mockResolvedValue({ revision: 2, resume_defaults: { template: 'modern', layout: { accent_color: 'teal' }, sections: [{ kind: 'skills' }, { kind: 'experience' }] } });
     mockApi.createDocument.mockImplementation(async (values) => ({ ...resume({ id: 'blank' }), ...values } as ReturnType<typeof resume>));
-    await goTo(user, 'Resume studio');
+    await goTo(user, 'My resumes');
     await user.click(await screen.findByRole('button', { name: /create your first resume/i }));
     await user.click(screen.getByRole('button', { name: /^Blank/ }));
     await screen.findByRole('textbox', { name: 'Resume title' });
@@ -95,7 +95,7 @@ describe('build flow inside the app', () => {
     const openEditor = async (user: ReturnType<typeof userEvent.setup>) => {
       mockApi.documents.mockResolvedValue({ items: [resume({ reviewed_revision: 2 })] });
       render(<App />);
-      await goTo(user, 'Resume studio');
+      await goTo(user, 'My resumes');
       await user.click(await screen.findByRole('button', { name: 'Open Backend Engineer – Stripe' }));
       await screen.findByRole('textbox', { name: 'Resume title' });
     };
