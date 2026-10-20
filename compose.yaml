@@ -25,6 +25,7 @@ services:
       PDF_STORAGE_DIR: /data/exports
       MODEL_BACKEND: ${MODEL_BACKEND:-heuristic}
       FOR_YOU_ENABLED: ${FOR_YOU_ENABLED:-1}
+      FOR_YOU_FUSION: ${FOR_YOU_FUSION:-1}
       EMBED_ON_SAVE: ${EMBED_ON_SAVE:-1}
       EMBEDDER_URL: ${EMBEDDER_URL:-http://embedder:8100}
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
