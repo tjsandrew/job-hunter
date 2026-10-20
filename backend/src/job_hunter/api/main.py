@@ -35,6 +35,8 @@ from job_hunter.profile_bank.build import blank_document_parts
 from job_hunter.profile_bank.importing import ImportFailure
 from job_hunter.profile_bank.importing.docx import CONTENT_TYPES, declared_file_problem, detect_resume_file, extract_docx
 from job_hunter.seniority import SENIORITY_LADDER, SENIORITY_OPTIONS, normalise_levels
+from job_hunter.adapters import storage
+from job_hunter.adapters.auth import CloudIdentity, cloud_identity
 
 app = FastAPI(title="Job Hunter API", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=[x.strip() for x in settings.cors_origins.split(",")],
@@ -60,7 +62,9 @@ def optional_schema_init():
     if settings.auto_create_schema:
         Base.metadata.create_all(engine)
 
-def identity(x_dev_user: str | None = Header(default=None)) -> str:
+def identity(request: Request, x_dev_user: str | None = Header(default=None)) -> str | CloudIdentity:
+    if settings.auth_mode == "cognito":
+        return cloud_identity(request)
     if settings.auth_mode != "local" or settings.app_env not in {"local", "test"}:
         raise HTTPException(401, detail={"code": "AUTH_REQUIRED", "message": "Identity provider is not configured"})
     chosen = x_dev_user or settings.dev_default_user
@@ -68,7 +72,7 @@ def identity(x_dev_user: str | None = Header(default=None)) -> str:
         raise HTTPException(401, detail={"code": "INVALID_DEV_IDENTITY", "message": "Use alice or casey in local mode"})
     return chosen
 
-def db_for(user_key: str = Depends(identity)):
+def db_for(user_key = Depends(identity)):
     try:
         yield from get_db(user_key)
     except ValueError as exc:
@@ -404,9 +408,7 @@ def application_out(item: Application, db: Session) -> dict:
 
 def create_reviewed_export(document: Document, user_id: UUID, db: Session) -> DocumentExport:
     export_id = uuid4()
-    directory = Path(settings.pdf_storage_dir).resolve(); directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"{user_id}-{export_id}.pdf"
-    path.write_bytes(pdf_bytes(document))
+    path = storage.write(storage.reference("exports", user_id, export_id, "pdf"), pdf_bytes(document), "application/pdf")
     export = DocumentExport(id=export_id, user_id=user_id, document_id=document.id,
                             revision=document.revision, file_path=str(path))
     db.add(export)
@@ -571,22 +573,21 @@ def export_document(document_id: UUID, db: Session = Depends(db_for)):
     if item is None: not_found()
     if item.reviewed_revision != item.revision:
         raise HTTPException(409, detail={"code": "REVIEW_REQUIRED", "message": "Review the current revision before export"})
-    export_id = uuid4()
-    directory = Path(settings.pdf_storage_dir).resolve(); directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"{current_user(db).id}-{export_id}.pdf"
-    path.write_bytes(pdf_bytes(item))
-    db.add(DocumentExport(id=export_id, user_id=current_user(db).id, document_id=item.id,
-                          revision=item.revision, file_path=str(path)))
-    db.flush()
+    export = create_reviewed_export(item, current_user(db).id, db)
+    export_id = export.id
     return {"export_id": str(export_id), "revision": item.revision, "download_url": f"/v1/exports/{export_id}"}
 
 @app.get("/v1/exports/{export_id}")
 def download_export(export_id: UUID, db: Session = Depends(db_for)):
     item = db.scalar(select(DocumentExport).where(DocumentExport.id == export_id, DocumentExport.user_id == current_user(db).id))
     if item is None: not_found()
-    path = Path(item.file_path)
-    if not path.is_file(): not_found()
-    return Response(path.read_bytes(), media_type="application/pdf",
+    if item.file_path.startswith("s3://"):
+        return JSONResponse({"url": storage.download_url(item.file_path, f"resume-r{item.revision}.pdf", "application/pdf")}, headers={"Cache-Control": "no-store"})
+    try:
+        data = storage.read(item.file_path)
+    except FileNotFoundError:
+        not_found()
+    return Response(data, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="resume-r{item.revision}.pdf"'})
 
 @app.post("/v1/uploads", status_code=201)
@@ -594,15 +595,20 @@ def upload_resume(body: UploadCreate, db: Session = Depends(db_for)):
     declared = declared_file_problem(body.filename, body.content_type)
     if isinstance(declared, tuple):
         raise HTTPException(422, detail={"code": declared[0], "message": declared[1]})
-    upload_id = uuid4(); directory = Path(settings.pdf_storage_dir).resolve().parent / "uploads"; directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"{current_user(db).id}-{upload_id}.{declared}"
+    upload_id = uuid4()
+    path = storage.reference("uploads", current_user(db).id, upload_id, declared)
     upload = Upload(id=upload_id, user_id=current_user(db).id, filename=Path(body.filename).name,
                     content_type=body.content_type, declared_size=body.size_bytes,
                     file_path=str(path)); db.add(upload); db.flush()
+    if settings.storage_backend == "s3":
+        return {"upload_id": str(upload_id), "upload_url": storage.upload_url(path, body.content_type, body.size_bytes),
+                "finalize_url": f"/v1/uploads/{upload_id}/finalize", "fields": {}, "expires_at": None}
     return {"upload_id": str(upload_id), "upload_url": f"/v1/uploads/{upload_id}/content", "fields": {}, "expires_at": None}
 
 @app.put("/v1/uploads/{upload_id}/content")
 async def save_upload_content(upload_id: UUID, request: Request, db: Session = Depends(db_for)):
+    if settings.storage_backend != "local":
+        raise HTTPException(400, detail="Use the direct upload URL and finalize endpoint")
     item = db.scalar(select(Upload).where(Upload.id == upload_id, Upload.user_id == current_user(db).id).with_for_update())
     if item is None: not_found()
     if item.sha256 is not None:
@@ -617,14 +623,36 @@ async def save_upload_content(upload_id: UUID, request: Request, db: Session = D
     data = b"".join(parts)
     if total_size != item.declared_size:
         raise HTTPException(422, detail={"code": "SIZE_MISMATCH", "message": "Uploaded byte count does not match the declared size"})
+    return process_upload(item, data)
+
+
+@app.post("/v1/uploads/{upload_id}/finalize")
+def finalize_upload(upload_id: UUID, db: Session = Depends(db_for)):
+    if settings.storage_backend != "s3":
+        raise HTTPException(400, detail="Direct upload finalization is not enabled")
+    item = db.scalar(select(Upload).where(Upload.id == upload_id, Upload.user_id == current_user(db).id).with_for_update())
+    if item is None:
+        not_found()
+    if item.sha256 is not None:
+        raise HTTPException(409, detail={"code": "UPLOAD_IMMUTABLE", "message": "This upload has already been captured"})
+    try:
+        frozen, data = storage.capture(item.file_path, item.declared_size)
+    except (ValueError, FileNotFoundError) as exc:
+        raise HTTPException(422, detail={"code": "INVALID_UPLOAD", "message": str(exc)}) from exc
+    result = process_upload(item, data, persist=False)
+    item.file_path = frozen
+    return result
+
+
+def process_upload(item: Upload, data: bytes, persist: bool = True):
     try:
         kind = detect_resume_file(data)
     except ImportFailure as exc:
         raise HTTPException(422, detail={"code": exc.code, "message": str(exc)})
     # The bytes decide the type, so a renamed file is stored (and later served) as what it really is.
     item.content_type = CONTENT_TYPES[kind]
-    item.file_path = str(Path(item.file_path).with_suffix(f".{kind}"))
-    Path(item.file_path).write_bytes(data)
+    if persist:
+        item.file_path = storage.write(str(Path(item.file_path).with_suffix(f".{kind}")), data, item.content_type)
     item.sha256 = hashlib.sha256(data).hexdigest()
     parsed = inspect_pdf(data) if kind == "pdf" else inspect_docx(data)
     item.status = parsed["status"]

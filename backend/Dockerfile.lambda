@@ -1,0 +1,7 @@
+FROM public.ecr.aws/lambda/python:3.12
+COPY pyproject.toml requirements.lock ${LAMBDA_TASK_ROOT}/
+COPY src ${LAMBDA_TASK_ROOT}/src
+COPY migrations ${LAMBDA_TASK_ROOT}/migrations
+COPY alembic.ini ${LAMBDA_TASK_ROOT}/
+RUN pip install --no-cache-dir -c requirements.lock .
+CMD ["job_hunter.api.lambda_handler.handler"]
