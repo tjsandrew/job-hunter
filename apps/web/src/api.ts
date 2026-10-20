@@ -57,6 +57,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (type.includes('application/json')) return response.json() as Promise<T>;
   return (await response.blob()) as T;
 }
+// Shared by feature clients so cloud authentication and error handling stay consistent.
+export { request as apiRequest };
+
 // The browser's MIME type for .docx is sometimes empty, so the type sent follows the extension (the server re-checks the bytes).
 export const resumeContentType = (file: { name: string }) => file.name.toLowerCase().endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : '';
 const json = (method: string, body?: unknown): RequestInit => ({ method, body: body === undefined ? undefined : JSON.stringify(body) });
