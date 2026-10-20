@@ -239,7 +239,7 @@ def health():
     return {"status": "ok"}
 
 @app.get("/v1/me")
-def me(db: Session = Depends(db_for)):
+def me(db: Session = Depends(db_for, scope="function")):
     user = current_user(db)
     limit = 50 if user.plan == "premium" else 5
     period = datetime.now(ZoneInfo("Asia/Singapore")).strftime("%Y-%m")
@@ -253,15 +253,15 @@ async def bank_error_handler(request: Request, exc: BankError):
         "code": exc.code, "message": exc.message}))
 
 @app.get("/v1/profile")
-def profile(db: Session = Depends(db_for)):
+def profile(db: Session = Depends(db_for, scope="function")):
     return bank_services.read_basics(db)
 
 @app.put("/v1/profile")
-def update_profile(body: ProfileWrite, db: Session = Depends(db_for)):
+def update_profile(body: ProfileWrite, db: Session = Depends(db_for, scope="function")):
     return bank_services.update_basics(db, body.draft, body.expected_revision)
 
 @app.post("/v1/profile/confirm")
-def confirm_profile(body: ConfirmWrite, db: Session = Depends(db_for)):
+def confirm_profile(body: ConfirmWrite, db: Session = Depends(db_for, scope="function")):
     result = bank_services.confirm_bank(db, body.expected_bank_revision)
     profile_sync.embed_after_save(db, current_user(db).id)   # best effort: a failed embed never fails the confirm
     return result
@@ -269,7 +269,7 @@ def confirm_profile(body: ConfirmWrite, db: Session = Depends(db_for)):
 app.include_router(build_router(db_for))
 
 @app.get("/v1/preferences")
-def get_preferences(db: Session = Depends(db_for)):
+def get_preferences(db: Session = Depends(db_for, scope="function")):
     item = db.get(Preference, current_user(db).id)
     data = dict(item.data) if item else {}
     seniority = data.get("seniority")
@@ -284,7 +284,7 @@ def seniority_options():
     return {"items": SENIORITY_OPTIONS}
 
 @app.put("/v1/preferences")
-def update_preferences(body: PreferencesWrite, db: Session = Depends(db_for)):
+def update_preferences(body: PreferencesWrite, db: Session = Depends(db_for, scope="function")):
     item = db.scalar(select(Preference).where(Preference.user_id == current_user(db).id).with_for_update())
     if item is None:
         if body.expected_revision != 0: raise HTTPException(409, detail={"code": "REVISION_CONFLICT", "message": "Preferences changed"})
@@ -296,7 +296,7 @@ def update_preferences(body: PreferencesWrite, db: Session = Depends(db_for)):
     return {**item.data, "revision": item.revision}
 
 @app.get("/v1/recommendations")
-def recommendations(db: Session = Depends(db_for), limit: int = Query(20, ge=1, le=100),
+def recommendations(db: Session = Depends(db_for, scope="function"), limit: int = Query(20, ge=1, le=100),
                      offset: int = Query(0, ge=0, le=1000000),
                      q: str | None = Query(None, max_length=200)):
     jobs = db.scalars(select(Job).where(Job.status == "open")).all()
@@ -319,7 +319,7 @@ def recommendations(db: Session = Depends(db_for), limit: int = Query(20, ge=1, 
             "ranking_status": "Keyword text similarity and skill matching (the For you list uses semantic matching)"}
 
 @app.get("/v1/recommendations/for-you")
-def recommendations_for_you(db: Session = Depends(db_for), limit: int = Query(20, ge=1, le=100),
+def recommendations_for_you(db: Session = Depends(db_for, scope="function"), limit: int = Query(20, ge=1, le=100),
                             offset: int = Query(0, ge=0, le=1000000),
                             q: str | None = Query(None, max_length=200)):
     """Semantic recommendations (eligibility, role/seniority checks, then similarity), behind FOR_YOU_ENABLED.
@@ -360,13 +360,13 @@ def job_out(job: Job) -> dict:
             "salary_period": job.salary_period}
 
 @app.get("/v1/jobs/{job_id}")
-def get_job(job_id: UUID, db: Session = Depends(db_for)):
+def get_job(job_id: UUID, db: Session = Depends(db_for, scope="function")):
     job = db.get(Job, job_id)
     if job is None: not_found()
     return job_out(job)
 
 @app.put("/v1/jobs/{job_id}/review")
-def review_job(job_id: UUID, body: ReviewWrite, db: Session = Depends(db_for)):
+def review_job(job_id: UUID, body: ReviewWrite, db: Session = Depends(db_for, scope="function")):
     if body.decision not in {"saved", "dismissed", "none"}: raise HTTPException(422, detail={"code": "INVALID_DECISION", "message": "decision must be saved, dismissed, or none"})
     if db.get(Job, job_id) is None: not_found()
     user_id = current_user(db).id
@@ -382,7 +382,7 @@ def review_job(job_id: UUID, body: ReviewWrite, db: Session = Depends(db_for)):
     return {"job_id": str(job_id), "decision": None if body.decision == "none" else body.decision}
 
 @app.get("/v1/applications")
-def list_applications(db: Session = Depends(db_for)):
+def list_applications(db: Session = Depends(db_for, scope="function")):
     rows = db.scalars(select(Application).where(Application.user_id == current_user(db).id)
                       .order_by(Application.updated_at.desc())).all()
     return {"items": [application_out(x, db) for x in rows]}
@@ -416,7 +416,7 @@ def create_reviewed_export(document: Document, user_id: UUID, db: Session) -> Do
     return export
 
 @app.put("/v1/applications/{job_id}")
-def put_application(job_id: UUID, body: ApplicationWrite, db: Session = Depends(db_for)):
+def put_application(job_id: UUID, body: ApplicationWrite, db: Session = Depends(db_for, scope="function")):
     if body.status is not None and body.status not in {"saved", "preparing", "applied", "interviewing", "offer", "rejected", "withdrawn"}:
         raise HTTPException(422, detail={"code": "INVALID_STATUS", "message": "Unsupported application status"})
     if db.get(Job, job_id) is None: not_found()
@@ -484,14 +484,14 @@ def put_application(job_id: UUID, body: ApplicationWrite, db: Session = Depends(
 app.include_router(build_resume_router(db_for, validate_document=validate_document, doc_out=doc_out))
 
 @app.get("/v1/documents")
-def list_documents(kind: str | None = None, db: Session = Depends(db_for)):
+def list_documents(kind: str | None = None, db: Session = Depends(db_for, scope="function")):
     stmt = select(Document).where(Document.user_id == current_user(db).id)
     # Without a kind, archived (deleted) resumes stay out of the list; ask for kind=archived to see them.
     stmt = stmt.where(Document.kind == kind) if kind else stmt.where(Document.kind != "archived")
     return {"items": [doc_out(x) for x in db.scalars(stmt.order_by(Document.updated_at.desc())).all()]}
 
 @app.post("/v1/documents", status_code=201)
-def create_document(body: DocumentCreate, db: Session = Depends(db_for)):
+def create_document(body: DocumentCreate, db: Session = Depends(db_for, scope="function")):
     # A new, empty resume starts from the user's resume defaults and profile basics.
     template, content, layout = blank_document_parts(
         body.template if "template" in body.model_fields_set else None, body.content,
@@ -505,13 +505,13 @@ def create_document(body: DocumentCreate, db: Session = Depends(db_for)):
     return doc_out(item)
 
 @app.get("/v1/documents/{document_id}")
-def get_document(document_id: UUID, db: Session = Depends(db_for)):
+def get_document(document_id: UUID, db: Session = Depends(db_for, scope="function")):
     item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id).with_for_update())
     if item is None: not_found()
     return doc_out(item)
 
 @app.patch("/v1/documents/{document_id}")
-def patch_document(document_id: UUID, body: DocumentPatch, db: Session = Depends(db_for)):
+def patch_document(document_id: UUID, body: DocumentPatch, db: Session = Depends(db_for, scope="function")):
     item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id, Document.kind == "resume").with_for_update())
     if item is None: not_found()
     if item.revision != body.expected_revision: raise HTTPException(409, detail={"code": "REVISION_CONFLICT", "message": "Document changed"})
@@ -523,7 +523,7 @@ def patch_document(document_id: UUID, body: DocumentPatch, db: Session = Depends
     return doc_out(item)
 
 @app.delete("/v1/documents/{document_id}", status_code=204)
-def archive_document(document_id: UUID, db: Session = Depends(db_for)):
+def archive_document(document_id: UUID, db: Session = Depends(db_for, scope="function")):
     """Archive a resume: it leaves the library but its exports and application snapshots keep working."""
     item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id,
                                             Document.kind.in_(("resume", "archived"))).with_for_update())
@@ -532,7 +532,7 @@ def archive_document(document_id: UUID, db: Session = Depends(db_for)):
     return Response(status_code=204)
 
 @app.post("/v1/documents/{document_id}/restore")
-def restore_document(document_id: UUID, db: Session = Depends(db_for)):
+def restore_document(document_id: UUID, db: Session = Depends(db_for, scope="function")):
     item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id,
                                             Document.kind.in_(("resume", "archived"))).with_for_update())
     if item is None: not_found()
@@ -540,7 +540,7 @@ def restore_document(document_id: UUID, db: Session = Depends(db_for)):
     return doc_out(item)
 
 @app.post("/v1/documents/{document_id}/duplicate", status_code=201)
-def duplicate_document(document_id: UUID, body: DuplicateWrite, db: Session = Depends(db_for)):
+def duplicate_document(document_id: UUID, body: DuplicateWrite, db: Session = Depends(db_for, scope="function")):
     item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id, Document.kind == "resume"))
     if item is None: not_found()
     if body.job_id and db.get(Job, body.job_id) is None: not_found()
@@ -550,7 +550,7 @@ def duplicate_document(document_id: UUID, body: DuplicateWrite, db: Session = De
     return doc_out(copy)
 
 @app.post("/v1/documents/{document_id}/review")
-def review_document(document_id: UUID, body: DocumentReview, db: Session = Depends(db_for)):
+def review_document(document_id: UUID, body: DocumentReview, db: Session = Depends(db_for, scope="function")):
     item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id, Document.kind == "resume").with_for_update())
     if item is None: not_found()
     if body.expected_revision != item.revision: raise HTTPException(409, detail={"code": "REVISION_CONFLICT", "message": "Document changed"})
@@ -563,12 +563,12 @@ def owned_document(document_id: UUID, db: Session) -> Document:
     return item
 
 @app.get("/v1/documents/{document_id}/preview.pdf")
-def preview_document(document_id: UUID, db: Session = Depends(db_for)):
+def preview_document(document_id: UUID, db: Session = Depends(db_for, scope="function")):
     return Response(pdf_bytes(owned_document(document_id, db)), media_type="application/pdf",
                     headers={"Content-Disposition": "inline; filename=resume-preview.pdf"})
 
 @app.post("/v1/documents/{document_id}/exports", status_code=201)
-def export_document(document_id: UUID, db: Session = Depends(db_for)):
+def export_document(document_id: UUID, db: Session = Depends(db_for, scope="function")):
     item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id, Document.kind == "resume").with_for_update())
     if item is None: not_found()
     if item.reviewed_revision != item.revision:
@@ -578,7 +578,7 @@ def export_document(document_id: UUID, db: Session = Depends(db_for)):
     return {"export_id": str(export_id), "revision": item.revision, "download_url": f"/v1/exports/{export_id}"}
 
 @app.get("/v1/exports/{export_id}")
-def download_export(export_id: UUID, db: Session = Depends(db_for)):
+def download_export(export_id: UUID, db: Session = Depends(db_for, scope="function")):
     item = db.scalar(select(DocumentExport).where(DocumentExport.id == export_id, DocumentExport.user_id == current_user(db).id))
     if item is None: not_found()
     if item.file_path.startswith("s3://"):
@@ -591,7 +591,7 @@ def download_export(export_id: UUID, db: Session = Depends(db_for)):
                     headers={"Content-Disposition": f'attachment; filename="resume-r{item.revision}.pdf"'})
 
 @app.post("/v1/uploads", status_code=201)
-def upload_resume(body: UploadCreate, db: Session = Depends(db_for)):
+def upload_resume(body: UploadCreate, db: Session = Depends(db_for, scope="function")):
     declared = declared_file_problem(body.filename, body.content_type)
     if isinstance(declared, tuple):
         raise HTTPException(422, detail={"code": declared[0], "message": declared[1]})
@@ -606,7 +606,7 @@ def upload_resume(body: UploadCreate, db: Session = Depends(db_for)):
     return {"upload_id": str(upload_id), "upload_url": f"/v1/uploads/{upload_id}/content", "fields": {}, "expires_at": None}
 
 @app.put("/v1/uploads/{upload_id}/content")
-async def save_upload_content(upload_id: UUID, request: Request, db: Session = Depends(db_for)):
+async def save_upload_content(upload_id: UUID, request: Request, db: Session = Depends(db_for, scope="function")):
     if settings.storage_backend != "local":
         raise HTTPException(400, detail="Use the direct upload URL and finalize endpoint")
     item = db.scalar(select(Upload).where(Upload.id == upload_id, Upload.user_id == current_user(db).id).with_for_update())
@@ -627,7 +627,7 @@ async def save_upload_content(upload_id: UUID, request: Request, db: Session = D
 
 
 @app.post("/v1/uploads/{upload_id}/finalize")
-def finalize_upload(upload_id: UUID, db: Session = Depends(db_for)):
+def finalize_upload(upload_id: UUID, db: Session = Depends(db_for, scope="function")):
     if settings.storage_backend != "s3":
         raise HTTPException(400, detail="Direct upload finalization is not enabled")
     item = db.scalar(select(Upload).where(Upload.id == upload_id, Upload.user_id == current_user(db).id).with_for_update())
@@ -665,7 +665,7 @@ def process_upload(item: Upload, data: bytes, persist: bool = True):
             "ai_available": False}
 
 @app.get("/v1/uploads/{upload_id}")
-def get_upload(upload_id: UUID, db: Session = Depends(db_for)):
+def get_upload(upload_id: UUID, db: Session = Depends(db_for, scope="function")):
     item = db.scalar(select(Upload).where(Upload.id == upload_id, Upload.user_id == current_user(db).id))
     if item is None: not_found()
     return {"upload_id": str(item.id), "filename": item.filename, "status": item.status,

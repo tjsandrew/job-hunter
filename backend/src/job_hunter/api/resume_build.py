@@ -75,7 +75,7 @@ def build_router(db_dependency, *, validate_document, doc_out):
     router = APIRouter(prefix="/v1")
 
     @router.post("/documents/from-bank", status_code=201)
-    def create_from_bank(body: BuildPlan, db: Session = Depends(db_dependency)):
+    def create_from_bank(body: BuildPlan, db: Session = Depends(db_dependency, scope="function")):
         if body.job_id is not None and db.get(Job, body.job_id) is None:
             raise HTTPException(404, detail={"code": "NOT_FOUND", "message": "Resource not found"})
         bank = services.get_bank(db)
@@ -93,7 +93,7 @@ def build_router(db_dependency, *, validate_document, doc_out):
         return doc_out(document)
 
     @router.post("/resume-builds/suggest")
-    def suggest(body: SuggestRequest, db: Session = Depends(db_dependency)):
+    def suggest(body: SuggestRequest, db: Session = Depends(db_dependency, scope="function")):
         job = db.get(Job, body.job_id)
         if job is None:
             raise HTTPException(404, detail={"code": "NOT_FOUND", "message": "Resource not found"})
