@@ -102,3 +102,8 @@ def test_legacy_keys_and_wording_are_converted():
     assert classify_seniority("Senior Engineer", stated="entry")[:2] == (["junior"], SENIORITY_STATED)
     assert normalise_levels(["nonsense", None]) == ()
     assert normalise_levels(None) == ()
+
+
+def test_head_without_of_is_lead_level():
+    assert classify_seniority("Head, Merchant Acquisition")[0] == ["lead"]
+    assert classify_seniority("Product Head Count Analyst")[0] == []

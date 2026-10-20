@@ -55,6 +55,7 @@ _SENIORITY_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         # Added 2026-10-16 after the head-to-head showed "Engineering Manager" roles (people management)
         # reaching junior profiles. Other "manager" titles are still not read as a level.
         r"|\bengineering\s+manager\b|\bmanager,\s*engineering\b"
+        r"|^\s*head\b"  # "Head, Merchant Acquisition": the head-of-function form without "of"
         r"|\bstaff\s+(?:\w+\s+){0,2}(engineer|developer|scientist|designer|architect)\b"
         r"|\blead\b(?!\s*gen)", re.I)),
 )
