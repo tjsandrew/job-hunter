@@ -1,6 +1,43 @@
 # AWS deployment handoff
 
-Updated 21 October 2026. The foundation and backend resources are deployed. The password-authentication transition requires the one-time setup below before a successful application release. Singapore (`ap-southeast-1`) is the target region; use Amplify's provided address.
+Updated 21 October 2026. The foundation, backend and website are deployed. The password-authentication transition and release succeeded on 21 October 2026; the transition instructions below are for recovery or a new environment. Singapore (`ap-southeast-1`) is the target region; use Amplify's provided address.
+
+## Architecture and credentials
+
+```mermaid
+flowchart LR
+    Browser[Teammate browser] -->|React app over HTTPS| Web[Amplify Hosting]
+    Browser -->|Sign in| Auth[Cognito]
+    Auth -->|Access token| Browser
+    Browser -->|Bearer token| Gateway[API Gateway JWT authorizer]
+    Gateway --> API
+    Browser -->|Presigned upload or download URL| Files[Private S3 documents]
+
+    subgraph Private[Private VPC]
+        API[API Lambda: jobhunter_app] -->|Password and verified TLS| DB[Aurora PostgreSQL: 0–1 ACU]
+        Migration[Migration Lambda: jobhunter_migrator] -->|Schema migrations over TLS| DB
+    end
+    API -->|Free S3 gateway endpoint| Files
+
+    Secrets[Secrets Manager: API and migration passwords] -->|Read at deployment| Release[Manual GitHub Actions release]
+    Release -.->|Inject API password into environment| API
+    Release -.->|Inject migration password into environment| Migration
+    Release -.->|Publish frontend build| Web
+```
+
+Solid arrows show application traffic or credential retrieval. Dashed arrows show deployment configuration. The Lambda functions read database passwords from their environment, so they do not contact Secrets Manager at runtime. There is no NAT gateway or paid Secrets Manager VPC endpoint. The master password is used only by the operator bootstrap and is omitted from the normal release path.
+
+| Location | What is stored there | Who can obtain it |
+|---|---|---|
+| Secrets Manager, Singapore: AWS-managed `rds!cluster-…` secret | Master `jobhunter_admin` password for setup/recovery | Authorized AWS operators; normal release role cannot read this secret |
+| Secrets Manager, Singapore: `jobhunter-staging-database-credentials` | Separate `jobhunter_app` and `jobhunter_migrator` passwords in one JSON secret | Authorized AWS operators and the GitHub release role |
+| Each Lambda's environment configuration | That function's own `DATABASE_PASSWORD`, encrypted at rest | Function code and AWS principals with sufficient configuration-reading permissions |
+| Terraform state and saved plans | Can contain copies of Lambda environment passwords after refresh | Principals who can read the private state bucket or local plan/state files |
+| Git repository and GitHub deployment variables | Architecture, scripts, resource names and secret ARN; no password values | Repository collaborators |
+
+**After pulling:** read this file for the architecture. Use the local Docker setup for development; no production credentials are needed. Cloud deployment uses **Actions → Deploy staging → Run workflow → main**; ordinary merges do not deploy. Database changes belong in Alembic migrations. Password rotation is separate operator work, not part of normal feature development.
+
+**Trust boundary:** pulling the repository alone does not grant secret access. However, maintainers who can change and execute the deployment workflow on `main` can potentially retrieve credentials through its AWS role. Treat those maintainers, Lambda configuration readers and Terraform-state readers as trusted secret holders. An ARN is an identifier, not a password.
 
 ## First-release design
 
@@ -23,7 +60,7 @@ The private database spans a two-subnet network with one serverless writer. Ther
 - Terraform foundation plus an opt-in backend (`enable_backend=false` by default), scoped IAM permissions and budget alerts.
 - Password connections with verified TLS and the bundled public RDS CA certificates. No idle connection pool keeps Aurora awake; bounded connection retries cover resume delays.
 - A dedicated migration function using an administrator SQL identity and advisory lock. The API uses `jobhunter_app`, without superuser or RLS bypass privileges.
-- GitHub release workflow and scripts for migrations, API updates, frontend publication and public configuration. The first complete release must pass migration and acceptance checks.
+- GitHub release workflow and scripts for migrations, API updates, frontend publication and public configuration. The password-based release passed migrations, API health/anonymous-access checks and Amplify publication. Browser acceptance with separate team accounts remains a separate check.
 
 The master password remains AWS-managed for operator recovery. A second Secrets Manager secret holds separate `jobhunter_app` and `jobhunter_migrator` passwords; only the operator and release role retrieve it outside the VPC. Lambda receives the relevant password through encrypted-at-rest environment configuration. The API has no secret-reading permission. The migrator inherits the master SQL role for existing schema ownership and DDL; it is privileged and never handles HTTP requests.
 
@@ -45,7 +82,7 @@ Singapore Aurora Standard planning rates (inspected 20 October): **USD 0.20/ACU-
 
 At 20 GB average consumed storage, add approximately USD 2.20/month; 10 million I/O requests add USD 2.20. These are examples, not preallocated storage or I/O allowances. Two secrets (master plus deployment credentials) add approximately USD 0.80/month, plus API requests. Hosting, requests, logs, the CloudWatch alarm/SNS, backups beyond allowances, transfer and taxes are additional. Compute is uncharged while actually paused, but storage continues to be billed. Five-minute idle intervals, resume activity and administrative/maintenance work can contribute to compute usage. The 1 ACU ceiling limits capacity, not the whole account bill.
 
-Password authentication still avoids the approximately USD 9.49/month Secrets Manager interface endpoint and USD 0.40/month runtime password secret from the earlier design. No NAT gateway or paid interface endpoint is needed.
+Deployment-injected passwords avoid the approximately USD 9.49/month Secrets Manager interface endpoint. Secrets Manager storage is still used: one master secret and one combined API/migration credential secret, approximately USD 0.80/month total plus requests. No NAT gateway or paid interface endpoint is needed.
 
 There are two independent notifications:
 
