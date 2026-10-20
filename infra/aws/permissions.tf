@@ -4,8 +4,13 @@
 resource "aws_iam_role_policy" "release" {
   role = aws_iam_role.release.id
   policy = jsonencode({ Version = "2012-10-17", Statement = [
-    { Effect = "Allow", Action = ["amplify:CreateDeployment", "amplify:StartDeployment"], Resource = "${aws_amplify_app.web.arn}/branches/main" },
-    { Effect = "Allow", Action = ["amplify:GetJob"], Resource = "${aws_amplify_app.web.arn}/branches/main/jobs/*" },
+    # Amplify authorizes these against the branch's deployment/job sub-resources
+    # (CreateDeployment was denied on .../branches/main/deployments/*).
+    { Effect = "Allow", Action = ["amplify:CreateDeployment", "amplify:StartDeployment", "amplify:GetJob"], Resource = [
+      "${aws_amplify_app.web.arn}/branches/main",
+      "${aws_amplify_app.web.arn}/branches/main/deployments/*",
+      "${aws_amplify_app.web.arn}/branches/main/jobs/*",
+    ] },
     { Effect = "Allow", Action = ["ecr:GetAuthorizationToken"], Resource = "*" },
     { Effect = "Allow", Action = ["ecr:BatchCheckLayerAvailability", "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage", "ecr:BatchGetImage"], Resource = aws_ecr_repository.api.arn }
   ] })
