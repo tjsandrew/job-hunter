@@ -10,6 +10,11 @@ def test_defaults():
     assert s.backend == "fastembed"
     assert s.model_name == "jinaai/jina-embeddings-v2-small-en"
     assert s.dimensions == 512 and s.max_texts == 64 and s.max_chars == 30_000
+    assert s.batch_size == 1
+
+
+def test_batch_size_override():
+    assert Settings.from_env({"EMBEDDER_BATCH_SIZE": "2"}).batch_size == 2
 
 
 def test_overrides():
@@ -25,6 +30,7 @@ def test_overrides():
     {"EMBEDDER_SERVICE_BACKEND": "openai"},
     {"EMBEDDER_MAX_TEXTS": "0"},
     {"EMBEDDER_MAX_CHARS": "-5"},
+    {"EMBEDDER_BATCH_SIZE": "0"},
     {"EMBEDDER_DIMENSIONS": "abc"},
 ])
 def test_invalid_values_fail_fast(env):

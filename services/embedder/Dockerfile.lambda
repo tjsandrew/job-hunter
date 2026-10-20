@@ -1,0 +1,46 @@
+# syntax=docker/dockerfile:1
+# AWS Lambda container image for the embedder service. Same FastAPI app and the same HTTP contract as ./Dockerfile;
+# only the packaging differs. The AWS Lambda Web Adapter (an extension) translates Lambda invocations into HTTP
+# requests on port 8100, so no service code changes.
+#
+# STATUS: built and smoke-tested locally only (docker run, read-only root filesystem, 2 GB / 1 CPU limits).
+# Not yet run on real Lambda. See LAMBDA.md for what was measured and what is still open.
+#
+#   docker build -f Dockerfile.lambda -t embedder-lambda .
+
+# ---- build: dependencies and the application, on the official Lambda Python base ----
+FROM public.ecr.aws/lambda/python:3.12 AS build
+ENV PYTHONDONTWRITEBYTECODE=1
+WORKDIR /app
+COPY pyproject.toml requirements.lock ./
+COPY src ./src
+RUN pip install --no-cache-dir -c requirements.lock .
+
+# ---- modelsrc: the baked model. Override with --build-context modelsrc=docker-image://<existing embedder image>
+#      to reuse an already-downloaded model instead of fetching it again. ----
+FROM build AS modelsrc
+ARG EMBEDDER_MODEL_NAME=jinaai/jina-embeddings-v2-small-en
+RUN python -c "from fastembed import TextEmbedding; TextEmbedding(model_name='${EMBEDDER_MODEL_NAME}', cache_dir='/models')" \
+ && chmod -R a+rX /models
+
+# ---- final ----
+FROM build
+COPY --from=modelsrc /models /models
+# Pin a released adapter version; do not use :latest.
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:1.0.0 /lambda-adapter /opt/extensions/lambda-adapter
+
+# Lambda's filesystem is read-only except /tmp, and the model is baked in, so never reach for the Hugging Face hub.
+ENV EMBEDDER_CACHE_DIR=/models \
+    HF_HUB_OFFLINE=1 \
+    HF_HOME=/tmp/hf \
+    HOME=/tmp \
+    AWS_LWA_PORT=8100 \
+    AWS_LWA_READINESS_CHECK_PATH=/health \
+    AWS_LWA_READINESS_CHECK_PORT=8100 \
+    AWS_LWA_INVOKE_MODE=buffered
+
+# Lambda ignores USER and runs the function as its own unprivileged user. The base image's entrypoint expects a
+# handler name, so clear it and start the web server directly; the adapter extension does the Lambda plumbing.
+ENTRYPOINT []
+EXPOSE 8100
+CMD ["python", "-m", "uvicorn", "embedder_service.app:app_factory", "--factory", "--host", "0.0.0.0", "--port", "8100"]
