@@ -1,12 +1,13 @@
 # Release SDK actions verified with IAM Policy Autopilot. ECR push permissions
-# additionally cover Docker registry operations (not visible to an SDK scanner).
+# additionally cover Docker registry operations (not visible to an SDK scanner);
+# Buildx reads the manifest (BatchGetImage) while pushing.
 resource "aws_iam_role_policy" "release" {
   role = aws_iam_role.release.id
   policy = jsonencode({ Version = "2012-10-17", Statement = [
     { Effect = "Allow", Action = ["amplify:CreateDeployment", "amplify:StartDeployment"], Resource = "${aws_amplify_app.web.arn}/branches/main" },
     { Effect = "Allow", Action = ["amplify:GetJob"], Resource = "${aws_amplify_app.web.arn}/branches/main/jobs/*" },
     { Effect = "Allow", Action = ["ecr:GetAuthorizationToken"], Resource = "*" },
-    { Effect = "Allow", Action = ["ecr:BatchCheckLayerAvailability", "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage"], Resource = aws_ecr_repository.api.arn }
+    { Effect = "Allow", Action = ["ecr:BatchCheckLayerAvailability", "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage", "ecr:BatchGetImage"], Resource = aws_ecr_repository.api.arn }
   ] })
 }
 resource "aws_iam_role_policy" "release_backend" {
