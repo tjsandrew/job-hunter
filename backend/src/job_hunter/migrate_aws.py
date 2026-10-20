@@ -1,10 +1,10 @@
-"""IAM schema releases and explicit one-time operator bootstrap; no HTTP route."""
+"""Password schema releases and explicit one-time operator bootstrap; no HTTP route."""
 import os
 
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import text
-from job_hunter.adapters.aws_config import bootstrap_engine, iam_engine
+from job_hunter.adapters.aws_config import bootstrap_engine, password_engine
 
 
 def grant_runtime(connection):
@@ -25,7 +25,7 @@ def grant_runtime(connection):
 def handler(event, context):
     host, database = os.environ["DATABASE_HOST"], os.environ["DATABASE_NAME"]
     username = os.environ["DATABASE_USERNAME"]
-    if username != "jobhunter_admin":
+    if username != "jobhunter_migrator":
         raise ValueError("Unexpected migration role")
     action = event.get("action", "migrate")
     if action not in {"migrate", "check", "bootstrap"}:
@@ -34,11 +34,11 @@ def handler(event, context):
         # Operator retrieves the AWS-managed master secret outside the VPC and
         # invokes over TLS. Never log the event or its credentials.
         credentials = event.get("credentials", {})
-        if credentials.get("username") != username or not credentials.get("password"):
+        if credentials.get("username") != "jobhunter_admin" or not credentials.get("password"):
             raise ValueError("Bootstrap requires administrator credentials")
-        engine = bootstrap_engine(host, database, username, credentials["password"])
+        engine = bootstrap_engine(host, database, "jobhunter_admin", credentials["password"])
     else:
-        engine = iam_engine(host, database, username, attempts=12)
+        engine = password_engine(host, database, username, attempts=12)
     try:
         if action == "check":
             with engine.connect() as connection:
@@ -49,13 +49,27 @@ def handler(event, context):
             if action == "bootstrap":
                 if not connection.scalar(text("SELECT 1 FROM pg_roles WHERE rolname='jobhunter_app'")):
                     connection.execute(text("CREATE ROLE jobhunter_app LOGIN PASSWORD NULL"))
-                connection.execute(text("ALTER ROLE jobhunter_app PASSWORD NULL"))
+                passwords = event.get("passwords", {})
+                if not all(isinstance(passwords.get(role), str) and len(passwords[role]) >= 32
+                           for role in ("jobhunter_app", "jobhunter_migrator")):
+                    raise ValueError("Bootstrap requires generated application and migration passwords")
+                if not connection.scalar(text("SELECT 1 FROM pg_roles WHERE rolname='jobhunter_migrator'")):
+                    connection.execute(text("CREATE ROLE jobhunter_migrator LOGIN"))
+                connection.execute(text("REVOKE rds_iam FROM jobhunter_app, jobhunter_admin, jobhunter_migrator"))
+                connection.execute(text("GRANT jobhunter_admin TO jobhunter_migrator"))
+                # Utility statements do not accept password bind parameters. psycopg
+                # quotes literals, and SQLAlchemy never sees/logs the password SQL.
+                from psycopg import sql
+                with connection.connection.driver_connection.cursor() as cursor:
+                    for role, password in passwords.items():
+                        if role not in {"jobhunter_app", "jobhunter_migrator"}:
+                            raise ValueError("Unexpected credential role")
+                        cursor.execute(sql.SQL("ALTER ROLE {} PASSWORD {}").format(
+                            sql.Identifier(role), sql.Literal(password)))
                 # The RDS/Aurora admin is not a superuser, so it may not even restate
                 # NOSUPERUSER/NOBYPASSRLS. New roles default to both; verify instead.
                 if connection.scalar(text("SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname='jobhunter_app'")):
                     raise RuntimeError("jobhunter_app must not be a superuser or bypass row-level security")
-                connection.execute(text("GRANT rds_iam TO jobhunter_app"))
-                connection.execute(text("GRANT rds_iam TO jobhunter_admin"))
             connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             config = Config("alembic.ini")
             config.attributes["connection"] = connection

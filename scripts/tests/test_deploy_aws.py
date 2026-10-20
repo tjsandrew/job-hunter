@@ -19,7 +19,10 @@ class ReleaseRecovery(unittest.TestCase):
     def setUp(self):
         self.client = Mock()
         self.client.invoke.return_value = {"Payload": BytesIO(b'{"status":"migrated"}')}
-        self.client.get_function.side_effect = [function(OLD, "before"), function(NEW, "after")]
+        self.client.get_function.side_effect = [function(OLD, "before"), function(OLD, "configured"), function(NEW, "after")]
+        self.passwords = patch.object(release, "configure_password")
+        self.passwords.start()
+        self.addCleanup(self.passwords.stop)
         self.env = patch.dict(release.os.environ, {"MIGRATION_FUNCTION": "migrate", "API_FUNCTION": "api"})
         self.env.start()
         self.addCleanup(self.env.stop)
@@ -51,7 +54,7 @@ class ReleaseRecovery(unittest.TestCase):
         self.client.update_function_code.assert_called_once_with(FunctionName="migrate", ImageUri=NEW)
 
     def test_concurrent_operator_update_is_preserved(self):
-        self.client.get_function.side_effect = [function(OLD, "before"), function("operator-image", "operator")]
+        self.client.get_function.side_effect = [function(OLD, "before"), function(OLD, "configured"), function("operator-image", "operator")]
         with patch.object(release, "verify_api", side_effect=RuntimeError("bad health")):
             with self.assertRaisesRegex(RuntimeError, "changed concurrently"):
                 release.backend(NEW)
@@ -75,3 +78,21 @@ class ReleaseRecovery(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CredentialInjection(unittest.TestCase):
+    def test_preserves_environment_and_uses_revision_guard(self):
+        client = Mock()
+        client.get_function_configuration.return_value = {
+            "RevisionId": "configuration-before",
+            "Environment": {"Variables": {"DOCUMENT_BUCKET": "documents", "DATABASE_AUTH": "iam"}}}
+        store = Mock()
+        store.get_secret_value.return_value = {"SecretString": '{"jobhunter_app":"' + 'x' * 64 + '"}'}
+        with patch.dict(release.os.environ, {"DATABASE_CREDENTIALS_SECRET_ARN": "credential-secret"}), \
+                patch.object(release.boto3, "client", return_value=store):
+            release.configure_password(client, "api", "jobhunter_app")
+        args = client.update_function_configuration.call_args.kwargs
+        self.assertEqual(args["RevisionId"], "configuration-before")
+        self.assertEqual(args["Environment"]["Variables"]["DOCUMENT_BUCKET"], "documents")
+        self.assertEqual(args["Environment"]["Variables"]["DATABASE_USERNAME"], "jobhunter_app")
+        self.assertEqual(args["Environment"]["Variables"]["DATABASE_PASSWORD"], "x" * 64)

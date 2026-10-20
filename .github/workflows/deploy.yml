@@ -20,6 +20,7 @@ jobs:
       AMPLIFY_APP_ID: ${{ vars.AMPLIFY_APP_ID }}
       ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
       API_FUNCTION: ${{ vars.API_FUNCTION }}
+      DATABASE_CREDENTIALS_SECRET_ARN: ${{ vars.DATABASE_CREDENTIALS_SECRET_ARN }}
       MIGRATION_FUNCTION: ${{ vars.MIGRATION_FUNCTION }}
     steps:
       - uses: actions/checkout@v4

@@ -40,5 +40,5 @@ if settings.storage_backend == "s3" and not settings.document_bucket:
     raise RuntimeError("DOCUMENT_BUCKET is required for S3 storage")
 if settings.database_auth == "iam" and not (settings.database_host and settings.database_username):
     raise RuntimeError("IAM database authentication requires host and username")
-if settings.app_env == "aws" and not (settings.auth_mode == "cognito" and settings.storage_backend == "s3" and settings.database_auth == "iam"):
-    raise RuntimeError("AWS requires Cognito, S3 and IAM database authentication")
+if settings.app_env == "aws" and not (settings.auth_mode == "cognito" and settings.storage_backend == "s3" and settings.database_host and settings.database_username):
+    raise RuntimeError("AWS requires Cognito, S3 and explicit database host and username")

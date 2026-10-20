@@ -72,7 +72,7 @@ resource "aws_rds_cluster" "app" {
   database_name                       = "jobhunter"
   master_username                     = "jobhunter_admin"
   manage_master_user_password         = true
-  iam_database_authentication_enabled = true
+  iam_database_authentication_enabled = false
   storage_encrypted                   = true
   storage_type                        = "aurora"
   db_subnet_group_name                = aws_db_subnet_group.app.name
@@ -163,7 +163,7 @@ resource "aws_lambda_function" "api" {
   environment {
     variables = {
       APP_ENV         = "aws", AUTH_MODE = "cognito", STORAGE_BACKEND = "s3"
-      DATABASE_AUTH   = "iam", DATABASE_USERNAME = "jobhunter_app"
+      DATABASE_AUTH   = "password", DATABASE_USERNAME = "jobhunter_app"
       DATABASE_HOST   = aws_rds_cluster.app.endpoint, DATABASE_NAME = aws_rds_cluster.app.database_name
       DB_POOL_SIZE    = "1", PDF_STORAGE_DIR = "/tmp/exports", AUTO_CREATE_SCHEMA = "false"
       DOCUMENT_BUCKET = aws_s3_bucket.documents.id, CORS_ORIGINS = var.origin
@@ -173,8 +173,8 @@ resource "aws_lambda_function" "api" {
   }
   # Manual controls own concurrency after creation; infrastructure updates must
   # not silently undo a pause. A fresh function starts with the limit above.
-  lifecycle { ignore_changes = [image_uri, reserved_concurrent_executions] }
-  depends_on = [aws_iam_role_policy_attachment.network, aws_cloudwatch_log_group.lambda, aws_rds_cluster_instance.writer, aws_iam_role_policy.api, aws_iam_role_policy.migrate]
+  lifecycle { ignore_changes = [image_uri, reserved_concurrent_executions, environment[0].variables["DATABASE_PASSWORD"]] }
+  depends_on = [aws_iam_role_policy_attachment.network, aws_cloudwatch_log_group.lambda, aws_rds_cluster_instance.writer, aws_iam_role_policy.api]
 }
 resource "aws_lambda_function" "migrate" {
   function_name = "${var.name}-migrate"
@@ -192,12 +192,12 @@ resource "aws_lambda_function" "migrate" {
   }
   environment {
     variables = {
-      DATABASE_AUTH = "iam", DATABASE_USERNAME = "jobhunter_admin"
+      DATABASE_AUTH = "password", DATABASE_USERNAME = "jobhunter_migrator"
       DATABASE_HOST = aws_rds_cluster.app.endpoint, DATABASE_NAME = aws_rds_cluster.app.database_name
     }
   }
-  lifecycle { ignore_changes = [image_uri] }
-  depends_on = [aws_iam_role_policy_attachment.network, aws_cloudwatch_log_group.lambda, aws_rds_cluster_instance.writer, aws_iam_role_policy.api, aws_iam_role_policy.migrate]
+  lifecycle { ignore_changes = [image_uri, environment[0].variables["DATABASE_PASSWORD"]] }
+  depends_on = [aws_iam_role_policy_attachment.network, aws_cloudwatch_log_group.lambda, aws_rds_cluster_instance.writer, aws_iam_role_policy.api]
 }
 resource "aws_apigatewayv2_api" "app" {
   name          = var.name
@@ -272,3 +272,10 @@ output "migration_arn" { value = aws_lambda_function.migrate.arn }
 output "bootstrap" {
   value = { function_name = aws_lambda_function.migrate.function_name, master_secret_arn = aws_rds_cluster.app.master_user_secret[0].secret_arn }
 }
+
+# Metadata only: the operator bootstrap writes credential values outside Terraform.
+resource "aws_secretsmanager_secret" "database_credentials" {
+  name        = "${var.name}-database-credentials"
+  description = "Deployment-injected application and migrator database passwords"
+}
+output "database_credentials_arn" { value = aws_secretsmanager_secret.database_credentials.arn }

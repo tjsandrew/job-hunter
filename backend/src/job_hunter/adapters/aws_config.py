@@ -1,4 +1,5 @@
-"""IAM database connections; credentials never enter a URL or Terraform state."""
+"""Verified TLS connections with short-lived physical connections."""
+import os
 from pathlib import Path
 import time
 
@@ -41,3 +42,25 @@ def bootstrap_engine(host: str, database: str, username: str, password: str):
         host=host, port=5432, dbname=database, user=username, password=password,
         sslmode="verify-full", sslrootcert=RDS_CA, connect_timeout=30),
         poolclass=NullPool, hide_parameters=True)
+
+
+def password_engine(host: str, database: str, username: str, *, attempts: int = 4,
+                    password: str | None = None):
+    credential = password if password is not None else os.environ.get("DATABASE_PASSWORD", "")
+    if not credential:
+        raise ValueError("DATABASE_PASSWORD is required for cloud password authentication")
+    def connect():
+        for attempt in range(attempts):
+            try:
+                return psycopg.connect(host=host, port=5432, dbname=database, user=username,
+                                       password=credential, sslmode="verify-full", sslrootcert=RDS_CA,
+                                       connect_timeout=5)
+            except psycopg.OperationalError as exc:
+                # Authentication errors can have no sqlstate during connection startup.
+                message = str(exc).lower()
+                if (exc.sqlstate not in {None, "57P03", "08001", "08006"}
+                        or "authentication failed" in message or attempt == attempts - 1):
+                    raise
+                time.sleep(1)
+    url = URL.create("postgresql+psycopg", host=host, database=database, username=username)
+    return create_engine(url, creator=connect, poolclass=NullPool, hide_parameters=True)

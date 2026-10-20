@@ -11,6 +11,21 @@ import boto3
 from botocore.config import Config
 
 
+def configure_password(client, function, role):
+    # Retrieve outside the VPC. Never print credentials or include them in argv.
+    secret = os.environ["DATABASE_CREDENTIALS_SECRET_ARN"]
+    passwords = json.loads(boto3.client("secretsmanager").get_secret_value(SecretId=secret)["SecretString"])
+    password = passwords[role]
+    if not isinstance(password, str) or len(password) < 32:
+        raise ValueError("Invalid stored database credential")
+    current = client.get_function_configuration(FunctionName=function)
+    variables = dict(current.get("Environment", {}).get("Variables", {}))
+    variables.update(DATABASE_AUTH="password", DATABASE_USERNAME=role, DATABASE_PASSWORD=password)
+    client.update_function_configuration(FunctionName=function, RevisionId=current["RevisionId"],
+                                         Environment={"Variables": variables})
+    client.get_waiter("function_updated_v2").wait(FunctionName=function)
+
+
 def backend(image: str):
     # A synchronous migration can take 300s. Disable invoke retries so a client
     # read timeout cannot silently execute the migration function twice.
@@ -28,13 +43,16 @@ def backend(image: str):
     # compatible with the currently running API; destructive changes are manual.
     client.update_function_code(FunctionName=migration, ImageUri=image)
     client.get_waiter("function_updated_v2").wait(FunctionName=migration)
+    configure_password(client, migration, "jobhunter_migrator")
     result = client.invoke(FunctionName=migration, InvocationType="RequestResponse", Payload=b"{}")
     payload = json.loads(result["Payload"].read())
     if result.get("FunctionError") or payload.get("status") != "migrated":
         raise RuntimeError("Database migration failed; inspect migration Lambda logs")
     try:
+        configure_password(client, api, "jobhunter_app")
+        current_api = client.get_function(FunctionName=api)
         client.update_function_code(FunctionName=api, ImageUri=image,
-                                    RevisionId=previous["Configuration"]["RevisionId"])
+                                    RevisionId=current_api["Configuration"]["RevisionId"])
         client.get_waiter("function_updated_v2").wait(FunctionName=api)
         verify_api()
     except Exception as release_error:

@@ -137,17 +137,18 @@ output "database_bootstrap" { value = try(module.backend[0].bootstrap, null) }
 output "activity_monitoring" { value = try(module.backend[0].activity_monitoring, null) }
 output "deployment" {
   value = {
-    AWS_ROLE_ARN           = aws_iam_role.release.arn
-    AWS_REGION             = "ap-southeast-1"
-    AMPLIFY_APP_ID         = aws_amplify_app.web.id
-    ECR_REPOSITORY         = aws_ecr_repository.api.repository_url
-    API_FUNCTION           = try(module.backend[0].api_function, "")
-    MIGRATION_FUNCTION     = try(module.backend[0].migration_function, "")
-    VITE_AUTH_MODE         = "cognito"
-    VITE_COGNITO_ISSUER    = "https://${aws_cognito_user_pool.users.endpoint}"
-    VITE_COGNITO_CLIENT_ID = aws_cognito_user_pool_client.web.id
-    VITE_COGNITO_DOMAIN    = "https://${aws_cognito_user_pool_domain.login.domain}.auth.ap-southeast-1.amazoncognito.com"
-    VITE_API_SCOPE         = "jobhunter/use"
-    VITE_API_BASE_URL      = try("${module.backend[0].api_url}/v1", "")
+    AWS_ROLE_ARN                    = aws_iam_role.release.arn
+    AWS_REGION                      = "ap-southeast-1"
+    AMPLIFY_APP_ID                  = aws_amplify_app.web.id
+    ECR_REPOSITORY                  = aws_ecr_repository.api.repository_url
+    DATABASE_CREDENTIALS_SECRET_ARN = try(module.backend[0].database_credentials_arn, "")
+    API_FUNCTION                    = try(module.backend[0].api_function, "")
+    MIGRATION_FUNCTION              = try(module.backend[0].migration_function, "")
+    VITE_AUTH_MODE                  = "cognito"
+    VITE_COGNITO_ISSUER             = "https://${aws_cognito_user_pool.users.endpoint}"
+    VITE_COGNITO_CLIENT_ID          = aws_cognito_user_pool_client.web.id
+    VITE_COGNITO_DOMAIN             = "https://${aws_cognito_user_pool_domain.login.domain}.auth.ap-southeast-1.amazoncognito.com"
+    VITE_API_SCOPE                  = "jobhunter/use"
+    VITE_API_BASE_URL               = try("${module.backend[0].api_url}/v1", "")
   }
 }

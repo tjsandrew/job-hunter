@@ -8,10 +8,12 @@ from job_hunter.domain.identity import DEV_USERS
 from job_hunter.adapters.auth import CloudIdentity
 from job_hunter.adapters import storage
 from sqlalchemy.dialects.postgresql import insert
-from job_hunter.adapters.aws_config import iam_engine
+from job_hunter.adapters.aws_config import iam_engine, password_engine
 
 engine = (iam_engine(settings.database_host, settings.database_name, settings.database_username)
-          if settings.database_auth == "iam" else create_engine(settings.database_url, pool_pre_ping=True,
+          if settings.database_auth == "iam" else
+          password_engine(settings.database_host, settings.database_name, settings.database_username)
+          if settings.app_env == "aws" else create_engine(settings.database_url, pool_pre_ping=True,
           pool_size=settings.db_pool_size, max_overflow=0, hide_parameters=True))
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 

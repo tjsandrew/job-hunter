@@ -1,6 +1,6 @@
 # AWS deployment handoff
 
-Updated 21 October 2026. Infrastructure and cloud application integrations are prepared for review; **nothing has been deployed**. Review the infrastructure plan and the remaining items below before any AWS deployment. Singapore (`ap-southeast-1`) is the target region; use Amplify's provided address.
+Updated 21 October 2026. The foundation and backend resources are deployed. The password-authentication transition requires the one-time setup below before a successful application release. Singapore (`ap-southeast-1`) is the target region; use Amplify's provided address.
 
 ## First-release design
 
@@ -11,7 +11,7 @@ Updated 21 October 2026. Infrastructure and cloud application integrations are p
 | API Gateway and Python Lambda | Reuse FastAPI and existing resume/PDF features; request-driven execution with concurrency and request limits. |
 | Aurora PostgreSQL Serverless v2 | Keep the existing relational schema, Alembic migrations, pgvector and tenant RLS. Configure 0–1 ACU and auto-pause after five idle minutes for intermittent project use. PostgreSQL compatibility reduces future migration work, but moving to standard RDS still requires data transfer and a tested cutover. |
 | Private S3 | Durable uploads and exports across Lambda replacements; versioned files and short-lived signed URLs. |
-| IAM database authentication | Locally signed, short-lived login tokens using Lambda roles; separate runtime and migration SQL users. Removes the application's password secret and paid Secrets Manager interface endpoint. |
+| Password database authentication | Separate API and migration credentials, retrieved by the release runner and injected into Lambda configuration. No runtime Secrets Manager request or paid interface endpoint. IAM database login is denied by this account’s organization policy. |
 | GitHub Actions / ECR / Terraform | Test and publish immutable application artifacts; use GitHub OIDC instead of stored AWS keys. Terraform provisions infrastructure separately from application releases. |
 
 The private database spans a two-subnet network with one serverless writer. There is no NAT gateway, VM or paid interface endpoint. A free S3 gateway endpoint provides document access. External AI/model calls and embedding workers are deferred.
@@ -21,11 +21,15 @@ The private database spans a two-subnet network with one serverless writer. Ther
 - Cognito browser login/callback/logout and bearer-token API calls; trusted API Gateway JWT claims mapped to internal users with transaction-local tenant isolation.
 - Lambda image/ASGI handler, existing PDF fonts, S3 uploads with authenticated finalize and version-pinned reads/deletion.
 - Terraform foundation plus an opt-in backend (`enable_backend=false` by default), scoped IAM permissions and budget alerts.
-- IAM connections with verified TLS and the bundled public RDS CA certificates. Each physical connection receives a fresh token. No idle connection pool keeps Aurora awake; bounded connection retries cover resume delays.
+- Password connections with verified TLS and the bundled public RDS CA certificates. No idle connection pool keeps Aurora awake; bounded connection retries cover resume delays.
 - A dedicated migration function using an administrator SQL identity and advisory lock. The API uses `jobhunter_app`, without superuser or RLS bypass privileges.
-- GitHub release workflow and scripts for migrations, API updates, frontend publication and public configuration. These have not run against AWS.
+- GitHub release workflow and scripts for migrations, API updates, frontend publication and public configuration. The first complete release must pass migration and acceptance checks.
 
-The initial administrator credential is generated and managed by AWS, rather than supplied through Terraform. One managed secret remains. An operator retrieves it outside the VPC and passes it directly to the migration Lambda over TLS for initial role/schema setup. The Lambda never fetches or logs it. After setup, normal migrations authenticate with IAM. The runtime role cannot read the secret.
+The master password remains AWS-managed for operator recovery. A second Secrets Manager secret holds separate `jobhunter_app` and `jobhunter_migrator` passwords; only the operator and release role retrieve it outside the VPC. Lambda receives the relevant password through encrypted-at-rest environment configuration. The API has no secret-reading permission. The migrator inherits the master SQL role for existing schema ownership and DDL; it is privileged and never handles HTTP requests.
+
+**State security:** credentials are never committed, passed in shell arguments, or supplied as Terraform variables. However, Terraform refresh reads Lambda environment variables and can store their values in state and saved plans. `ignore_changes` preserves deployment-injected passwords; it does not hide them from state. Protect the private encrypted state bucket, its versions and local plans as secrets. Restrict Lambda configuration-reading access as well.
+
+**Rotation:** generate and store new credentials, apply them to the SQL roles through the operator bootstrap, then run the release to update both functions. There can be downtime between SQL and Lambda updates. Ordinary code releases reuse the stored passwords. Keep the master out of application configuration.
 
 ## Cost model
 
@@ -39,9 +43,9 @@ Singapore Aurora Standard planning rates (inspected 20 October): **USD 0.20/ACU-
 | 0.5 ACU continuously for 730 hours | 73.00 |
 | 1 ACU continuously for 730 hours | 146.00 |
 
-At 20 GB average consumed storage, add approximately USD 2.20/month; 10 million I/O requests add USD 2.20. These are examples, not preallocated storage or I/O allowances. One AWS-managed administrator secret adds approximately USD 0.40/month. Hosting, requests, logs, the CloudWatch alarm/SNS, backups beyond allowances, transfer and taxes are additional. Compute is uncharged while actually paused, but storage continues to be billed. Five-minute idle intervals, resume activity and administrative/maintenance work can contribute to compute usage. The 1 ACU ceiling limits capacity, not the whole account bill.
+At 20 GB average consumed storage, add approximately USD 2.20/month; 10 million I/O requests add USD 2.20. These are examples, not preallocated storage or I/O allowances. Two secrets (master plus deployment credentials) add approximately USD 0.80/month, plus API requests. Hosting, requests, logs, the CloudWatch alarm/SNS, backups beyond allowances, transfer and taxes are additional. Compute is uncharged while actually paused, but storage continues to be billed. Five-minute idle intervals, resume activity and administrative/maintenance work can contribute to compute usage. The 1 ACU ceiling limits capacity, not the whole account bill.
 
-IAM authentication still avoids the approximately USD 9.49/month Secrets Manager interface endpoint and USD 0.40/month runtime password secret from the earlier design. No NAT gateway or paid interface endpoint is needed.
+Password authentication still avoids the approximately USD 9.49/month Secrets Manager interface endpoint and USD 0.40/month runtime password secret from the earlier design. No NAT gateway or paid interface endpoint is needed.
 
 There are two independent notifications:
 
@@ -77,17 +81,17 @@ The controls are defined locally and have not been run against AWS. Verify pause
 ## Connection and access guards
 
 - Cognito is **team-only** (`allow_admin_create_user_only=true`). Operators create ordinary accounts for the six teammates and the fictional demo workspace. Anonymous API requests are rejected by the Gateway authorizer before reaching database code. No Google/social provider, SES or custom domain is configured. Cognito's built-in email sender handles invitations and managed password reset.
-- IAM connections use `NullPool`; request sessions commit/rollback and close in `finally`. Each new physical connection gets a fresh token and verified TLS through the bundled public RDS CA certificates. Warm Lambda instances do not retain idle database connections.
+- Cloud connections use `NullPool`; request sessions commit/rollback and close in `finally`. Each new physical connection uses verified TLS through the bundled public RDS CA certificates. Warm Lambda instances do not retain idle database connections.
 - Cloud migrations apply runtime-only role defaults: **15 seconds per statement**, **30 seconds idle in a transaction**, and **60 seconds idle outside a transaction**. They bound orphaned runtime sessions without constraining migrations/admin queries.
 - Public `/v1/health` remains database-free and has a separate rate limit of 1 request/second with burst 2. API Gateway throttling is best-effort and does not reserve capacity for other routes. Do not add public SQL readiness routes, scheduled SQL probes, Lambda warmers or browser keep-alives. Frontend token renewal talks to Cognito rather than the database.
 - Initial cloud entry waits for one authenticated `/me` request before the workspace sends parallel requests. Only that GET retries temporary failures, with a **45-second total deadline** and cancellation when leaving the screen. No writes or periodic wake-ups are automatically retried. API reserved concurrency remains 10 for the subsequent request burst.
 - Close SQL consoles and administrator sessions after use. Review auto-pause compatibility before introducing RDS Proxy, replication or other database features. Valid or invalid connection attempts can wake Aurora; direct access is therefore private and restricted to the Lambda security group.
 
-For acceptance, leave the app untouched and close database clients for at least ten minutes. Observe `DatabaseConnections` and `ServerlessDatabaseCapacity` through CloudWatch/RDS metrics and confirm they reach zero after idle. Checking with SQL would wake the database. Verify that a tab left open without edits produces no API keep-alive traffic. Test a real resume, IAM connectivity, memory headroom and PDF/import workloads at the configured ceiling. No scheduled shutdown or hard spending limit is configured.
+For acceptance, leave the app untouched and close database clients for at least ten minutes. Observe `DatabaseConnections` and `ServerlessDatabaseCapacity` through CloudWatch/RDS metrics and confirm they reach zero after idle. Checking with SQL would wake the database. Verify that a tab left open without edits produces no API keep-alive traffic. Test a real resume, password connectivity, memory headroom and PDF/import workloads at the configured ceiling. No scheduled shutdown or hard spending limit is configured.
 
 ## Before deployment
 
-1. Complete the independent review of the current working tree, especially IAM bootstrap, migration ownership, tenant RLS and signed file access.
+1. Complete the independent review of the current working tree, especially password bootstrap, migration ownership, tenant RLS and signed file access.
 2. Verify signed-download navigation, Gateway CORS and API rollback in AWS; local implementations and recovery tests are present.
 3. Pin workflow actions and review the GitHub OIDC trust boundary. CI now builds the production ARM64 Lambda image on PRs; release image publication also works before the backend functions exist.
 4. Bootstrap the S3 state backend (see Terraform state). Merges to `main` run checks only. Deploy by running **GitHub → Actions → Deploy staging → Run workflow**, selecting `main`. Terraform applies remain a separate reviewed operation.
@@ -107,12 +111,12 @@ State lives in a private, versioned, encrypted S3 bucket (`jobhunter-<account>-t
 1. Provision the foundation to obtain the Amplify origin, Cognito configuration, ECR repository and release role.
 2. Configure the foundation deployment variables and manually run **Actions → Deploy staging → Run workflow** on `main`. It builds/pushes the ARM64 Lambda image even before the backend functions exist and records the immutable digest in the Actions run summary. Use that digest as `api_image_uri` when planning the backend.
 3. Provision the reviewed backend. Read `terraform output -json database_bootstrap` for the migration function and managed administrator secret ARN; these are identifiers, not passwords.
-4. With an authorized operator session and Python/boto3 installed, run `AWS_PROFILE=nus AWS_DEFAULT_REGION=ap-southeast-1 python scripts/bootstrap_database.py --function <migration-function> --secret-arn <master-secret-arn>`. Do not copy secret values into source, shell arguments, Terraform variables or logs. Verify a subsequent normal IAM migration before releasing the API.
+4. With an authorized operator session and Python/boto3 installed, run `AWS_PROFILE=nus AWS_DEFAULT_REGION=ap-southeast-1 python scripts/bootstrap_database.py --function <migration-function> --secret-arn <master-secret-arn> --credentials-secret-arn <deployment-secret-arn>`. Do not copy secret values into source, shell arguments, Terraform variables or logs. Verify a subsequent normal password migration before releasing the API.
 5. Export only the whitelisted public deployment values using `scripts/configure_github_deploy.py`; release the frontend/API through the checked workflow.
 6. Test two real accounts for login/logout, expiry, profile persistence, PDF/DOCX import/export, cross-user denial and persistence across Lambda replacements. Measure the first request after Aurora pauses and verify the bounded wake-up screen; exceptionally long resumes may still require a manual retry. Confirm actual auto-pause and costs.
 7. Create an ordinary shared Cognito demo user containing fictional data. Share its password privately; use individual accounts for personal work and university SSO for infrastructure access.
 
-Local verification is not proof of IAM login, Aurora resume, organization permissions or browser behavior in AWS. Those remain rollout acceptance checks.
+Local verification is not proof of password login, Aurora resume, organization permissions or browser behavior in AWS. Those remain rollout acceptance checks.
 
 Local checks after release hardening: **632 backend tests**, **244 frontend tests**, the production frontend build and the release/control script tests passed. The ARM64 Lambda image built and passed handler/certificate/font packaging checks; recovery tests also passed inside that image. Terraform validation passed. The earlier disposable PostgreSQL migration check passed using the supplied-connection path. These do not substitute for the cloud acceptance checks above.
 
@@ -135,3 +139,11 @@ Local checks after release hardening: **632 backend tests**, **244 frontend test
 - **M8:** PR checks build the actual ARM64 Lambda Dockerfile, import both handlers and verify packaged certificates/fonts. Release recovery unit tests run in that image.
 - **M1:** The verified creation version remains 16.15 with `ignore_changes = [engine_version]`, preventing a later apply from attempting to undo automatic maintenance. Deliberate upgrades require reviewing that lifecycle rule.
 - **M5:** Image build/push is gated by ECR availability rather than API function existence. The foundation release can therefore produce the first image; deploying the paid backend still requires the reviewed Terraform apply and explicit database bootstrap.
+
+## Password transition from the IAM deployment
+
+1. Review and apply the Terraform change: disable cluster IAM login, configure password mode and the dedicated migrator, create credential-secret metadata, and authorize the release runner. No endpoint or database replacement is needed. Wait until the cluster reports IAM authentication disabled; the change can wait for the maintenance window unless explicitly applied immediately.
+2. Update only the migration Lambda to the tested new image before invoking the new bootstrap. The old handler grants IAM roles and must not be used for this transition.
+3. Run `scripts/bootstrap_database.py` with the master secret and deployment-secret ARNs. It generates passwords only if the deployment secret has no value, persists them before SQL changes, removes `rds_iam` membership and initializes the roles/schema. Reruns reuse the same passwords. If master login remains blocked, stop and request administrator recovery; do not replace the database.
+4. Publish `terraform output -json deployment` through `scripts/configure_github_deploy.py`, then run **Deploy staging** on main. It injects the migration password before migrations and the runtime password before updating the API image.
+5. Verify an authenticated two-account workflow, PDF downloads and Aurora idle behavior. The public health check alone does not prove database login.

@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, MagicMock
 
 import psycopg
 import pytest
@@ -50,43 +50,44 @@ def test_rejected_authentication_is_not_retried(monkeypatch):
 
 
 @pytest.mark.parametrize("action", ["migrate", "bootstrap"])
-def test_migrations_share_the_iam_or_bootstrap_transaction(monkeypatch, action):
-    for key, value in {"DATABASE_HOST": "cluster", "DATABASE_NAME": "jobhunter", "DATABASE_USERNAME": "jobhunter_admin"}.items():
+def test_migrations_share_the_password_or_bootstrap_transaction(monkeypatch, action):
+    for key, value in {"DATABASE_HOST": "cluster", "DATABASE_NAME": "jobhunter", "DATABASE_USERNAME": "jobhunter_migrator"}.items():
         monkeypatch.setenv(key, value)
-    connection = Mock()
+    connection = MagicMock()
     connection.scalar.return_value = None
     engine = Mock()
     engine.begin.return_value.__enter__ = Mock(return_value=connection)
     engine.begin.return_value.__exit__ = Mock(return_value=False)
-    iam, bootstrap = Mock(return_value=engine), Mock(return_value=engine)
-    monkeypatch.setattr(migrate_aws, "iam_engine", iam)
+    password, bootstrap = Mock(return_value=engine), Mock(return_value=engine)
+    monkeypatch.setattr(migrate_aws, "password_engine", password)
     monkeypatch.setattr(migrate_aws, "bootstrap_engine", bootstrap)
     upgrade = Mock()
     monkeypatch.setattr(migrate_aws.command, "upgrade", upgrade)
-    migrate_aws.handler({"action": action, "credentials": {"username": "jobhunter_admin", "password": "test-only"}}, None)
+    migrate_aws.handler({"action": action, "credentials": {"username": "jobhunter_admin", "password": "test-only"},
+                         "passwords": {"jobhunter_app": "a" * 64, "jobhunter_migrator": "b" * 64}}, None)
     assert upgrade.call_args.args[0].attributes["connection"] is connection
     statements = [str(call.args[0]) for call in connection.execute.call_args_list]
     assert "SELECT pg_advisory_xact_lock(5224001)" in statements
     assert "REVOKE ALL ON alembic_version FROM jobhunter_app" in statements
     if action == "bootstrap":
         bootstrap.assert_called_once()
-        iam.assert_not_called()
-        assert "GRANT rds_iam TO jobhunter_app" in statements
-        assert "GRANT rds_iam TO jobhunter_admin" in statements
+        password.assert_not_called()
+        assert "REVOKE rds_iam FROM jobhunter_app, jobhunter_admin, jobhunter_migrator" in statements
+        assert "GRANT jobhunter_admin TO jobhunter_migrator" in statements
         # Aurora's admin cannot change SUPERUSER/BYPASSRLS, even to restate "NO".
         assert not any("SUPERUSER" in s or "BYPASSRLS" in s for s in statements)
     else:
-        iam.assert_called_once()
+        password.assert_called_once()
         bootstrap.assert_not_called()
         assert not any("CREATE ROLE" in statement for statement in statements)
     engine.dispose.assert_called_once()
 
 
 def test_bootstrap_refuses_a_privileged_runtime_role(monkeypatch):
-    for key, value in {"DATABASE_HOST": "cluster", "DATABASE_NAME": "jobhunter", "DATABASE_USERNAME": "jobhunter_admin"}.items():
+    for key, value in {"DATABASE_HOST": "cluster", "DATABASE_NAME": "jobhunter", "DATABASE_USERNAME": "jobhunter_migrator"}.items():
         monkeypatch.setenv(key, value)
-    connection = Mock()
-    connection.scalar.side_effect = [1, True]  # Role exists; it is a superuser or bypasses RLS.
+    connection = MagicMock()
+    connection.scalar.side_effect = [1, 1, True]  # Role exists; it is a superuser or bypasses RLS.
     engine = Mock()
     engine.begin.return_value.__enter__ = Mock(return_value=connection)
     engine.begin.return_value.__exit__ = Mock(return_value=False)
@@ -94,6 +95,7 @@ def test_bootstrap_refuses_a_privileged_runtime_role(monkeypatch):
     upgrade = Mock()
     monkeypatch.setattr(migrate_aws.command, "upgrade", upgrade)
     with pytest.raises(RuntimeError, match="row-level security"):
-        migrate_aws.handler({"action": "bootstrap", "credentials": {"username": "jobhunter_admin", "password": "test-only"}}, None)
+        migrate_aws.handler({"action": "bootstrap", "credentials": {"username": "jobhunter_admin", "password": "test-only"},
+                         "passwords": {"jobhunter_app": "a" * 64, "jobhunter_migrator": "b" * 64}}, None)
     upgrade.assert_not_called()
     engine.dispose.assert_called_once()
