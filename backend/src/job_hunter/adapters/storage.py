@@ -4,6 +4,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, urlsplit
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from job_hunter.config import settings
 
@@ -12,7 +13,10 @@ MAX_UPLOAD = 10 * 1024 * 1024
 
 @lru_cache
 def s3():
-    return boto3.client("s3")
+    # Pin the bucket region and virtual-hosted SigV4 endpoint. The default
+    # presigner can choose the global endpoint/SigV2, causing browser redirects.
+    return boto3.client("s3", region_name="ap-southeast-1",
+                        config=Config(signature_version="s3v4", s3={"addressing_style": "virtual"}))
 
 
 def reference(kind: str, user_id, object_id, extension: str) -> str:

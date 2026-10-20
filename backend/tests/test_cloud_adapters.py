@@ -92,3 +92,27 @@ def test_s3_missing_key_becomes_missing_document(s3_stub):
     s3_stub.add_client_error("get_object", "NoSuchKey", expected_params={"Bucket": "test-documents", "Key": "uploads/test.pdf"})
     with pytest.raises(FileNotFoundError):
         storage.read("s3://test-documents/uploads/test.pdf")
+
+
+def test_browser_upload_and_download_use_regional_sigv4_urls(monkeypatch):
+    from urllib.parse import parse_qs, urlsplit
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
+    monkeypatch.setenv("AWS_SESSION_TOKEN", "testing-session")
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "ap-southeast-2")
+    monkeypatch.setattr(settings, "document_bucket", "test-documents")
+    storage.s3.cache_clear()
+    try:
+        ref = "s3://test-documents/uploads/synthetic.pdf"
+        urls = [storage.upload_url(ref, "application/pdf", 123),
+                storage.download_url(ref, "synthetic.pdf", "application/pdf")]
+        for url in urls:
+            parsed = urlsplit(url)
+            query = parse_qs(parsed.query)
+            assert parsed.netloc == "test-documents.s3.ap-southeast-1.amazonaws.com"
+            assert query["X-Amz-Algorithm"] == ["AWS4-HMAC-SHA256"]
+            assert "/ap-southeast-1/s3/aws4_request" in query["X-Amz-Credential"][0]
+            assert query["X-Amz-Security-Token"] == ["testing-session"]
+        assert "content-type" in parse_qs(urlsplit(urls[0]).query)["X-Amz-SignedHeaders"][0]
+    finally:
+        storage.s3.cache_clear()

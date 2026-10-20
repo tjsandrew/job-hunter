@@ -339,3 +339,11 @@ describe('Profile bank', () => {
   });
 
 });
+
+
+it('prevents importing a source whose file upload did not finish', async () => {
+  mockApi.uploads.mockResolvedValue({items: [{upload_id: 'incomplete', filename: 'incomplete.pdf', status: 'uploaded', page_count: null}], next_cursor: null});
+  await setup();
+  expect(await screen.findByText('Upload incomplete — choose the file again')).toBeInTheDocument();
+  expect(screen.getByRole('button', {name: 'Import incomplete.pdf into profile'})).toBeDisabled();
+});
