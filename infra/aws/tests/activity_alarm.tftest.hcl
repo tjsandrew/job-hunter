@@ -12,6 +12,14 @@ run "team_only_foundation" {
     condition     = aws_cognito_user_pool.users.admin_create_user_config[0].allow_admin_create_user_only && length(aws_cognito_user_pool_client.web.supported_identity_providers) == 1 && contains(aws_cognito_user_pool_client.web.supported_identity_providers, "COGNITO")
     error_message = "The approved foundation is team-only and uses Cognito email login without social providers."
   }
+  assert {
+    condition     = strcontains(aws_amplify_app.web.custom_headers, "Strict-Transport-Security")
+    error_message = "The website must send an HSTS header."
+  }
+  assert {
+    condition     = jsondecode(aws_ecr_lifecycle_policy.api.policy).rules[0].selection.countNumber >= 10
+    error_message = "Keep enough images for release recovery."
+  }
 }
 
 run "guarded_aurora" {
@@ -37,6 +45,14 @@ run "guarded_aurora" {
   assert {
     condition     = anytrue([for route in aws_apigatewayv2_stage.app.route_settings : route.route_key == "GET /v1/health" && route.throttling_rate_limit == 1 && route.throttling_burst_limit == 2])
     error_message = "The public health route must retain its separate 1/second, burst-2 throttle."
+  }
+  assert {
+    condition     = length(aws_apigatewayv2_stage.app.access_log_settings) == 1
+    error_message = "The API stage must keep access logs for debugging and latency evaluation."
+  }
+  assert {
+    condition     = aws_rds_cluster.app.preferred_maintenance_window == "sun:19:00-sun:20:00"
+    error_message = "Aurora maintenance must stay in the agreed quiet window."
   }
 
 }

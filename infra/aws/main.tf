@@ -22,10 +22,13 @@ resource "aws_amplify_app" "web" {
             value: strict-origin-when-cross-origin
           - key: X-Frame-Options
             value: DENY
+          - key: Strict-Transport-Security
+            value: max-age=31536000
   HEADERS
   # Amplify stores these headers as JSON, so the YAML above always shows a diff.
   # To change headers, remove this ignore for that one apply.
-  lifecycle { ignore_changes = [custom_headers] }
+  # TEMPORARY: removed to apply the HSTS header. Restore after that apply:
+  # lifecycle { ignore_changes = [custom_headers] }
 }
 resource "aws_amplify_branch" "main" {
   app_id            = aws_amplify_app.web.id
@@ -96,6 +99,16 @@ resource "aws_ecr_repository" "api" {
   name                 = local.name
   image_tag_mutability = "IMMUTABLE"
   image_scanning_configuration { scan_on_push = true }
+}
+# Release recovery only rolls back to the previously deployed image, which is
+# always among the newest images kept here.
+resource "aws_ecr_lifecycle_policy" "api" {
+  repository = aws_ecr_repository.api.name
+  policy = jsonencode({ rules = [{
+    rulePriority = 1, description = "Keep the 15 newest images"
+    selection    = { tagStatus = "any", countType = "imageCountMoreThan", countNumber = 15 }
+    action       = { type = "expire" }
+  }] })
 }
 
 resource "aws_ecr_repository" "embed" {
