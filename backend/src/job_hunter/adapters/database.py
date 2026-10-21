@@ -7,6 +7,7 @@ from job_hunter.domain.models import User
 from job_hunter.domain.identity import DEV_USERS
 from job_hunter.adapters.auth import CloudIdentity
 from job_hunter.adapters import storage
+from job_hunter.embedding import flag as embed_flag
 from sqlalchemy.dialects.postgresql import insert
 from job_hunter.adapters.aws_config import iam_engine, password_engine
 
@@ -33,6 +34,8 @@ def get_db(dev_identity: str | CloudIdentity) -> Generator[Session, None, None]:
         session.info["current_user"] = user
         yield session
         session.commit()
+        # Only after the commit: the embed worker must be able to see the rows. Best effort, never raises.
+        embed_flag.send_requested(session)
         for file_path in session.info.get("profile_upload_cleanup", []):
             try:
                 storage.delete(file_path)

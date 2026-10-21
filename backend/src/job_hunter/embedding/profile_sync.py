@@ -28,8 +28,11 @@ HOOK_TIMEOUT_SECONDS = 5.0
 log = logging.getLogger(__name__)
 
 
-def embed_user_profile(session: Session, user_id: Any, embedder, *, force: bool = False) -> "EmbeddingOutcome | None":
-    """Embed the user's confirmed profile version; ``None`` when there is no confirmed version."""
+def embed_user_profile(session: Session, user_id: Any, embedder, *, force: bool = False,
+                       expected_model: str | None = None) -> "EmbeddingOutcome | None":
+    """Embed the user's confirmed profile version; ``None`` when there is no confirmed version.
+
+    With ``expected_model`` a vector stored by a different model counts as out of date."""
     profile = session.get(Profile, user_id)
     if profile is None or profile.confirmed_revision is None:
         return None
@@ -42,12 +45,20 @@ def embed_user_profile(session: Session, user_id: Any, embedder, *, force: bool 
     return embed_profile(
         ProfileEmbedRequest(profile_version_id=str(version.id), snapshot=version.data,
                             target_roles=ProfileTextInput.from_preferences({}, data).target_roles),
-        embedder=embedder, store=DbProfileEmbeddingStore(session), force=force)
+        embedder=embedder, store=DbProfileEmbeddingStore(session), force=force, expected_model=expected_model)
 
 
 def embed_after_save(session: Session, user_id: Any, *, embedder=None) -> str:
-    """Best-effort embed after a confirm or a preferences save. Returns a short status, never raises."""
-    if not embedding_settings.embed_on_save_enabled():
+    """Best-effort embed after a confirm or a preferences save. Returns a short status, never raises.
+
+    ``EMBED_ON_SAVE=queue`` does not embed here: it marks the session so ``get_db`` writes the S3 flag
+    after the commit and the AWS embed worker does the work (see ``embedding/flag.py``)."""
+    mode = embedding_settings.embed_mode()
+    if mode == "queue":
+        from .flag import request_embedding
+        request_embedding(session)
+        return "queued"
+    if mode != "sync":
         return "disabled"
     try:
         with session.begin_nested():
