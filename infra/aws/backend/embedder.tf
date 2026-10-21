@@ -29,11 +29,16 @@ variable "embed_on_save" {
 }
 
 locals {
-  embed_enabled     = var.embed_image_uri != ""
-  embed_timeout     = 900
-  embed_flag_prefix = "embed-requests/"
-  embed_alarm_names = ["embed-dlq", "embed-errors", "embed-runaway"]
-  embed_alarm_arns  = [for name in local.embed_alarm_names : "arn:aws:cloudwatch:ap-southeast-1:${var.account_id}:alarm:${var.name}-${name}"]
+  embed_enabled = var.embed_image_uri != ""
+  embed_timeout = 900
+  # Flags arriving within this window are handed to one invocation (up to embed_batch_size of them). Every flag means the
+  # same thing ("look at the database"), and the worker ignores their contents, so collapsing a burst is safe. The cost is
+  # that a lone save can wait up to this long before the worker starts.
+  embed_batch_window = 5
+  embed_batch_size   = 10
+  embed_flag_prefix  = "embed-requests/"
+  embed_alarm_names  = ["embed-dlq", "embed-errors", "embed-runaway"]
+  embed_alarm_arns   = [for name in local.embed_alarm_names : "arn:aws:cloudwatch:ap-southeast-1:${var.account_id}:alarm:${var.name}-${name}"]
 }
 
 # ---- queue: S3 flag -> SQS -> worker ----
@@ -44,8 +49,8 @@ resource "aws_sqs_queue" "embed_dlq" {
 }
 resource "aws_sqs_queue" "embed" {
   name = "${var.name}-embed"
-  # AWS guidance for Lambda queue consumers: at least six times the function timeout.
-  visibility_timeout_seconds = local.embed_timeout * 6
+  # AWS guidance for Lambda queue consumers: at least six times the function timeout plus the batching window.
+  visibility_timeout_seconds = local.embed_timeout * 6 + local.embed_batch_window
   message_retention_seconds  = 86400
   sqs_managed_sse_enabled    = true
   redrive_policy = jsonencode({
@@ -144,7 +149,9 @@ resource "aws_lambda_event_source_mapping" "embed" {
   count            = local.embed_enabled ? 1 : 0
   event_source_arn = aws_sqs_queue.embed.arn
   function_name    = aws_lambda_function.embed[0].arn
-  batch_size       = 1
+  batch_size       = local.embed_batch_size
+  # A burst of saves becomes one invocation instead of one per save; the worker takes the lock once and does all the work.
+  maximum_batching_window_in_seconds = local.embed_batch_window
   scaling_config { maximum_concurrency = 2 }
 }
 resource "aws_s3_bucket_notification" "embed" {
