@@ -4,6 +4,14 @@
 Lambda invocations into HTTP requests on port 8100, so the app and the HTTP contract ([CONTRACT.md](CONTRACT.md)) are
 unchanged.
 
+The Linux amd64 adapter executable is vendored at
+`vendor/aws-lambda-adapter/v1.0.0/linux-amd64/lambda-adapter` from the official
+`public.ecr.aws/awsguru/aws-lambda-adapter:1.0.0` image (digest
+`sha256:b4da35991627bdac98a81c377d0cc28e6989687359576dfda9f0b64be835d648`).
+Its SHA-256 is `a76f42498951cd77c2422999a80ab68a5d959b419993e7cff9cb7eec963bcd7f`,
+checked during the image build. Vendoring avoids the anonymous Public ECR rate limit in CI.
+This Dockerfile supports amd64 only; an ARM64 build needs a separately verified adapter executable.
+
 ```sh
 docker build -f Dockerfile.lambda -t embedder-lambda .
 # reuse an already-downloaded model instead of fetching it again:

@@ -31,8 +31,11 @@ RUN mkdir -p /models \
 # ---- final ----
 FROM build
 COPY --from=modelsrc /models /models
-# Pin a released adapter version; do not use :latest.
-COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:1.0.0 /lambda-adapter /opt/extensions/lambda-adapter
+COPY vendor/aws-lambda-adapter/v1.0.0/linux-amd64/lambda-adapter /opt/extensions/lambda-adapter
+ARG TARGETARCH
+RUN test "$TARGETARCH" = "amd64" \
+ && echo "a76f42498951cd77c2422999a80ab68a5d959b419993e7cff9cb7eec963bcd7f  /opt/extensions/lambda-adapter" | sha256sum -c - \
+ && chmod 755 /opt/extensions/lambda-adapter
 
 # Lambda's filesystem is read-only except /tmp, and the model is baked in, so never reach for the Hugging Face hub.
 ENV EMBEDDER_CACHE_DIR=/models \
