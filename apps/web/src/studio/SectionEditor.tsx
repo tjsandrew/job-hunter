@@ -7,8 +7,9 @@ import { AddFromProfileDialog, MoreFromJob } from './points/FromProfile';
 import { focusKey, PointRow } from './points/PointRow';
 import { useProfileSave } from './points/useProfileSave';
 import './points/points.css';
+import type { PreviewPages } from './ResumePreview';
 
-export function SectionEditor({ section, index, count, content, onContent, bank: bankOverride }: { section: ResumeSection; index: number; count: number; content: ResumeContent; onContent: (value: ResumeContent) => void; bank?: BankHandle }) {
+export function SectionEditor({ section, index, count, content, onContent, bank: bankOverride, pageInfo, paperType = 'A4' }: { section: ResumeSection; index: number; count: number; content: ResumeContent; onContent: (value: ResumeContent) => void; bank?: BankHandle; pageInfo?: PreviewPages; paperType?: string }) {
   const bank = useProfileBank(bankOverride);
   const latest = useRef(content); latest.current = content;
   const root = useRef<HTMLElement>(null);
@@ -43,6 +44,12 @@ export function SectionEditor({ section, index, count, content, onContent, bank:
     newVersion: () => void save.actions.newVersion(entry, i),
     newPoint: () => save.actions.newPoint(entry, i),
   });
+  const visibleEntries = content.sections.filter(item => !item.hidden).flatMap(item => item.entries);
+  const startsPage = (entry: ResumeEntry) => {
+    const previous = visibleEntries[visibleEntries.findIndex(item => item.id === entry.id) - 1];
+    const previousPage = previous ? Math.max(pageInfo?.entries[previous.id] || 1, ...previous.bullets.map((_, i) => pageInfo?.bullets[`${previous.id}:${i}`] || 1)) : 1;
+    return (pageInfo?.entries[entry.id] || 1) > previousPage;
+  };
   const addFromProfileTitle = bank.status === 'ready' ? undefined : bank.status === 'loading' ? 'Loading your profile…' : 'Your profile could not be loaded. Reload the page to try again.';
 
   return <section ref={root} className={`section-editor${section.hidden ? ' is-hidden' : ''}`}>
@@ -50,8 +57,8 @@ export function SectionEditor({ section, index, count, content, onContent, bank:
       {section.hidden && <span className="section-hidden-note">Hidden on the resume</span>}
       <button type="button" className="button text-button small-button section-hide" aria-pressed={!!section.hidden} aria-label={section.hidden ? 'Show section on the resume' : 'Hide section on the resume'} title={section.hidden ? 'Show this section on the resume' : 'Keep this section but leave it off the resume'} onClick={() => patchSection({ hidden: !section.hidden })}>{section.hidden ? 'Show' : 'Hide'}</button>
       <button className="icon-button" title="Move section up" disabled={index === 0} onClick={() => move(-1)}><Icon name="up" /></button><button className="icon-button" title="Move section down" disabled={index === count - 1} onClick={() => move(1)}><Icon name="down" /></button><button className="icon-button danger" title="Remove section" onClick={() => onContent(removeSection(content, section.id))}><Icon name="trash" /></button></div>
-    {section.entries.map((entry, entryIndex) => <div className="entry-editor" key={entry.id}><div className="entry-edit-head"><span>Entry {entryIndex + 1}</span><button className="icon-button danger" title="Remove entry" onClick={() => onContent({ ...content, sections: content.sections.map((item) => item.id === section.id ? removeEntry(item, entry.id) : item) })}><Icon name="trash" /></button></div><div className="form-grid two-col"><Field label="Role or degree" value={entry.heading} onChange={(v) => patchEntry(entry.id, { heading: v })} placeholder="Senior Product Designer" /><Field label="Company or school" value={entry.subheading} onChange={(v) => patchEntry(entry.id, { subheading: v })} placeholder="Company name" /></div><Field label="Dates" value={entry.dates} onChange={(v) => patchEntry(entry.id, { dates: v })} placeholder="Jan 2022 – Present" />{entry.date_range && <small className="point-date-note">Dates come from your profile. Editing this text keeps them as you type them.</small>}
-      {entry.bullets.map((_, bulletIndex) => <PointRow key={`${entry.id}-${bulletIndex}`} entry={entry} index={bulletIndex} count={entry.bullets.length} section={section} bank={bank} actions={pointActions(entry, bulletIndex)} />)}
+    {section.entries.map((entry, entryIndex) => <div className="entry-editor" key={entry.id}>{!section.hidden && startsPage(entry) && <div className="editor-page-marker">{paperType === 'letter' ? 'US Letter' : 'A4'} page {pageInfo?.entries[entry.id]} starts at this entry</div>}<div className="entry-edit-head"><span>Entry {entryIndex + 1}</span><button className="icon-button danger" title="Remove entry" onClick={() => onContent({ ...content, sections: content.sections.map((item) => item.id === section.id ? removeEntry(item, entry.id) : item) })}><Icon name="trash" /></button></div><div className="form-grid two-col"><Field label="Role or degree" value={entry.heading} onChange={(v) => patchEntry(entry.id, { heading: v })} placeholder="Senior Product Designer" /><Field label="Company or school" value={entry.subheading} onChange={(v) => patchEntry(entry.id, { subheading: v })} placeholder="Company name" /></div><Field label="Dates" value={entry.dates} onChange={(v) => patchEntry(entry.id, { dates: v })} placeholder="Jan 2022 – Present" />{entry.date_range && <small className="point-date-note">Dates come from your profile. Editing this text keeps them as you type them.</small>}
+      {entry.bullets.map((_, bulletIndex) => <div key={`${entry.id}-${bulletIndex}`}>{!section.hidden && (pageInfo?.bullets[`${entry.id}:${bulletIndex}`] || 1) > (pageInfo?.bullets[`${entry.id}:${bulletIndex - 1}`] || pageInfo?.entries[entry.id] || 1) && <div className="editor-page-marker">{paperType === 'letter' ? 'US Letter' : 'A4'} page {pageInfo?.bullets[`${entry.id}:${bulletIndex}`]} starts here</div>}<PointRow entry={entry} index={bulletIndex} count={entry.bullets.length} section={section} bank={bank} actions={pointActions(entry, bulletIndex)} /></div>)}
       <button className="button text-button" onClick={() => change(entry.id, (current) => addBullet(current))}><Icon name="plus" /> Add bullet</button>
       <MoreFromJob entry={entry} bank={bank} onAdd={(point) => change(entry.id, (current) => addBullet(current, point.text, { bullet_id: point.id, alternative_id: null, base_text: point.text }))} />
     </div>)}

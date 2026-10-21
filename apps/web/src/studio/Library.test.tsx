@@ -25,7 +25,7 @@ beforeEach(() => {
   mockApi.restoreDocument.mockImplementation(async (id) => id === 'r1' ? first : second);
 });
 afterEach(() => cleanup());
-const goToStudio = async (user: ReturnType<typeof userEvent.setup>) => user.click(within(await screen.findByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Resume studio' }));
+const goToStudio = async (user: ReturnType<typeof userEvent.setup>) => user.click(within(await screen.findByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'My resumes' }));
 const titles = () => [...document.querySelectorAll('.resume-card-foot strong')].map((node) => node.textContent);
 
 describe('deleting a resume', () => {
@@ -107,4 +107,26 @@ describe('Use profile summary', () => {
     await openFirst(user);
     expect(screen.getByRole('button', { name: 'Use profile summary' })).toBeDisabled();
   });
+});
+
+
+it('My resumes opens the saved library even when an editor was open', async () => {
+  const user = userEvent.setup(); render(<App />); await goToStudio(user);
+  await user.click(await screen.findByRole('button', {name: 'Open Backend Engineer – Stripe'}));
+  expect(await screen.findByRole('textbox', {name: 'Resume title'})).toBeInTheDocument();
+  await goToStudio(user);
+  expect(await screen.findByRole('heading', {name: 'My resumes'})).toBeInTheDocument();
+  expect(titles()).toEqual(['Backend Engineer – Stripe', 'Data resume']);
+});
+
+
+it('separates original uploaded files from resumes created in the app', async () => {
+  mockApi.uploads.mockResolvedValue({items: [{upload_id: 'upload-1', filename: 'original.pdf', status: 'ready_for_review', page_count: 1}], next_cursor: null});
+  const user = userEvent.setup(); render(<App />); await goToStudio(user);
+  const uploaded = await screen.findByRole('region', {name: 'Uploaded resumes'});
+  expect(await within(uploaded).findByText('original.pdf')).toBeInTheDocument();
+  expect(within(uploaded).getByRole('button', {name: 'Download uploaded original.pdf'})).toBeEnabled();
+  const generated = screen.getByRole('region', {name: 'Created on Job Hunter'});
+  expect(within(generated).getByRole('button', {name: 'Open Backend Engineer – Stripe'})).toBeInTheDocument();
+  expect(within(generated).queryByText('original.pdf')).not.toBeInTheDocument();
 });

@@ -75,3 +75,7 @@
 .tag-chip button:hover, .tag-chip button:focus-visible { background: rgba(35, 100, 71, .16); }
 .tag-chip.choice { border: 1px solid #d8d8d2; background: #fff; color: #424a42; padding: 5px 12px; cursor: pointer; }
 .tag-chip.choice.on { background: #e4f4ed; border-color: #8fbfa6; color: #236447; font-weight: 500; }
+
+.bank-backups { padding: 20px 24px; margin: 24px 0; }
+.bank-backups summary { cursor: pointer; font-weight: 600; }
+.bank-backups p { color: var(--muted); margin: 12px 0; }

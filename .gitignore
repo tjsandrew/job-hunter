@@ -34,3 +34,15 @@ test-results/
 # OS and editor files
 .DS_Store
 .Rhistory
+
+# Terraform state and plans can contain credentials
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+plan.json
+crash.log
+**/backend.hcl
+infra/state/bootstrap_override.tf

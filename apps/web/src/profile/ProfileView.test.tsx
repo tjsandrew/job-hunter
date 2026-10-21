@@ -9,6 +9,7 @@ vi.mock('../api', async importOriginal => {
   const original = await importOriginal<typeof import('../api')>();
   return { ...original, api: Object.fromEntries(Object.keys(original.api).map(key => [key, vi.fn()])) };
 });
+const importRecord = (overrides: Partial<ProfileImport> = {}): ProfileImport => ({ id: 'imp-1', source_type: 'upload', status: 'ready', parser: 'heuristic-v1', profile_epoch: 0, input_ref: { sha256: 'abc', upload_id: 'upload-1' }, candidates: [{ candidate_id: 'c1', kind: 'experience', data: { title: 'Imported Role', bullets: [] }, evidence: { title: { source_sha256: 'abc', page: 1, text: 'Imported Role' } }, match: { status: 'new' } }], error_code: null, created_at: '2026-10-14T00:00:00Z', applied_at: null, result: null, ...overrides });
 const mockApi = vi.mocked(api);
 const copy = <T,>(value: T): T => structuredClone(value);
 let bank: ProfileBank;
@@ -263,7 +264,7 @@ describe('Profile bank', () => {
   });
 
 
-  const importRecord = (overrides: Partial<ProfileImport> = {}): ProfileImport => ({ id: 'imp-1', source_type: 'upload', status: 'ready', parser: 'heuristic-v1', profile_epoch: 0, input_ref: { sha256: 'abc', upload_id: 'upload-1' }, candidates: [{ candidate_id: 'c1', kind: 'experience', data: { title: 'Imported Role', bullets: [] }, evidence: { title: { source_sha256: 'abc', page: 1, text: 'Imported Role' } }, match: { status: 'new' } }], error_code: null, created_at: '2026-10-14T00:00:00Z', applied_at: null, result: null, ...overrides });
+
   const withUpload = () => mockApi.uploads.mockResolvedValue({ items: [{ upload_id: 'upload-1', filename: 'fictional.pdf', status: 'ready_for_review', page_count: 1 }], next_cursor: null });
 
   it('imports an upload, reviews it, applies with the profile epoch and reloads the bank', async () => {
@@ -307,7 +308,8 @@ describe('Profile bank', () => {
   it('imports a JSON Resume file and rejects invalid JSON without calling the API', async () => {
     mockApi.startImport.mockResolvedValue(importRecord({ source_type: 'json_resume' }));
     const user = await setup();
-    const input = screen.getByLabelText('Import profile from JSON file');
+    await user.click(screen.getByText('Profile backups'));
+    const input = screen.getByLabelText('Restore profile from JSON backup');
     await user.upload(input, new File(['{not json'], 'broken.json', { type: 'application/json' }));
     expect(await screen.findByText(/not valid JSON/)).toBeInTheDocument();
     expect(mockApi.startImport).not.toHaveBeenCalled();
@@ -338,4 +340,38 @@ describe('Profile bank', () => {
     expect(await screen.findByRole('heading', { name: 'Review what we found' })).toBeInTheDocument();
   });
 
+});
+
+
+it('prevents importing a source whose file upload did not finish', async () => {
+  mockApi.uploads.mockResolvedValue({items: [{upload_id: 'incomplete', filename: 'incomplete.pdf', status: 'uploaded', page_count: null}], next_cursor: null});
+  await setup();
+  expect(await screen.findByText('Upload incomplete — choose the file again')).toBeInTheDocument();
+  expect(screen.getByRole('button', {name: 'Import incomplete.pdf into profile'})).toBeDisabled();
+});
+
+
+it('shows profile content while resume sources are still loading', async () => {
+  let finish!: (value: {items: never[]; next_cursor: null}) => void;
+  mockApi.uploads.mockImplementationOnce(() => new Promise(done => { finish = done; }));
+  await setup();
+  expect(await screen.findByRole('heading', {name: 'Your profile bank.'})).toBeInTheDocument();
+  expect(screen.getByText('Loading your resumes…')).toBeInTheDocument();
+  finish({items: [], next_cursor: null});
+  await waitFor(() => expect(screen.queryByText('Loading your resumes…')).not.toBeInTheDocument());
+});
+
+it('uploads a PDF from the main import action and opens review once', async () => {
+  let finish!: (value: Awaited<ReturnType<typeof api.uploadResume>>) => void;
+  mockApi.uploadResume.mockImplementationOnce(() => new Promise(done => { finish = done; }));
+  mockApi.startImport.mockResolvedValue(importRecord());
+  const user = await setup();
+  const input = screen.getByLabelText('Import resume from PDF or Word file');
+  await user.upload(input, new File(['%PDF'], 'resume.pdf', {type: 'application/pdf'}));
+  expect(input).toBeDisabled();
+  expect(screen.getByText('Importing…')).toBeInTheDocument();
+  expect(mockApi.startImport).not.toHaveBeenCalled();
+  finish({upload_id: 'new-upload', filename: 'resume.pdf', status: 'ready_for_review', page_count: 1, extracted_text: 'Synthetic Applicant', error_code: null, message: 'Ready', ai_available: false});
+  expect(await screen.findByRole('heading', {name: 'Review what we found'})).toBeInTheDocument();
+  expect(mockApi.startImport).toHaveBeenCalledExactlyOnceWith({upload_id: 'new-upload'});
 });

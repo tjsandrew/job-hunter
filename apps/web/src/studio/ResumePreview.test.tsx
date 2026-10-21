@@ -9,9 +9,22 @@ const show = (doc: Resume) => render(<ResumePreview resume={doc} />);
 const paper = (container: HTMLElement) => container.querySelector('article')!;
 
 describe('ResumePreview', () => {
-  it('renders a document without the new keys exactly as before', () => {
+  it('renders physical A4 dimensions with point-size text and millimetre margins', () => {
     const { container } = show(resume());
-    expect(container.innerHTML).toBe('<article class="resume-paper classic font-auto paper-A4" style="font-size: 11px; padding: 45px; line-height: 1.25;"><header class="paper-header"><h1>Alice Tan</h1><div>alice@example.com  ·  +65 5555 0100  ·  Singapore</div></header><p class="paper-summary">Backend engineer.</p><section class="paper-section"><h2>Experience</h2><div class="paper-entry"><div class="paper-entry-head"><strong>Backend Engineer</strong><span>Jul 2023 – Present</span></div><div class="paper-subheading">Harbour Metrics</div><ul><li>Built FastAPI services.</li><li>Cut p95 query time.</li></ul></div></section><section class="paper-section"><h2>Skills</h2><div class="paper-entry"><div class="paper-entry-head"><strong>Languages</strong><span></span></div><div class="paper-subheading"></div><ul><li>Python, SQL</li></ul></div><div class="paper-entry"><div class="paper-entry-head"><strong>Tools</strong><span></span></div><div class="paper-subheading"></div><ul><li>Docker</li><li>Git</li></ul></div></section><section class="paper-section"><h2>Fun facts</h2><div class="paper-entry"><div class="paper-entry-head"><strong>Chess</strong><span></span></div><div class="paper-subheading"></div></div></section></article>');
+    const page = paper(container);
+    expect(page).toHaveClass('paper-A4');
+    expect(page.style.fontSize).toBe('11pt');
+    expect(page.style.padding).toBe('18mm');
+    expect(parseFloat(page.style.width) / parseFloat(page.style.height)).toBeCloseTo(210 / 297, 5);
+    expect(screen.getByText('A4 · Page 1 of 1')).toBeInTheDocument();
+    expect(screen.getByText('Built FastAPI services.')).toBeInTheDocument();
+  });
+
+  it('uses Letter dimensions when the paper selector changes', () => {
+    const { container } = show(resume({layout: {font_size: 11, margin: 18, page_size: 'letter'}}));
+    const page = paper(container);
+    expect(parseFloat(page.style.width) / parseFloat(page.style.height)).toBeCloseTo(8.5 / 11, 5);
+    expect(screen.getByText('US Letter · Page 1 of 1')).toBeInTheDocument();
   });
 
   it('leaves out hidden sections', () => {

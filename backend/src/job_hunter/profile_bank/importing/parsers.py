@@ -7,6 +7,7 @@ from .text import ExtractedText
 
 HEADINGS = {'experience':'work', 'work experience':'work', 'professional experience':'work', 'work history':'work',
             'education':'education', 'projects':'projects', 'skills':'skills', 'technical skills':'skills',
+            'additional':'additional', 'additional information':'additional',
             'summary':'summary', 'profile':'summary', 'professional summary':'summary',
             'certifications':'certificates', 'certificates':'certificates', 'awards':'awards', 'volunteering':'volunteer'}
 # Only real month names may precede a year, so "Fictional Labs 2023" keeps "Labs" in the employer.
@@ -37,6 +38,21 @@ def _section_kind(title):
     return next((kind for kind, words in HEADING_KEYWORDS if any(word in key for word in words)), None)
 
 
+def _skills(text):
+    # Category labels are not skills; commas inside qualifiers stay together.
+    text = re.sub(r'^[•◦▪●*-]\s*', '', text)
+    text = re.sub(r'^[^:]{1,40}:\s*', '', text)
+    depth, start = 0, 0
+    values = []
+    for index, char in enumerate(text):
+        if char in '([': depth += 1
+        elif char in ')]': depth = max(0, depth - 1)
+        elif char in ',|•·;' and depth == 0:
+            values.append(text[start:index].strip()); start = index + 1
+    values.append(text[start:].strip())
+    return [value for value in values if value]
+
+
 def document_to_json_resume(content):
     basics = {key: deepcopy(content[key]) for key in ('name','phone','summary') if isinstance(content.get(key), str) and content[key]}
     # Studio fields are free text; only a well-formed email is carried, so a draft typo can't block the import.
@@ -63,7 +79,7 @@ def document_to_json_resume(content):
             elif kind == 'skills':
                 names = points or [heading]
                 for name in names:
-                    for skill in re.split(r'[,|·•;]', re.sub(r'^[^:]{1,30}:\s*', '', name)):
+                    for skill in _skills(name):
                         if skill.strip():
                             result['skills'].append({'name':skill.strip()})
             else:
@@ -76,11 +92,17 @@ def heuristic_to_json_resume(source: ExtractedText):
     result = {'basics': {}, 'work': [], 'education': [], 'projects': [], 'skills': [],
               'meta': {'jobHunterUnsorted': [], 'jobHunterDates': {}}}
     section, current = None, None
-    for line in source.lines:
+    header_first, details_started = False, False
+    seen_skills = set()
+    outer_indent = min((line.x0 for line in source.lines if line.text.strip().startswith('• ')), default=0)
+    nested = any(re.match(r'^[◦•▪●*-]\s+', line.text.strip())
+                 and line.x0 > outer_indent + 3 for line in source.lines)
+    for index, line in enumerate(source.lines):
         text = line.text.strip()
         heading = _section_kind(text)
         if heading:
             section, current = heading, None
+            header_first, details_started = False, False
             continue
         if re.search(r'(?i)ignore previous instructions|system prompt|assistant:|execute command', text):
             result['meta']['jobHunterUnsorted'].append({'title':'Unclassified source text','summary':text,'bullets':[]})
@@ -96,19 +118,53 @@ def heuristic_to_json_resume(source: ExtractedText):
             result['basics']['summary'] = '\n'.join(filter(None,[result['basics'].get('summary'),text]))
             continue
         if section == 'skills':
-            for skill in re.split(r'[,|•·;]',text):
-                skill = re.sub(r'^\w+:\s*','',skill).strip(' -')
-                if skill: result['skills'].append({'name':skill})
+            for skill in _skills(text):
+                if skill.casefold() not in seen_skills:
+                    result['skills'].append({'name':skill})
+                    seen_skills.add(skill.casefold())
             continue
         if section not in ('work','education','projects'):
             result['meta']['jobHunterUnsorted'].append({'title':section,'summary':text,'bullets':[]})
             continue
-        bullet = re.match(r'^[•▪●*-]\s+(.+)$',text)
+        # Some resumes use outer bullets for employers/schools and smaller
+        # circles for achievements. Preserve that hierarchy instead of treating
+        # a floating glyph or each wrapped line as a separate record.
+        if nested and text.startswith('• ') and line.x0 <= outer_indent + 3:
+            title = text[2:].strip()
+            if section == 'work': current = {'position':'', 'name':title, 'highlights':[]}
+            elif section == 'education': current = {'area':'', 'institution':title, 'courses':[]}
+            else: current = {'name':title, 'description':'', 'highlights':[]}
+            result[section].append(current)
+            header_first, details_started = True, False
+            continue
+        date_match = DATE_RANGE.search(text)
+        date_only = bool((date_match and text == date_match[0]) or re.fullmatch(r'(?:19|20)\d{2}', text))
+        previous = source.lines[index - 1] if index else None
+        right_of_header = (previous is not None and previous.page == line.page
+                           and abs(previous.top - line.top) <= 3 and line.x0 - previous.x0 > 120)
+        if current is not None and right_of_header and not date_only:
+            if section == 'work': current['location'] = text
+            # School locations are not qualifications or achievement bullets.
+            continue
+        if date_only and current is not None:
+            current.update(_date_fields(text))
+            result['meta']['jobHunterDates'].setdefault(section,{})[str(len(result[section])-1)]=normalize_dates(text)
+            continue
+        bullet = re.match(r'^[•◦▪●*-]\s+(.+)$',text)
         if bullet:
             if current is not None:
                 current.setdefault('courses' if section == 'education' else 'highlights',[]).append(bullet[1])
+                details_started = True
             else:
                 result['meta']['jobHunterUnsorted'].append({'title':section,'summary':text,'bullets':[]})
+            continue
+        if header_first and current is not None:
+            field = 'position' if section == 'work' else 'area' if section == 'education' else 'description'
+            if not current[field]: current[field] = text
+            elif section == 'education' and not details_started: current[field] += ' ' + text
+            else:
+                current.setdefault('courses' if section == 'education' else 'highlights',[]).append(text)
+                details_started = True
             continue
         date_match = DATE_RANGE.search(text)
         if date_match and text == date_match[0] and current is not None:

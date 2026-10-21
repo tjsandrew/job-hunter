@@ -177,7 +177,13 @@ def main():
         command.upgrade(config, BANK_REVISION)
         assert dump(engine) == before, "Downgrade/upgrade changed stored data"
         verify_rls(engine)
-        command.upgrade(config, "head")
+        # The cloud migrator supplies a live IAM-authenticated connection rather
+        # than a password URL. Verify that path against the disposable database.
+        with engine.begin() as connection:
+            config.attributes["connection"] = connection
+            command.upgrade(config, "head")
+            assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+        config.attributes.pop("connection")
         verify_orm_matches_schema(engine)
         print("PASS: legacy 0009 upgrade, rich bank roundtrip, stable IDs, vector(512), forced tenant RLS, "
               "and every ORM column created by migrations")

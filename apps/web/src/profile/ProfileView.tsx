@@ -1,3 +1,4 @@
+import { downloadFile } from '../download';
 import { useEffect, useRef, useState } from 'react';
 import { api, HttpError } from '../api';
 import { ChoiceChips, Field, Icon, Loading, Pill, SelectField, TagInput } from '../ui';
@@ -36,8 +37,8 @@ const importMessage = (record: ProfileImport) => record.result && 'message' in r
 const importDate = (value: string) => { const date = new Date(value); return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString(); };
 const readText = (file: File) => typeof file.text === 'function' ? file.text() : new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsText(file); });
 
-export function ProfileView({ userKey, onChanged, onBasicsSaved, onOpenResume, preferences, setPreferences, savePreferences, savingPreferences, uploading, uploadMessage, extractedResumeText, onUpload, resumes, onBusyChange }: {
-  userKey: string; onChanged: () => void; onBasicsSaved: (draft: ProfileDraft) => void; onOpenResume: (resume: Resume) => void;
+export function ProfileView({ userKey, onChanged, onBasicsSaved, onOpenResume, onOpenLibrary, preferences, setPreferences, savePreferences, savingPreferences, uploading, uploadMessage, extractedResumeText, onUpload, resumes, onBusyChange }: {
+  userKey: string; onChanged: () => void; onBasicsSaved: (draft: ProfileDraft) => void; onOpenResume: (resume: Resume) => void; onOpenLibrary?: () => void;
   preferences: any; setPreferences: (value: any) => void; savePreferences: () => void; savingPreferences: boolean;
   uploading: boolean; uploadMessage: string; extractedResumeText: string; onUpload: (file?: File) => void;
   resumes: Resume[]; onBusyChange: (busy: boolean) => void;
@@ -59,6 +60,8 @@ export function ProfileView({ userKey, onChanged, onBasicsSaved, onOpenResume, p
   const [reviewKey, setReviewKey] = useState(0);
   const [failedImport, setFailedImport] = useState<ProfileImport | null>(null);
   const [importing, setImporting] = useState(false);
+  const [sourcesLoading, setSourcesLoading] = useState(true);
+  const [sourcesError, setSourcesError] = useState('');
   const [pasteOpen, setPasteOpen] = useState(false);
   const alive = useRef(true);
   const lock = useRef(false);
@@ -66,11 +69,18 @@ export function ProfileView({ userKey, onChanged, onBasicsSaved, onOpenResume, p
 
   useEffect(() => {
     alive.current = true;
-    Promise.all([api.getBank(), api.getProfile(), api.uploads(), api.imports().catch(() => ({items: [] as ProfileImport[]}))]).then(([nextBank, nextProfile, files, recent]) => {
-      if (!alive.current) return;
-      setBank(nextBank); setProfile(nextProfile); setUploads(files.items); setImports(recent.items);
-    }).catch((cause: Error) => alive.current && setError(cause.message)).finally(() => alive.current && setLoading(false));
-    return () => { alive.current = false; };
+    let active = true;
+    setLoading(true); setSourcesLoading(true); setSourcesError('');
+    // Profile content is useful before the optional sources/history arrive.
+    Promise.all([api.getBank(), api.getProfile()]).then(([nextBank, nextProfile]) => {
+      if (!active) return;
+      setBank(nextBank); setProfile(nextProfile);
+    }).catch((cause: Error) => active && setError(cause.message)).finally(() => active && setLoading(false));
+    Promise.all([api.uploads(), api.imports()]).then(([files, recent]) => {
+      if (!active) return;
+      setUploads(files.items); setImports(recent.items);
+    }).catch((cause: Error) => active && setSourcesError(cause.message)).finally(() => active && setSourcesLoading(false));
+    return () => { active = false; alive.current = false; };
   }, [userKey]);
 
   const reload = async () => {
@@ -169,6 +179,17 @@ export function ProfileView({ userKey, onChanged, onBasicsSaved, onOpenResume, p
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) { setError('That file is not a JSON Resume object.'); return; }
     await startImport({json_resume: parsed as Record<string, unknown>});
   };
+  const importResumeFile = async (file?: File) => {
+    if (!file) return;
+    if (!/\.(pdf|docx)$/i.test(file.name)) { setError('Choose a PDF or Word (.docx) resume.'); return; }
+    if (file.size > 10 * 1024 * 1024) { setError('The file must be 10 MiB or smaller.'); return; }
+    await runImport(async () => {
+      const uploaded = await api.uploadResume(file);
+      const files = await api.uploads();
+      if (alive.current) setUploads(files.items);
+      return api.startImport({upload_id: uploaded.upload_id});
+    });
+  };
   const applyImport = async (decisions: ImportDecision[]): Promise<ImportResult> => {
     if (!bank || !reviewing) throw new Error('This review is no longer open.');
     const result = await api.applyImport(reviewing.id, decisions, bank.profile_epoch);
@@ -204,7 +225,7 @@ export function ProfileView({ userKey, onChanged, onBasicsSaved, onOpenResume, p
   const shownKinds = [...new Set([...baseKinds, ...extraKinds, ...bank.items.map(item => item.kind)])].filter(kind => kind !== 'skill');
   const unconfirmed = bank.confirmed_revision === null || bank.bank_revision > bank.confirmed_revision;
   return <div className="page-wrap bank-page">
-    <div className="page-heading"><div><div className="eyebrow">YOUR CAREER PROFILE</div><h1>Your profile bank.</h1><p>Keep all your experience here. Choose the points you need for each resume.</p></div><div className="bank-actions"><button className="button secondary" disabled={pending} onClick={exportBank}>Export my profile <Icon name="download" /></button><label className={`button secondary upload-button${pending ? ' is-disabled' : ''}`}>Import from file<input aria-label="Import profile from JSON file" type="file" accept=".json,application/json" disabled={pending} onChange={event => { const file = event.target.files?.[0]; event.currentTarget.value = ''; void importFile(file); }} /></label><button className="button secondary" disabled={pending} onClick={() => setPasteOpen(true)}>Paste text</button>{unconfirmed ? <button className="button primary" disabled={pending || basicsDirty} onClick={confirm}>Update my matches <Icon name="check" /></button> : <Pill color="green">Matching profile up to date</Pill>}</div></div>
+    <div className="page-heading"><div><div className="eyebrow">YOUR CAREER PROFILE</div><h1>Your profile bank.</h1><p>Keep all your experience here. Choose the points you need for each resume.</p></div><div className="bank-actions"><label className={`button secondary upload-button${pending || uploading ? ' is-disabled' : ''}`}>{importing ? 'Importing…' : 'Import from file'}<input aria-label="Import resume from PDF or Word file" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={pending || uploading} onChange={event => { const file = event.target.files?.[0]; event.currentTarget.value = ''; void importResumeFile(file); }} /></label><button className="button secondary" disabled={pending} onClick={() => setPasteOpen(true)}>Paste text</button>{unconfirmed ? <button className="button primary" disabled={pending || basicsDirty} onClick={confirm}>Update my matches <Icon name="check" /></button> : <Pill color="green">Matching profile up to date</Pill>}</div></div>
     <p className="bank-matching-note">Saving keeps your bank current. Update my matches confirms a snapshot for matching; you can keep editing without confirming.</p>
     {error && <div className="bank-error" role="alert">{error}</div>}
     {importing && <div className="bank-matching-note" role="status"><Loading label="Reading your source. This can take a moment…" /></div>}
@@ -222,17 +243,22 @@ export function ProfileView({ userKey, onChanged, onBasicsSaved, onOpenResume, p
       </section>)}
     </div><aside className="bank-stack">
       <Skills items={bank.items.filter(item => item.kind === 'skill')} busy={pending} write={write} onMove={reorder} />
-      <section className="panel bank-resumes"><div className="panel-heading"><h2>Your resumes</h2><span className="bank-count">{uploads.length + resumes.length}</span></div>
+      <section className="panel bank-resumes"><div className="panel-heading"><h2>Resume sources</h2><div className="bank-actions"><span className="bank-count">{uploads.length + resumes.length}</span>{onOpenLibrary && <button className="button text-button small-button" onClick={onOpenLibrary}>View all resumes</button>}</div></div>
         <div className="upload-strip"><div><strong>Upload an existing resume</strong><span>PDF or Word (.docx) · up to 10 MiB. Review the extracted text below.</span>{uploadMessage && <small>{uploadMessage}</small>}</div><label className="button secondary upload-button">{uploading ? 'Uploading…' : 'Choose file'}<input aria-label="Upload resume file" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={uploading || pending} onChange={event => { void onUpload(event.target.files?.[0]); event.currentTarget.value = ''; }} /></label></div>
         {extractedResumeText && <label className="field"><span>Extracted text candidate · verify details and enter profile facts manually</span><textarea readOnly value={extractedResumeText} rows={8} /></label>}
-        {uploads.slice(0, showAllSources ? uploads.length : SOURCE_PREVIEW).map(file => <div className="bank-file" key={file.upload_id}><span className="bank-file-icon">PDF</span><div><button className="link-button" onClick={async () => { try { download(await api.downloadUpload(file.upload_id), file.filename); } catch (cause) { setError((cause as Error).message); } }}>{file.filename}</button><small>{file.status.replaceAll('_',' ')}</small></div><button className="button secondary small-button bank-file-import" disabled={pending} aria-label={`Import ${file.filename} into profile`} onClick={() => startImport({upload_id: file.upload_id})}>Import</button></div>)}
+        {sourcesLoading && <div role="status"><Loading label="Loading your resumes…" /></div>}
+        {sourcesError && <p role="alert">Your resume sources could not be loaded. {sourcesError}</p>}
+        {uploads.length > 0 && <h3>Uploaded resumes</h3>}
+        {uploads.slice(0, showAllSources ? uploads.length : SOURCE_PREVIEW).map(file => <div className="bank-file" key={file.upload_id}><span className="bank-file-icon">PDF</span><div><button className="link-button" onClick={async () => { try { downloadFile(await api.downloadUpload(file.upload_id), file.filename); } catch (cause) { setError((cause as Error).message); } }}>{file.filename}</button><small>{file.status === 'uploaded' ? 'Upload incomplete — choose the file again' : file.status.replaceAll('_',' ')}</small></div><button className="button secondary small-button bank-file-import" disabled={pending || file.status === 'uploaded'} aria-label={`Import ${file.filename} into profile`} onClick={() => startImport({upload_id: file.upload_id})}>Import</button></div>)}
+        {resumes.length > 0 && <h3>Created on Job Hunter</h3>}
         {resumes.slice(0, showAllSources ? resumes.length : SOURCE_PREVIEW).map(resume => <div className="bank-file" key={resume.id}><span className="bank-file-icon">CV</span><div><button className="link-button" onClick={() => onOpenResume(resume)}>{resume.title}</button><small>Resume Studio · revision {resume.revision}</small></div><button className="button secondary small-button bank-file-import" disabled={pending} aria-label={`Import ${resume.title} into profile`} onClick={() => startImport({document_id: resume.id})}>Import</button></div>)}
         {(uploads.length > SOURCE_PREVIEW || resumes.length > SOURCE_PREVIEW) && <button className="button text-button" aria-expanded={showAllSources} onClick={() => setShowAllSources(value => !value)}>{showAllSources ? 'Show fewer' : `Show all ${uploads.length + resumes.length}`}</button>}
-        {!uploads.length && !resumes.length && <p className="bank-empty">Your uploaded PDFs and Studio resumes will appear here.</p>}
+        {!sourcesLoading && !sourcesError && !uploads.length && !resumes.length && <p className="bank-empty">Your uploaded PDFs and Studio resumes will appear here.</p>}
         {imports.length > 0 && <div className="bank-recent-imports"><h3>Recent imports</h3>{imports.slice(0, 5).map(record => <div className="bank-import-row" key={record.id}><span>{sourceNames[record.source_type]} · {record.status} · {importDate(record.created_at)}</span>{record.status === 'ready' && <button className="button secondary small-button" disabled={pending} aria-label={`Review ${sourceNames[record.source_type]} import from ${importDate(record.created_at)}`} onClick={() => reviewImport(record)}>Review</button>}{record.status === 'failed' && <button className="button secondary small-button" disabled={pending} aria-label={`Retry ${sourceNames[record.source_type]} import from ${importDate(record.created_at)}`} onClick={() => runImport(() => api.retryImport(record.id))}>Retry</button>}</div>)}</div>}
       </section>
       <Preferences preferences={preferences} setPreferences={setPreferences} onSave={savePreferences} busy={savingPreferences} />
     </aside></div>
+    <details className="panel bank-backups"><summary>Profile backups</summary><p>Export your profile or restore a JSON backup. JSON Resume files are also supported.</p><div className="bank-actions"><button className="button secondary" disabled={pending} onClick={exportBank}>Export profile backup <Icon name="download" /></button><label className={`button secondary upload-button${pending ? ' is-disabled' : ''}`}>Restore profile backup<input aria-label="Restore profile from JSON backup" type="file" accept=".json,application/json" disabled={pending} onChange={event => { const file = event.target.files?.[0]; event.currentTarget.value = ''; void importFile(file); }} /></label></div></details>
     <section className="panel bank-danger"><div><h2>Danger zone</h2><p>Delete your profile facts and uploaded source files. Your separate resumes and applications are kept.</p></div><button className="button secondary" disabled={pending} onClick={() => setDeleteOpen(true)}>Delete my profile data</button></section>
     {pasteOpen && <PasteDialog busy={pending} onCancel={() => setPasteOpen(false)} onStart={async text => { setPasteOpen(false); await startImport({text}); }} />}
     {deleteOpen && <DeleteDialog busy={pending} onCancel={() => setDeleteOpen(false)} onDelete={deleteBank} />}
@@ -335,7 +361,7 @@ function Preferences({preferences,setPreferences,onSave,busy}: {preferences:any;
     });
     return () => { alive = false; };
   }, [retry]);
-  return <section className="panel bank-preferences"><div className="panel-heading"><h2>Job preferences</h2></div><TagInput label="Roles or job titles" placeholder="e.g. Backend Engineer, then press Enter" values={list('roles')} onChange={roles => setPreferences({...preferences,roles})} /><TagInput label="Preferred locations" placeholder="e.g. Singapore, then press Enter" values={list('locations')} onChange={locations => setPreferences({...preferences,locations})} /><ChoiceChips label="Work modes" options={[{value:'remote',label:'Remote'},{value:'hybrid',label:'Hybrid'},{value:'onsite',label:'On-site'}]} values={list('work_modes')} onChange={work_modes => setPreferences({...preferences,work_modes})} /><label className="field"><span>Seniority</span><select value={preferences.seniority || ''} disabled={optionsLoading || optionsError} onChange={event => setPreferences({...preferences,seniority:event.target.value})}><option value="">{optionsLoading ? 'Loading levels…' : optionsError ? 'Levels unavailable' : 'Select one'}</option>{seniorityOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>{optionsError && <p role="alert">Could not load seniority levels. <button type="button" onClick={() => setRetry(value => value + 1)}>Retry</button></p>}<Field label="Minimum salary" type="number" value={String(preferences.salary_min ?? '')} onChange={salary_min => setPreferences({...preferences,salary_min})} /><div className="form-grid"><SelectField label="Currency" value={preferences.salary_currency || 'SGD'} options={['SGD','USD','AUD','GBP','EUR']} onChange={salary_currency => setPreferences({...preferences,salary_currency})} /><SelectField label="Salary period" value={preferences.salary_period || 'year'} options={['year','month','hour']} onChange={salary_period => setPreferences({...preferences,salary_period})} /></div><p className="bank-empty">Roles, locations, work modes and seniority affect For you results. Salary filtering is planned.</p><button className="button primary" disabled={busy} onClick={onSave}>Save preferences</button></section>;
+  return <section className="panel bank-preferences"><div className="panel-heading"><h2>Job preferences</h2></div><TagInput label="Roles or job titles" placeholder="e.g. Backend Engineer, then press Enter" values={list('roles')} onChange={roles => setPreferences({...preferences,roles})} /><TagInput label="Preferred locations" placeholder="e.g. Singapore, then press Enter" values={list('locations')} onChange={locations => setPreferences({...preferences,locations})} /><ChoiceChips label="Work modes" options={[{value:'remote',label:'Remote'},{value:'hybrid',label:'Hybrid'},{value:'onsite',label:'On-site'}]} values={list('work_modes')} onChange={work_modes => setPreferences({...preferences,work_modes})} /><label className="field"><span>Seniority</span><select value={preferences.seniority || ''} disabled={optionsLoading || optionsError} onChange={event => setPreferences({...preferences,seniority:event.target.value})}><option value="">{optionsLoading ? 'Loading levels…' : optionsError ? 'Levels unavailable' : 'Select one'}</option>{seniorityOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>{optionsError && <p role="alert">Could not load seniority levels. <button type="button" onClick={() => setRetry(value => value + 1)}>Retry</button></p>}<Field label="Minimum salary" type="number" value={String(preferences.salary_min ?? '')} onChange={salary_min => setPreferences({...preferences,salary_min})} /><div className="form-grid"><SelectField label="Currency" value={preferences.salary_currency || 'SGD'} options={['SGD','USD','AUD','GBP','EUR']} onChange={salary_currency => setPreferences({...preferences,salary_currency})} /><SelectField label="Salary period" value={preferences.salary_period || 'year'} options={['year','month','hour']} onChange={salary_period => setPreferences({...preferences,salary_period})} /></div><p className="bank-empty">Roles, locations, work modes and seniority affect For you results. Salary filtering is planned.</p><button className="button primary" disabled={busy} onClick={onSave}>{busy ? 'Saving…' : 'Save preferences'}</button></section>;
 }
 
 function DeleteDialog({busy,onCancel,onDelete}: {busy:boolean;onCancel:()=>void;onDelete:(settings:boolean)=>void}) {

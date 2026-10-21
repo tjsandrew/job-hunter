@@ -8,8 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import ValidationError
 from fastapi.responses import JSONResponse
 from pathlib import Path
-from sqlalchemy import select
-from job_hunter.domain.models import Upload
+from job_hunter.adapters import storage
+from sqlalchemy import select, update as sql_update
+from job_hunter.domain.models import Upload, ProfileImport
 from job_hunter.profile_bank.export import export_profile
 from job_hunter.profile_bank.importing import services as imports
 from job_hunter.profile_bank.importing.docx import DOCX_CONTENT_TYPE
@@ -104,7 +105,7 @@ def build_router(db_dependency):
     # The body is read manually (size and depth checked first), so document its schema explicitly.
     @router.post('/profile/imports', status_code=201, openapi_extra={'requestBody': {
         'required': True, 'content': {'application/json': {'schema': ImportCreate.model_json_schema()}}}})
-    async def start_import(request: Request, db: Session = Depends(db_dependency)):
+    async def start_import(request: Request, db: Session = Depends(db_dependency, scope="function")):
         # Read the body ourselves so oversized or deeply nested input is rejected before parsing.
         raw = bytearray()
         async for chunk in request.stream():
@@ -123,63 +124,85 @@ def build_router(db_dependency):
         return imports.start_import(db, body.model_dump(exclude_none=True), settings)
 
     @router.get('/profile/imports')
-    def list_imports(db: Session = Depends(db_dependency)):
+    def list_imports(db: Session = Depends(db_dependency, scope="function")):
         return imports.list_imports(db)
 
     @router.get('/profile/imports/{import_id}')
-    def get_import(import_id: UUID, db: Session = Depends(db_dependency)):
+    def get_import(import_id: UUID, db: Session = Depends(db_dependency, scope="function")):
         return imports.get_import(db, import_id)
 
     @router.post('/profile/imports/{import_id}/apply')
-    def apply_import(import_id: UUID, body: ImportApply, db: Session = Depends(db_dependency)):
+    def apply_import(import_id: UUID, body: ImportApply, db: Session = Depends(db_dependency, scope="function")):
         return imports.apply_import(db, import_id, [decision.model_dump(exclude_none=True) for decision in body.decisions], body.expected_profile_epoch)
 
     @router.post('/profile/imports/{import_id}/discard')
-    def discard_import(import_id: UUID, db: Session = Depends(db_dependency)):
+    def discard_import(import_id: UUID, db: Session = Depends(db_dependency, scope="function")):
         return imports.discard_import(db, import_id)
 
     @router.post('/profile/imports/{import_id}/retry')
-    def retry_import(import_id: UUID, db: Session = Depends(db_dependency)):
+    def retry_import(import_id: UUID, db: Session = Depends(db_dependency, scope="function")):
         return imports.retry_import(db, import_id, settings)
 
     @router.get('/profile/export.json')
-    def export(db: Session = Depends(db_dependency)):
+    def export(db: Session = Depends(db_dependency, scope="function")):
         return JSONResponse(export_profile(services.get_bank(db)), headers={'Content-Disposition': 'attachment; filename="profile.json"'})
 
     @router.get('/uploads')
-    def uploads(db: Session = Depends(db_dependency)):
+    def uploads(db: Session = Depends(db_dependency, scope="function")):
         rows = db.scalars(select(Upload).where(Upload.user_id == db.info['current_user'].id).order_by(Upload.created_at.desc()).limit(100)).all()
         return {'items': [{'upload_id': str(row.id), 'filename': row.filename, 'status': row.status,
                           'page_count': row.page_count, 'created_at': row.created_at} for row in rows], 'next_cursor': None}
 
-    @router.get('/uploads/{upload_id}/download')
-    def download_upload(upload_id: UUID, db: Session = Depends(db_dependency)):
-        row = db.scalar(select(Upload).where(Upload.id == upload_id, Upload.user_id == db.info['current_user'].id))
-        if row is None or not Path(row.file_path).is_file():
+    @router.delete('/uploads/{upload_id}', status_code=204)
+    def delete_upload(upload_id: UUID, db: Session = Depends(db_dependency, scope="function")):
+        owner = db.info['current_user'].id
+        row = db.scalar(select(Upload).where(Upload.id == upload_id, Upload.user_id == owner).with_for_update())
+        if row is None:
             raise HTTPException(404, detail={'code': 'NOT_FOUND', 'message': 'Resource not found'})
+        # Keep import evidence and already-applied profile facts, without a dangling FK.
+        db.execute(sql_update(ProfileImport).where(ProfileImport.upload_id == upload_id,
+                                              ProfileImport.user_id == owner).values(upload_id=None))
+        db.delete(row)
+        # Remove bytes only after the database transaction has committed successfully.
+        db.info.setdefault('profile_upload_cleanup', []).append(row.file_path)
+        return Response(status_code=204)
+
+    @router.get('/uploads/{upload_id}/download')
+    def download_upload(upload_id: UUID, db: Session = Depends(db_dependency, scope="function")):
+        row = db.scalar(select(Upload).where(Upload.id == upload_id, Upload.user_id == db.info['current_user'].id))
+        if row is None:
+            raise HTTPException(404, detail={'code': 'NOT_FOUND', 'message': 'Resource not found'})
+        if row.sha256 is None:
+            raise HTTPException(409, detail={'code': 'UPLOAD_NOT_CAPTURED', 'message': 'Finish uploading this resume first'})
         docx = row.content_type == DOCX_CONTENT_TYPE
-        return Response(Path(row.file_path).read_bytes(), media_type=DOCX_CONTENT_TYPE if docx else 'application/pdf',
+        if row.file_path.startswith('s3://'):
+            return JSONResponse({'url': storage.download_url(row.file_path, 'resume.docx' if docx else 'resume.pdf', row.content_type)}, headers={'Cache-Control': 'no-store'})
+        try:
+            data = storage.read(row.file_path)
+        except FileNotFoundError:
+            raise HTTPException(404, detail={'code': 'NOT_FOUND', 'message': 'Resource not found'})
+        return Response(data, media_type=DOCX_CONTENT_TYPE if docx else 'application/pdf',
                         headers={'Content-Disposition': f'attachment; filename="resume.{"docx" if docx else "pdf"}"'})
 
     @router.get('/profile/bank')
-    def bank(db: Session = Depends(db_dependency)):
+    def bank(db: Session = Depends(db_dependency, scope="function")):
         return services.get_bank(db)
 
     # Static route must precede /items/{item_id}.
     @router.put('/profile/items/order')
-    def order(body: ItemOrder, db: Session = Depends(db_dependency)):
+    def order(body: ItemOrder, db: Session = Depends(db_dependency, scope="function")):
         return services.reorder_items(db, body.kind, body.item_ids, body.expected_bank_revision)
 
     @router.post('/profile/items', status_code=201)
-    def create(body: ItemCreate, db: Session = Depends(db_dependency)):
+    def create(body: ItemCreate, db: Session = Depends(db_dependency, scope="function")):
         return services.create_item(db, body.kind, body.data, body.tags, body.parent_id)
 
     @router.get('/profile/items/{item_id}')
-    def read(item_id: UUID, db: Session = Depends(db_dependency)):
+    def read(item_id: UUID, db: Session = Depends(db_dependency, scope="function")):
         return services.item_out(services._item(db, item_id))
 
     @router.patch('/profile/items/{item_id}')
-    def update(item_id: UUID, body: ItemWrite, db: Session = Depends(db_dependency)):
+    def update(item_id: UUID, body: ItemWrite, db: Session = Depends(db_dependency, scope="function")):
         changes = body.model_dump(exclude_unset=True, exclude={'expected_revision'})
         if any(changes.get(key) is None for key in ('data', 'tags') if key in changes):
             raise HTTPException(422, detail={'code': 'INVALID_PROFILE_ITEM', 'message': 'Data and tags cannot be null'})
@@ -187,44 +210,44 @@ def build_router(db_dependency):
 
     @router.delete('/profile/items/{item_id}')
     def archive(item_id: UUID, expected_revision: int | None = Query(default=None, ge=0),
-                db: Session = Depends(db_dependency)):
+                db: Session = Depends(db_dependency, scope="function")):
         return services.archive_item(db, item_id, expected_revision)
 
     @router.post('/profile/items/{item_id}/revert')
-    def revert(item_id: UUID, body: ItemWrite, db: Session = Depends(db_dependency)):
+    def revert(item_id: UUID, body: ItemWrite, db: Session = Depends(db_dependency, scope="function")):
         if body.data is None:
             raise HTTPException(422, detail={'code': 'INVALID_REVERT', 'message': 'Supply the previous item data to restore'})
         return services.revert_item(db, item_id, body.expected_revision,
                                     body.model_dump(exclude_unset=True, exclude={'expected_revision'}))
 
     @router.post('/profile/items/{item_id}/bullets')
-    def add_point(item_id: UUID, body: PointWrite, db: Session = Depends(db_dependency)):
+    def add_point(item_id: UUID, body: PointWrite, db: Session = Depends(db_dependency, scope="function")):
         return services.mutate_bullet(db, item_id, body.expected_revision, 'add',
                                       body.model_dump(exclude={'expected_revision'}))
 
     @router.put('/profile/items/{item_id}/bullets/{bullet_id}')
     def update_point(item_id: UUID, bullet_id: str, body: PointUpdate,
-                     db: Session = Depends(db_dependency)):
+                     db: Session = Depends(db_dependency, scope="function")):
         return services.mutate_bullet(db, item_id, body.expected_revision, 'update',
                                       body.model_dump(exclude={'expected_revision'}), bullet_id)
 
     @router.post('/profile/items/{item_id}/bullets/{bullet_id}/alternatives')
     def alternative(item_id: UUID, bullet_id: str, body: PointVersionWrite,
-                    db: Session = Depends(db_dependency)):
+                    db: Session = Depends(db_dependency, scope="function")):
         return services.mutate_bullet(db, item_id, body.expected_revision, 'alternative',
                                       body.model_dump(exclude={'expected_revision'}), bullet_id)
 
     @router.get('/settings')
-    def read_settings(db: Session = Depends(db_dependency)):
+    def read_settings(db: Session = Depends(db_dependency, scope="function")):
         return services.get_settings(db)
 
     @router.put('/settings')
-    def write_settings(body: SettingsWrite, db: Session = Depends(db_dependency)):
+    def write_settings(body: SettingsWrite, db: Session = Depends(db_dependency, scope="function")):
         return services.update_settings(db, body.resume_defaults.model_dump(mode='json', exclude_unset=True),
                                         body.expected_revision)
 
     @router.delete('/profile/data')
-    def delete_data(body: DeleteProfile, db: Session = Depends(db_dependency)):
+    def delete_data(body: DeleteProfile, db: Session = Depends(db_dependency, scope="function")):
         result, paths = services.delete_profile_data(db, body.delete_settings)
         # Cleanup runs after the DB commit; rollback must not destroy uploaded bytes.
         db.info.setdefault('profile_upload_cleanup', []).extend(paths)
