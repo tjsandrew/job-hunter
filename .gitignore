@@ -42,7 +42,10 @@ test-results/
 *.tfplan
 *.tfvars
 !*.tfvars.example
+# Reviewed, non-secret shared staging configuration
+!/infra/aws/staging.tfvars
 plan.json
 crash.log
 **/backend.hcl
+!/infra/aws/backend.hcl
 infra/state/bootstrap_override.tf

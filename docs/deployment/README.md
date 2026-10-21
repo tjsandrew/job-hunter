@@ -137,11 +137,32 @@ For acceptance, leave the app untouched and close database clients for at least 
 
 ## Terraform state
 
-State lives in a private, versioned, encrypted S3 bucket (`jobhunter-<account>-tfstate`) created by the separate `infra/state` stack. The bucket has `prevent_destroy`, so app teardown never deletes it. Copy each `*.example` file (`terraform.tfvars`, `backend.hcl`, and for the first run `infra/state/bootstrap_override.tf`) to its real name; the real files are gitignored. The state owner is the operator who runs the applies.
+State lives in a private, versioned, encrypted S3 bucket (`jobhunter-<account>-tfstate`) created by the separate `infra/state` stack. The bucket has `prevent_destroy`, so app teardown never deletes it. The state owner is the operator who runs the applies.
+
+### Working on the existing staging deployment
+
+`infra/aws/backend.hcl` and `infra/aws/staging.tfvars` are committed shared configuration. They contain the state location, account ID, alert email recipients, budget and backend/image settings; no passwords or AWS credentials. Teammates pull these from GitHub rather than exchange copies through chat. Review changes through a PR and coordinate applies with the group. Each operator needs their own authorized AWS SSO session and permission to access the shared state and manage the resources.
+
+From the repository root:
+
+```bash
+aws sso login --profile nus
+export AWS_PROFILE=nus
+terraform -chdir=infra/aws init -backend-config=backend.hcl
+terraform -chdir=infra/aws plan -var-file=staging.tfvars
+```
+
+Use your own SSO profile name if it differs from `nus`. Include `-var-file=staging.tfvars` on every staging plan and direct apply; when applying a reviewed saved plan, its variable values are already included. The named file is explicit because Terraform does not automatically load `staging.tfvars`. No separate local `infra/aws/terraform.tfvars` is needed. Remove old local copies after pulling this change so they cannot silently supply stale settings. Do not apply the new-environment example defaults to the deployed stack: `enable_backend=false` there can propose removing the backend.
+
+Never commit credentials, state files, saved plans or `.terraform/`. Real `terraform.tfvars` files and other backend configuration files remain ignored; only the two reviewed application-staging files are exceptions. Normal application releases remain manual GitHub Actions deployments and do not apply Terraform.
+
+### State-bucket bootstrap (new environment only)
+
+The existing team deployment is already bootstrapped; teammates must not repeat these steps or initialize a separate state for it. For a new environment, copy the examples in `infra/state/` to `terraform.tfvars`, `backend.hcl` and `bootstrap_override.tf`, and set the intended account. Those real bootstrap files stay gitignored. Application-stack `*.example` files are new-environment templates, separate from the tracked staging configuration.
 
 1. First bootstrap only: with `infra/state/bootstrap_override.tf` present, `terraform -chdir=infra/state init`, `plan`, then `apply` to create the bucket using local state.
 2. Delete `infra/state/bootstrap_override.tf`, then `terraform -chdir=infra/state init -migrate-state -backend-config=backend.hcl` to move the bucket's own state into it. Delete the leftover local `terraform.tfstate*` files only after `terraform -chdir=infra/state plan` shows no changes.
-3. `terraform -chdir=infra/aws init -backend-config=backend.hcl` (add `-reconfigure` if it was previously initialized without a backend). Every later plan/apply of the app stack reads and locks state in S3.
+3. `terraform -chdir=infra/aws init -backend-config=backend.hcl` (add `-reconfigure` if it was previously initialized without a backend). Every later plan/apply of the app stack reads and locks state in S3. For the existing staging deployment, pass `-var-file=staging.tfvars` as shown above.
 
 ## Initial rollout after review
 
