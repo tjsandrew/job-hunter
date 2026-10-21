@@ -145,4 +145,5 @@ The step-by-step checklist, with the commands, is [EMBEDDING-WORKER-ROLLOUT.md](
 
 - The S3 to SQS to Lambda path inside this account and VPC, including retry behaviour under the reserved-concurrency cap.
 - Cold start of the container image on real Lambda (local model load is about 7 s), and ARM64 speed (local timings are x86).
+- That the migration role can set the new role's session limits and grant to it exactly as it already does for the application role (not run against Aurora).
 - All dollar figures above.

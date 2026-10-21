@@ -76,3 +76,4 @@ switch and stays 0 until ingestion exists.
 - The S3 to SQS to Lambda path in this account and VPC, and retry behaviour under the reserved-concurrency cap.
 - Cold-start time of the image, and arm64 speed (local timings are x86).
 - That the bucket lifecycle rule and notification apply cleanly next to the existing bucket settings (a bucket allows one of each).
+- That the migration role can set the new role's session limits and grant to it exactly as it already does for the application role (both roles are created by the operator bootstrap; this has not been run against Aurora).
