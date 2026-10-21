@@ -3,3 +3,6 @@ budget_alert_emails   = ["owner@example.com"]
 activity_alert_emails = ["owner@example.com"]
 monthly_budget_usd    = 40
 enable_backend        = false
+# Embedding worker (docs/design/11-EMBEDDING-WORKER.md); both default to off/empty, so applying without them changes nothing.
+# embed_image_uri = ""   # stage 2: immutable ECR digest of the embed worker image
+# embed_on_save   = "0"  # "queue" once the worker is live

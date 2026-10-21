@@ -43,8 +43,9 @@ def _client():
 
 
 def _bucket() -> str:
-    from job_hunter.config import settings
-    return settings.document_bucket
+    # Read straight from the environment (the same DOCUMENT_BUCKET the API's settings read): the embed worker has no
+    # Cognito settings, and importing job_hunter.config there would reject its environment.
+    return os.getenv("DOCUMENT_BUCKET") or ""
 
 
 def flag_key() -> str:
