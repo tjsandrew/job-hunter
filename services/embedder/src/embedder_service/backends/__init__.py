@@ -12,7 +12,7 @@ def build_backend(settings: Settings) -> EmbeddingBackend:
     if settings.backend == "fastembed":
         from .fastembed_backend import FastembedBackend
 
-        return FastembedBackend(settings.model_name, settings.dimensions, settings.cache_dir)
+        return FastembedBackend(settings.model_name, settings.dimensions, settings.cache_dir, settings.batch_size)
     if settings.backend == "bedrock":
         from .bedrock import BedrockBackend
 

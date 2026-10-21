@@ -1,0 +1,10 @@
+# Only what Dockerfile.embed-lambda copies (its build context is the repository root).
+*
+!backend/pyproject.toml
+!backend/requirements.lock
+!backend/src
+!services/embedder/pyproject.toml
+!services/embedder/requirements.lock
+!services/embedder/src
+**/__pycache__
+**/*.egg-info

@@ -294,6 +294,28 @@ describe('Discover: For you and All jobs', () => {
     expect(mockApi.recommendations).toHaveBeenCalled();
   });
 
+  it('when the server has For you switched off, shows the plain list with no toggle and no note, and asks only once', async () => {
+    const user = userEvent.setup();
+    mockApi.recommendationsForYou.mockRejectedValue(new HttpError('Semantic recommendations are not enabled', 404, 'FOR_YOU_DISABLED'));
+    render(<App />);
+    expect(await screen.findByText('Product Designer')).toBeInTheDocument();
+    expect(screen.queryByText(/is unavailable right now/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'For you' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'All jobs' })).not.toBeInTheDocument();
+    expect(mockApi.recommendationsForYou).toHaveBeenCalledTimes(1);
+    await user.type(screen.getByLabelText('Search jobs'), 'design');
+    await waitFor(() => expect(mockApi.recommendations).toHaveBeenLastCalledWith('design', 0), { timeout: 1500 });
+    expect(mockApi.recommendationsForYou).toHaveBeenCalledTimes(1);          // never asked again this session
+  });
+
+  it('keeps the toggle and the plain note for any other For you failure', async () => {
+    mockApi.recommendationsForYou.mockRejectedValue(new HttpError('Request failed (500).', 500, 'INTERNAL'));
+    render(<App />);
+    expect(await screen.findByText('Product Designer')).toBeInTheDocument();
+    expect(screen.getByText(/For you is unavailable right now, so all jobs are shown/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'For you' })).toBeInTheDocument();
+  });
+
   it('shows the server reason when For you itself fell back, and hints at thin preferences', async () => {
     mockApi.recommendationsForYou.mockResolvedValue({ ...semantic(), ranking_mode: 'keyword_fallback' as const, fallback_reason: 'No confirmed profile yet, so the keyword ranker was used.', degraded_mode: true });
     render(<App />);

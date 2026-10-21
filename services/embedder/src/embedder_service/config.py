@@ -15,6 +15,7 @@ class Settings:
     cache_dir: str = "/models"
     max_texts: int = 64
     max_chars: int = 30_000
+    batch_size: int = 1  # texts per ONNX run; fastembed's own default (256) pads a whole request to its longest text and needs GBs on long job texts
     bedrock_model_id: str = "amazon.titan-embed-text-v2:0"
     aws_region: str | None = None
 
@@ -41,6 +42,7 @@ class Settings:
             cache_dir=e.get("EMBEDDER_CACHE_DIR", cls.cache_dir),
             max_texts=num("EMBEDDER_MAX_TEXTS", cls.max_texts),
             max_chars=num("EMBEDDER_MAX_CHARS", cls.max_chars),
+            batch_size=num("EMBEDDER_BATCH_SIZE", cls.batch_size),
             bedrock_model_id=e.get("EMBEDDER_BEDROCK_MODEL_ID", cls.bedrock_model_id),
             aws_region=e.get("AWS_REGION") or e.get("AWS_DEFAULT_REGION") or None,
         )

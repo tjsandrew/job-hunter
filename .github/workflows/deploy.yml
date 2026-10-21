@@ -22,6 +22,9 @@ jobs:
       API_FUNCTION: ${{ vars.API_FUNCTION }}
       DATABASE_CREDENTIALS_SECRET_ARN: ${{ vars.DATABASE_CREDENTIALS_SECRET_ARN }}
       MIGRATION_FUNCTION: ${{ vars.MIGRATION_FUNCTION }}
+      # The embedding worker (docs/design/11-EMBEDDING-WORKER.md). Both unset means these steps are skipped.
+      EMBED_ECR_REPOSITORY: ${{ vars.EMBED_ECR_REPOSITORY }}
+      EMBED_FUNCTION: ${{ vars.EMBED_FUNCTION }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -102,11 +105,42 @@ jobs:
         env:
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
         run: echo "Backend image for Terraform api_image_uri = $ECR_REPOSITORY@$IMAGE_DIGEST" >> "$GITHUB_STEP_SUMMARY"
+      - name: Build and publish immutable embed worker image
+        id: embed_image
+        if: env.EMBED_ECR_REPOSITORY != ''
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile.embed-lambda
+          platforms: linux/arm64
+          provenance: false
+          load: true
+          push: true
+          tags: ${{ vars.EMBED_ECR_REPOSITORY }}:${{ github.run_id }}-${{ github.run_attempt }}
+          cache-from: type=gha,scope=jobhunter-embed-lambda
+          cache-to: type=gha,mode=max,scope=jobhunter-embed-lambda
+      - name: Verify the embed worker package (handler imports, model baked in)
+        if: env.EMBED_ECR_REPOSITORY != ''
+        env:
+          IMAGE_TAG: ${{ vars.EMBED_ECR_REPOSITORY }}:${{ github.run_id }}-${{ github.run_attempt }}
+        run: >-
+          docker run --rm --entrypoint python "$IMAGE_TAG"
+          -c 'from pathlib import Path; import job_hunter.embed_worker, embedder_service.backends; assert any(Path("/models").rglob("*.onnx")), "model is not baked into the image"'
+      - name: Record immutable embed image for infrastructure
+        if: env.EMBED_ECR_REPOSITORY != ''
+        env:
+          IMAGE_DIGEST: ${{ steps.embed_image.outputs.digest }}
+        run: echo "Embed worker image for Terraform embed_image_uri = $EMBED_ECR_REPOSITORY@$IMAGE_DIGEST" >> "$GITHUB_STEP_SUMMARY"
       - name: Migrate, deploy API and check anonymous access
         if: env.API_FUNCTION != ''
         env:
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
           VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
         run: python scripts/deploy_aws.py --image "$ECR_REPOSITORY@$IMAGE_DIGEST"
+      - name: Deploy the embedding worker
+        if: env.EMBED_FUNCTION != '' && env.EMBED_ECR_REPOSITORY != ''
+        env:
+          IMAGE_DIGEST: ${{ steps.embed_image.outputs.digest }}
+        run: python scripts/deploy_aws.py --embed-image "$EMBED_ECR_REPOSITORY@$IMAGE_DIGEST"
       - name: Deploy tested website to Amplify
         run: python scripts/deploy_aws.py --web apps/web/dist

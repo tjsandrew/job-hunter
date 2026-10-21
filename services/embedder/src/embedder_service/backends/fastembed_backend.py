@@ -11,10 +11,11 @@ class FastembedBackend:
     name = "fastembed"
     normalized = True
 
-    def __init__(self, model_name: str, dimensions: int, cache_dir: str | None = None):
+    def __init__(self, model_name: str, dimensions: int, cache_dir: str | None = None, batch_size: int = 1):
         from fastembed import TextEmbedding  # lazy: tests and other backends need not install it
 
         self.model_id = model_name
+        self._batch_size = batch_size
         self._lock = threading.Lock()  # one ONNX session; keep concurrent requests simple and safe
         self._model = TextEmbedding(model_name=model_name, cache_dir=cache_dir)
         probe = self._run(["dimension probe"])[0]
@@ -27,7 +28,7 @@ class FastembedBackend:
 
     def _run(self, texts: Sequence[str]) -> list[list[float]]:
         with self._lock:
-            vectors = list(self._model.embed(list(texts)))
+            vectors = list(self._model.embed(list(texts), batch_size=self._batch_size))
         return [l2_normalize([float(x) for x in v]) for v in vectors]
 
     def embed(self, texts: Sequence[str]) -> list[list[float]]:

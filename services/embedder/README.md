@@ -40,6 +40,7 @@ docker compose run --rm --no-deps --user root \
 | `EMBEDDER_MODEL_NAME` | `jinaai/jina-embeddings-v2-small-en` | fastembed model id |
 | `EMBEDDER_DIMENSIONS` | `512` | startup fails if the backend disagrees |
 | `EMBEDDER_MAX_TEXTS` / `EMBEDDER_MAX_CHARS` | `64` / `30000` | request limits |
+| `EMBEDDER_BATCH_SIZE` | `1` | texts per ONNX run; higher is a little faster but peak memory grows fast on long job texts (see LAMBDA.md) |
 | `EMBEDDER_CACHE_DIR` | `/models` | where fastembed finds the model |
 | `EMBEDDER_BEDROCK_MODEL_ID` | `amazon.titan-embed-text-v2:0` | bedrock backend only |
 | `AWS_REGION` | unset | bedrock backend only |

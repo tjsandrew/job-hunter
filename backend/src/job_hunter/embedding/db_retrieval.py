@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from job_hunter.domain.models import Job, ProfileVersion
+from job_hunter.role_family import classify_engineering_subrole
 
 from .db_tables import job_embeddings, profile_embeddings
 from .features import Classifier, extract_profile_features, job_role_family, job_seniority_levels, role_hint_from_snapshot
@@ -47,7 +48,8 @@ def load_profile_query(session: Session, profile_version_id: str, *, target_role
         return None
     features = extract_profile_features(target_roles, seniority_preference, classify)
     query = ProfileQuery(vector=_floats(row[0]), role_families=features.role_families,
-                         seniority_levels=features.seniority_levels)
+                         seniority_levels=features.seniority_levels,
+                         engineering_subroles=features.engineering_subroles)
     return query, row[1]
 
 
@@ -70,7 +72,8 @@ def load_job_candidates(session: Session, *, model: str, text_version: str = JOB
                "work_mode": work_mode, "status": status, "category": category}
         loaded.append((job, RetrievalCandidate(job_id=str(job_id), vector=_floats(embedding),
                                                role_family=job_role_family(category),
-                                               seniority_levels=job_seniority_levels(seniority))))
+                                               seniority_levels=job_seniority_levels(seniority),
+                                               engineering_subrole=classify_engineering_subrole(title))))
     return loaded
 
 

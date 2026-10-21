@@ -45,6 +45,25 @@ variable "api_image_uri" {
   }
 }
 
+variable "embed_image_uri" {
+  description = "Immutable ECR digest of the embed worker image (docs/design/11-EMBEDDING-WORKER.md). Empty creates only the stage-1 resources: queue, dead-letter queue, IAM, alarm and the ECR repository."
+  type        = string
+  default     = ""
+  validation {
+    condition     = var.embed_image_uri == "" || can(regex("@sha256:[a-f0-9]{64}$", var.embed_image_uri))
+    error_message = "Use an immutable ECR image digest, not a mutable tag."
+  }
+}
+variable "embed_on_save" {
+  description = "0 (off) or queue (the API writes the S3 flag after a profile save). Set queue only once the embed worker is live."
+  type        = string
+  default     = "0"
+  validation {
+    condition     = contains(["0", "queue"], var.embed_on_save)
+    error_message = "embed_on_save must be 0 or queue."
+  }
+}
+
 variable "activity_alert_emails" {
   description = "SNS recipients for the notification-only Aurora activity alarm; empty uses budget_alert_emails. Recipients must confirm their SNS email subscriptions."
   type        = set(string)

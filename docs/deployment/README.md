@@ -30,7 +30,7 @@ Solid arrows show application traffic or credential retrieval. Dashed arrows sho
 | Location | What is stored there | Who can obtain it |
 |---|---|---|
 | Secrets Manager, Singapore: AWS-managed `rds!cluster-…` secret | Master `jobhunter_admin` password for setup/recovery | Authorized AWS operators; normal release role cannot read this secret |
-| Secrets Manager, Singapore: `jobhunter-staging-database-credentials` | Separate `jobhunter_app` and `jobhunter_migrator` passwords in one JSON secret | Authorized AWS operators and the GitHub release role |
+| Secrets Manager, Singapore: `jobhunter-staging-database-credentials` | Separate `jobhunter_app` and `jobhunter_migrator` passwords in one JSON secret (plus `jobhunter_embedder` once the embedding worker is set up) | Authorized AWS operators and the GitHub release role |
 | Each Lambda's environment configuration | That function's own `DATABASE_PASSWORD`, encrypted at rest | Function code and AWS principals with sufficient configuration-reading permissions |
 | Terraform state and saved plans | Can contain copies of Lambda environment passwords after refresh | Principals who can read the private state bucket or local plan/state files |
 | Git repository and GitHub deployment variables | Architecture, scripts, resource names and secret ARN; no password values | Repository collaborators |
@@ -51,7 +51,7 @@ Solid arrows show application traffic or credential retrieval. Dashed arrows sho
 | Password database authentication | Separate API and migration credentials, retrieved by the release runner and injected into Lambda configuration. No runtime Secrets Manager request or paid interface endpoint. IAM database login is denied by this account’s organization policy. |
 | GitHub Actions / ECR / Terraform | Test and publish immutable application artifacts; use GitHub OIDC instead of stored AWS keys. Terraform provisions infrastructure separately from application releases. |
 
-The private database spans a two-subnet network with one serverless writer. There is no NAT gateway, VM or paid interface endpoint. A free S3 gateway endpoint provides document access. External AI/model calls and embedding workers are deferred.
+The private database spans a two-subnet network with one serverless writer. There is no NAT gateway, VM or paid interface endpoint. A free S3 gateway endpoint provides document access. External AI/model calls and embedding workers are deferred; the planned embedding worker (S3 flag, SQS queue, dedicated Lambda) is in [design brief 11](../design/11-EMBEDDING-WORKER.md) and its rollout checklist in [EMBEDDING-WORKER-ROLLOUT.md](EMBEDDING-WORKER-ROLLOUT.md).
 
 ## Implemented locally
 

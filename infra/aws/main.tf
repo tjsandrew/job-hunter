@@ -98,6 +98,12 @@ resource "aws_ecr_repository" "api" {
   image_scanning_configuration { scan_on_push = true }
 }
 
+resource "aws_ecr_repository" "embed" {
+  name                 = "${local.name}-embed"
+  image_tag_mutability = "IMMUTABLE"
+  image_scanning_configuration { scan_on_push = true }
+}
+
 module "backend" {
   source                = "./backend"
   count                 = var.enable_backend ? 1 : 0
@@ -108,6 +114,8 @@ module "backend" {
   client_id             = aws_cognito_user_pool_client.web.id
   image_uri             = var.api_image_uri
   activity_alert_emails = length(var.activity_alert_emails) > 0 ? var.activity_alert_emails : toset(var.budget_alert_emails)
+  embed_image_uri       = var.embed_image_uri
+  embed_on_save         = var.embed_on_save
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
@@ -133,6 +141,7 @@ resource "aws_iam_role" "release" {
 output "website_url" { value = local.origin }
 output "release_role_arn" { value = aws_iam_role.release.arn }
 output "ecr_repository_url" { value = aws_ecr_repository.api.repository_url }
+output "embed_ecr_repository_url" { value = aws_ecr_repository.embed.repository_url }
 output "database_bootstrap" { value = try(module.backend[0].bootstrap, null) }
 output "activity_monitoring" { value = try(module.backend[0].activity_monitoring, null) }
 output "deployment" {
@@ -144,6 +153,8 @@ output "deployment" {
     DATABASE_CREDENTIALS_SECRET_ARN = try(module.backend[0].database_credentials_arn, "")
     API_FUNCTION                    = try(module.backend[0].api_function, "")
     MIGRATION_FUNCTION              = try(module.backend[0].migration_function, "")
+    EMBED_ECR_REPOSITORY            = aws_ecr_repository.embed.repository_url
+    EMBED_FUNCTION                  = try(module.backend[0].embed_function, "")
     VITE_AUTH_MODE                  = "cognito"
     VITE_COGNITO_ISSUER             = "https://${aws_cognito_user_pool.users.endpoint}"
     VITE_COGNITO_CLIENT_ID          = aws_cognito_user_pool_client.web.id

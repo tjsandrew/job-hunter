@@ -149,3 +149,9 @@ def test_role_hint_from_snapshot():
     assert role_hint_from_snapshot({"headline": "", "experience": [{"role": "Data Analyst"}]}) == ["Data Analyst"]
     assert role_hint_from_snapshot({"experience": [{"title": "Engineer"}]}) == ["Engineer"]
     assert role_hint_from_snapshot({}) == [] and role_hint_from_snapshot(None) == []
+
+
+def test_profile_features_carry_engineering_subroles():
+    f = extract_profile_features(["Senior Backend Engineer", "Staff Engineer"], "Senior")
+    assert f.engineering_subroles == ("backend",) and f.role_families == ("engineering",)
+    assert extract_profile_features(["Data Analyst"], "Mid").engineering_subroles == ()

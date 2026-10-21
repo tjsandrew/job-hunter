@@ -33,6 +33,8 @@ Initial reserved concurrency: API 10, discovery 1, job worker 2, personal worker
 
 Functions needing RDS use private subnets and the function security group. RDS accepts PostgreSQL only from authorised function/migration security groups. Internet egress uses NAT; being in a public subnet would not give a standard Lambda a public IP. An S3 gateway endpoint is a useful addition; do not add a fleet of paid interface endpoints without a cost comparison. [AWS VPC internet access](https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc-internet.html)
 
+The deployed staging environment deliberately has **no NAT** to save cost; embedding there uses an S3 flag, an SQS queue and a dedicated worker instead of a direct call, and should switch to a direct SQS send if a NAT or SQS endpoint is later provisioned. See [11 Embedding worker](11-EMBEDDING-WORKER.md).
+
 This topology supports external job APIs, Bedrock, SQS sends and secret retrieval. Keep outbound connections/timeouts explicit. The Lambda service polls SQS through its event source mapping; code still needs network access for any SDK requests it makes.
 
 ## Packaging and migration

@@ -5,6 +5,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import text
 from job_hunter.adapters.aws_config import bootstrap_engine, password_engine
+from job_hunter.embedding.db_role import EMBEDDER_ROLE, grant_embedder
 
 
 def grant_runtime(connection):
@@ -20,6 +21,9 @@ def grant_runtime(connection):
     connection.execute(text("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO jobhunter_app"))
     connection.execute(text("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO jobhunter_app"))
     connection.execute(text("REVOKE ALL ON alembic_version FROM jobhunter_app"))
+    # The embed worker's role exists only after the operator bootstrap included its password; until then this
+    # is a no-op, and every later release re-applies the (idempotent) grants and policy.
+    grant_embedder(connection)
 
 
 def handler(event, context):
@@ -57,12 +61,20 @@ def handler(event, context):
                     connection.execute(text("CREATE ROLE jobhunter_migrator LOGIN"))
                 connection.execute(text("REVOKE rds_iam FROM jobhunter_app, jobhunter_admin, jobhunter_migrator"))
                 connection.execute(text("GRANT jobhunter_admin TO jobhunter_migrator"))
+                # Optional: the embed worker's role (design brief 11). It is created only when its password is
+                # supplied, so the two-password bootstrap keeps working unchanged.
+                if EMBEDDER_ROLE in passwords:
+                    if not isinstance(passwords[EMBEDDER_ROLE], str) or len(passwords[EMBEDDER_ROLE]) < 32:
+                        raise ValueError("Bootstrap requires a generated embedder password")
+                    if not connection.scalar(text(f"SELECT 1 FROM pg_roles WHERE rolname='{EMBEDDER_ROLE}'")):
+                        connection.execute(text(f"CREATE ROLE {EMBEDDER_ROLE} LOGIN"))
+                    connection.execute(text(f"REVOKE rds_iam FROM {EMBEDDER_ROLE}"))
                 # Utility statements do not accept password bind parameters. psycopg
                 # quotes literals, and SQLAlchemy never sees/logs the password SQL.
                 from psycopg import sql
                 with connection.connection.driver_connection.cursor() as cursor:
                     for role, password in passwords.items():
-                        if role not in {"jobhunter_app", "jobhunter_migrator"}:
+                        if role not in {"jobhunter_app", "jobhunter_migrator", EMBEDDER_ROLE}:
                             raise ValueError("Unexpected credential role")
                         cursor.execute(sql.SQL("ALTER ROLE {} PASSWORD {}").format(
                             sql.Identifier(role), sql.Literal(password)))
@@ -70,6 +82,9 @@ def handler(event, context):
                 # NOSUPERUSER/NOBYPASSRLS. New roles default to both; verify instead.
                 if connection.scalar(text("SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname='jobhunter_app'")):
                     raise RuntimeError("jobhunter_app must not be a superuser or bypass row-level security")
+                if EMBEDDER_ROLE in passwords and connection.scalar(
+                        text(f"SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname='{EMBEDDER_ROLE}'")):
+                    raise RuntimeError(f"{EMBEDDER_ROLE} must not be a superuser or bypass row-level security")
             connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             config = Config("alembic.ini")
             config.attributes["connection"] = connection

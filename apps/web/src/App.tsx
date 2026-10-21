@@ -38,6 +38,9 @@ export default function App() {
   const [rankingStatus, setRankingStatus] = useState('');
   const [discoverMode, setDiscoverMode] = useState<'for-you' | 'all'>('for-you');
   const [forYouNote, setForYouNote] = useState('');
+  // When the server says For you is switched off (FOR_YOU_DISABLED) the toggle is hidden and the keyword list is used silently.
+  const [forYouAvailable, setForYouAvailable] = useState(true);
+  const effectiveMode: 'for-you' | 'all' = forYouAvailable ? discoverMode : 'all';
   const [recommendationTotal, setRecommendationTotal] = useState(0);
   const [nextJobOffset, setNextJobOffset] = useState<number | null>(null);
   const [loadingMoreJobs, setLoadingMoreJobs] = useState(false);
@@ -100,7 +103,7 @@ export default function App() {
     const revision = ++searchRequestRevision.current;
     setLoadingMoreJobs(false); setRecommendationLoading(true);
     const timer = window.setTimeout(() => {
-      fetchJobs(discoverMode, query, 0).then((result) => {
+      fetchJobs(effectiveMode, query, 0).then((result) => {
         if (!alive) return;
         setJobs(result.items || []); setRecommendationTotal(result.total ?? result.items.length);
         setNextJobOffset(result.next_offset ?? null); setRecommendationsDegraded(Boolean(result.degraded_mode)); setRankingStatus(result.ranking_status || '');
@@ -129,11 +132,15 @@ export default function App() {
 
   // "For you" first; if it cannot answer (disabled, error) fall back to the original keyword list and say so.
   const fetchJobs = async (mode: 'for-you' | 'all', q: string, offset: number) => {
-    if (mode === 'all') return { ...(await api.recommendations(q, offset)), note: '' };
+    if (mode === 'all' || !forYouAvailable) return { ...(await api.recommendations(q, offset)), note: '' };
     try {
       const result = await api.recommendationsForYou(q, offset);
       return { ...result, note: result.ranking_mode === 'keyword_fallback' ? (result.fallback_reason || 'For you is not ready yet, so all jobs are shown.') : '' };
-    } catch {
+    } catch (error) {
+      if (error instanceof HttpError && error.code === 'FOR_YOU_DISABLED') {   // switched off on this deployment: not an error, so no note and no further tries
+        setForYouAvailable(false);
+        return { ...(await api.recommendations(q, offset)), note: '' };
+      }
       return { ...(await api.recommendations(q, offset)), note: 'For you is unavailable right now, so all jobs are shown.' };
     }
   };
@@ -143,7 +150,7 @@ export default function App() {
     setLoadingMoreJobs(true);
     const revision = searchRequestRevision.current;
     try {
-      const result = await fetchJobs(discoverMode, query, nextJobOffset);
+      const result = await fetchJobs(effectiveMode, query, nextJobOffset);
       if (revision !== searchRequestRevision.current) return;
       setJobs((current) => [...current, ...result.items.filter((item) => !current.some((loaded) => loaded.job.id === item.job.id))]);
       setRecommendationTotal(result.total ?? recommendationTotal); setNextJobOffset(result.next_offset ?? null); setRankingStatus(result.ranking_status || rankingStatus);
@@ -370,7 +377,7 @@ export default function App() {
         {fatal && <div className="fatal"><div className="fatal-icon">!</div><div><strong>Could not load your workspace</strong><p>{fatal}</p><button className="button secondary small-button" onClick={() => { setFatal(''); setBootstrapAttempt((x) => x + 1); setRefresh((x) => x + 1); }}>Try again</button></div></div>}
         {!fatal && busy && <Loading label="Connecting to your workspace…" />}
         {!fatal && !busy && <>
-          {page === 'discover' && <Discover jobs={jobs} loading={recommendationLoading} total={recommendationTotal} hasMore={nextJobOffset !== null} loadingMore={loadingMoreJobs} onLoadMore={loadMoreJobs} query={query} setQuery={setQuery} busyJob={busyJob} onReview={review} onDetails={setJobDetail} degraded={recommendationsDegraded} rankingStatus={rankingStatus} mode={discoverMode} setMode={setDiscoverMode} forYouNote={forYouNote} thinProfile={!(preferences.roles || []).length || !preferences.seniority} />}
+          {page === 'discover' && <Discover jobs={jobs} loading={recommendationLoading} total={recommendationTotal} hasMore={nextJobOffset !== null} loadingMore={loadingMoreJobs} onLoadMore={loadMoreJobs} query={query} setQuery={setQuery} busyJob={busyJob} onReview={review} onDetails={setJobDetail} degraded={recommendationsDegraded} rankingStatus={rankingStatus} mode={effectiveMode} forYouAvailable={forYouAvailable} setMode={setDiscoverMode} forYouNote={forYouNote} thinProfile={!(preferences.roles || []).length || !preferences.seniority} />}
           {page === 'profile' && <ProfileView key={user} userKey={user} onChanged={() => setRefresh(value => value + 1)} onBasicsSaved={draft => setProfile(profileToForm(draft))} onOpenResume={openResume} onOpenLibrary={openResumeLibrary} preferences={preferences} setPreferences={setPreferences} savePreferences={savePreferences} savingPreferences={prefSaving} uploading={uploading} uploadMessage={uploadMessage} extractedResumeText={extractedResumeText} onUpload={uploadProfileResume} resumes={resumes} onBusyChange={setProfileBusy} />}
           {page === 'tracker' && <Tracker apps={filteredApps} loading={recordsLoading} query={trackerQuery} setQuery={setTrackerQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onEdit={setTrackerEdit} />}
           {page === 'studio' && <Studio onDelete={deleteResume} resumes={resumes} loading={recordsLoading} active={activeResume} attachTarget={resumeAttachTarget} tab={studioTab} setTab={setStudioTab} busy={busyResumeAction} saving={saving} saveLabel={saveLabel} history={history} future={future} onCreate={createResume} onOpen={openResume} onCreateTailoredCopy={createTailoredCopy} onCopyResume={copyResume} onBuilt={resumeBuilt} onApplyDefaults={applyStyleDefaults} jobs={buildJobs} onAttach={attachResumeToApplication} onReturn={returnToApplication} onBack={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before leaving the editor.'); return; } setActiveResume(null); }} onUpdate={updateResume} onContent={pushContent} onUndo={undo} onRedo={redo} onDuplicate={duplicateResume} onReview={reviewResume} onExport={exportResume} onPreview={previewResume} onReload={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before reloading.'); return; } reloadResume(); }} />}
@@ -384,10 +391,10 @@ export default function App() {
   </div>;
 }
 
-function Discover({ jobs, loading, total, hasMore, loadingMore, onLoadMore, query, setQuery, busyJob, onReview, onDetails, degraded, rankingStatus, mode, setMode, forYouNote, thinProfile }: { jobs: Recommendation[]; loading: boolean; total: number; hasMore: boolean; loadingMore: boolean; onLoadMore: () => void; query: string; setQuery: (v: string) => void; busyJob: string; onReview: (job: Job, decision: 'saved' | 'dismissed') => void; onDetails: (job: Job) => void; degraded: boolean; rankingStatus: string; mode: 'for-you' | 'all'; setMode: (mode: 'for-you' | 'all') => void; forYouNote: string; thinProfile: boolean }) {
+function Discover({ jobs, loading, total, hasMore, loadingMore, onLoadMore, query, setQuery, busyJob, onReview, onDetails, degraded, rankingStatus, mode, setMode, forYouNote, thinProfile, forYouAvailable }: { jobs: Recommendation[]; loading: boolean; total: number; hasMore: boolean; loadingMore: boolean; onLoadMore: () => void; query: string; setQuery: (v: string) => void; busyJob: string; onReview: (job: Job, decision: 'saved' | 'dismissed') => void; onDetails: (job: Job) => void; degraded: boolean; rankingStatus: string; mode: 'for-you' | 'all'; setMode: (mode: 'for-you' | 'all') => void; forYouNote: string; thinProfile: boolean; forYouAvailable: boolean }) {
   return <div className="page-wrap"><div className="page-heading"><div><div className="eyebrow">YOUR NEXT OPPORTUNITY</div><h1>Find your next move.</h1><p>Explore roles matched to your experience and preferences.</p></div><span className="ai-unavailable-badge">AI unavailable</span></div>
     <div className="discovery-summary"><div className="discovery-icon"><Icon name="search" /></div><div><strong>Opportunities from your sources</strong><p>{total} roles match your current filters. Review each one and save what feels right.</p></div></div>
-    <div className="mode-toggle" role="group" aria-label="Job list"><button type="button" aria-pressed={mode === 'for-you'} className={mode === 'for-you' ? 'on' : ''} onClick={() => setMode('for-you')}>For you</button><button type="button" aria-pressed={mode === 'all'} className={mode === 'all' ? 'on' : ''} onClick={() => setMode('all')}>All jobs</button></div>
+    {forYouAvailable && <div className="mode-toggle" role="group" aria-label="Job list"><button type="button" aria-pressed={mode === 'for-you'} className={mode === 'for-you' ? 'on' : ''} onClick={() => setMode('for-you')}>For you</button><button type="button" aria-pressed={mode === 'all'} className={mode === 'all' ? 'on' : ''} onClick={() => setMode('all')}>All jobs</button></div>}
     <div className="toolbar"><label className="search-field"><Icon name="search" /><input aria-label="Search jobs" placeholder="Search title, company, location..." value={query} onChange={(e) => setQuery(e.target.value)} /></label><span className="result-count">{total} results</span></div>
     {mode === 'for-you' && forYouNote && <div className="degraded-note"><span className="note-dot" /> {forYouNote}</div>}
     {mode === 'for-you' && !forYouNote && thinProfile && <div className="degraded-note"><span className="note-dot" /> Add your target roles and seniority in Job preferences to sharpen these matches.</div>}

@@ -6,15 +6,19 @@ import boto3
 
 
 def set_mode(mode):
-    # Resume restores a bounded reservation, never unlimited concurrency.
+    # Resume restores a bounded reservation, never unlimited concurrency. The embedding worker (when it exists) pauses
+    # with the API, so paused really means nothing can wake Aurora.
     concurrency = {"pause": 0, "resume": 10}[mode]
-    function = os.environ["API_FUNCTION"]
+    targets = [(os.environ["API_FUNCTION"], concurrency, "API")]
+    if os.environ.get("EMBED_FUNCTION"):
+        targets.append((os.environ["EMBED_FUNCTION"], {"pause": 0, "resume": 2}[mode], "Embedding worker"))
     client = boto3.client("lambda")
-    client.put_function_concurrency(FunctionName=function, ReservedConcurrentExecutions=concurrency)
-    actual = client.get_function(FunctionName=function).get("Concurrency", {}).get("ReservedConcurrentExecutions")
-    if actual != concurrency:
-        raise RuntimeError("Concurrency verification failed; inspect the API function before continuing.")
-    print(f"Staging API {'paused' if mode == 'pause' else 'resumed'}; reserved concurrency = {actual}.")
+    for function, reserved, label in targets:
+        client.put_function_concurrency(FunctionName=function, ReservedConcurrentExecutions=reserved)
+        actual = client.get_function(FunctionName=function).get("Concurrency", {}).get("ReservedConcurrentExecutions")
+        if actual != reserved:
+            raise RuntimeError(f"Concurrency verification failed; inspect the {label} function before continuing.")
+        print(f"Staging {label} {'paused' if mode == 'pause' else 'resumed'}; reserved concurrency = {actual}.")
     if mode == "pause":
         print("New API requests are disabled. In-flight work and administrator sessions must finish before Aurora can auto-pause.")
     else:

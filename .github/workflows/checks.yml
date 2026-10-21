@@ -17,6 +17,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       package: ${{ steps.filter.outputs.package }}
       scripts: ${{ steps.filter.outputs.scripts }}
+      embedder: ${{ steps.filter.outputs.embedder }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -113,10 +114,49 @@ jobs:
       - run: pip install -c backend/requirements.lock boto3
       - run: python -m unittest discover -s scripts/tests -v
 
+  embedder:
+    needs: changes
+    if: needs.changes.outputs.embedder == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: services/embedder/requirements.lock
+      - name: Contract, config and backend tests (fake backend, no model download)
+        working-directory: services/embedder
+        run: |
+          pip install -c requirements.lock ".[test]"
+          EMBEDDER_SERVICE_BACKEND=fake python -m pytest -q
+      - name: Build both images without the model, start each with the fake backend and call the API
+        run: |
+          # public.ecr.aws rate-limits anonymous pulls per IP, and GitHub's runners share IPs, so a build can fail with
+          # "429 toomanyrequests" through no fault of the code. Retry with a growing pause.
+          retry() { for attempt in 1 2 3; do "$@" && return 0; echo "attempt $attempt failed" >&2; sleep $((attempt * 30)); done; return 1; }
+          retry docker build --build-arg BAKE_MODEL=0 -t embedder:check services/embedder
+          retry docker build --build-arg BAKE_MODEL=0 -f services/embedder/Dockerfile.lambda -t embedder-lambda:check services/embedder
+          for image in embedder:check embedder-lambda:check; do
+            docker run -d --name smoke -p 8100:8100 -e EMBEDDER_SERVICE_BACKEND=fake "$image"
+            for attempt in $(seq 1 30); do curl -fsS http://localhost:8100/health && break; sleep 1; done
+            curl -fsS http://localhost:8100/v1/model
+            curl -fsS -H 'content-type: application/json' -d '{"inputs": ["Python backend engineer"]}' http://localhost:8100/v1/embed | python3 -c 'import json,sys; body=json.load(sys.stdin); assert len(body["embeddings"][0]) == 512, body'
+            docker rm -f smoke
+          done
+      - name: Build the embed worker image without the model and check that it imports
+        run: |
+          retry() { for attempt in 1 2 3; do "$@" && return 0; echo "attempt $attempt failed" >&2; sleep $((attempt * 30)); done; return 1; }   # see the note on public.ecr.aws rate limits above
+          retry docker build -f backend/Dockerfile.embed-lambda --build-arg BAKE_MODEL=0 -t embed-worker:check .
+          docker run --rm --entrypoint python embed-worker:check -c "import job_hunter.embed_worker, embedder_service.backends; print('embed worker image ok')"
+      - name: Logs on failure
+        if: failure()
+        run: docker logs smoke || true
+
   gate:
     name: Checks passed
     if: always()
-    needs: [changes, web, backend, lambda-package, scripts]
+    needs: [changes, web, backend, lambda-package, scripts, embedder]
     runs-on: ubuntu-latest
     steps:
       - env:
