@@ -257,6 +257,35 @@ def test_a_job_that_stays_a_candidate_does_not_make_the_pass_loop(db):
     assert result.jobs == {"unchanged": 1} and result.progress == 0 and embedder.calls == []   # looked at once, then stopped
 
 
+def test_a_profile_saved_during_a_long_job_run_is_embedded_before_the_jobs_finish(db):
+    add_jobs(db, 6)
+    saved = []
+
+    def save_a_profile_during_the_first_batch():
+        if not saved:
+            saved.append(add_user_with_profile(db, "Late"))
+
+    embedder = FakeEmbedder(on_call=save_a_profile_during_the_first_batch)
+    result = run_pass(db.embedder, embedder, **pass_args(batch_size=2))
+    assert result.jobs == {"ready": 6} and result.profiles == {"ready": 1}
+    # three job batches plus the profile, and the profile came right after the first batch, not at the end
+    assert len(embedder.calls) == 4
+    assert "Build and run service" in embedder.calls[0][0] and "Build and run service" not in embedder.calls[1][0]
+    with db.owner.connect() as connection:
+        assert connection.execute(select(func.count()).select_from(profile_embeddings)
+                                  .where(profile_embeddings.c.user_id == saved[0])).scalar() == 1
+
+
+def test_a_forced_pass_re_embeds_each_profile_once_not_once_per_batch(db):
+    add_jobs(db, 6)
+    add_user_with_profile(db)
+    run_pass(db.embedder, FakeEmbedder(), **pass_args(batch_size=2))
+    forced = FakeEmbedder()
+    result = run_pass(db.embedder, forced, **pass_args(batch_size=2, force=True))
+    profile_calls = [call for call in forced.calls if "Build and run service" not in call[0]]
+    assert len(profile_calls) == 1 and result.jobs == {"ready": 6}
+
+
 # ---- locking and the time budget -------------------------------------------------------------------------
 
 def test_a_second_runner_gives_way_while_the_lock_is_held(db):

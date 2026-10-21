@@ -97,7 +97,7 @@ def handler(event, context):
         _embedder = build_embedder()
     result = run_pass(_engine, _embedder, model=embedder_model_name(),
                       deadline=time.monotonic() + _budget_seconds(context),
-                      batch_size=int(os.getenv("EMBED_BATCH_JOBS") or 8), force=wants_force(event))
+                      batch_size=int(os.getenv("EMBED_BATCH_JOBS") or 4), force=wants_force(event))
     # Time ran out with work left: wake the next run, but only if this one made progress. Every chained run
     # must embed at least one previously pending item, so the chain ends once the pending set is empty.
     chained = False
