@@ -9,6 +9,14 @@ spec.loader.exec_module(control)
 
 
 class BackendControls(unittest.TestCase):
+    def setUp(self):
+        # The Deploy staging job runs these tests with the repository variable EMBED_FUNCTION in its environment once the
+        # worker exists. Start every test without it; the tests that need the worker set it themselves.
+        environment = patch.dict(control.os.environ)
+        environment.start()
+        self.addCleanup(environment.stop)
+        control.os.environ.pop("EMBED_FUNCTION", None)
+
     def test_pause_and_resume_use_only_the_configured_api_and_bounded_values(self):
         for mode, concurrency in [("pause", 0), ("resume", 10)]:
             with self.subTest(mode=mode):
