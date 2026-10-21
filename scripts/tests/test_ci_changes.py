@@ -26,6 +26,11 @@ class CheckSelection(unittest.TestCase):
         self.assertFalse(ci.select_checks(["backend/src/job_hunter/config.py"], "pull_request")["embedder"])
         self.assertFalse(ci.select_checks(["apps/web/src/App.tsx"], "pull_request")["embedder"])
 
+    def test_files_that_decide_whether_the_embed_worker_image_builds_run_the_embedder_checks(self):
+        for path in ("backend/Dockerfile.embed-lambda", "backend/Dockerfile.embed-lambda.dockerignore",
+                     "backend/requirements.lock", "backend/pyproject.toml"):
+            self.assertTrue(ci.select_checks([path], "pull_request")["embedder"], path)
+
     def test_docs_pr_can_complete_without_app_builds(self):
         self.assertFalse(any(ci.select_checks(["docs/deployment/README.md"], "pull_request").values()))
 

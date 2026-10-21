@@ -1,0 +1,67 @@
+# syntax=docker/dockerfile:1
+# AWS Lambda image of the embed worker (job_hunter.embed_worker.handler); see docs/design/11-EMBEDDING-WORKER.md.
+# Backend code plus the embedder's in-process model (no HTTP service, no Web Adapter). The model is baked in so a
+# cold start is offline and fast.
+#
+# The build context is the REPOSITORY ROOT (it needs both backend/ and services/embedder/):
+#   docker build -f backend/Dockerfile.embed-lambda -t embed-worker .
+#   docker build -f backend/Dockerfile.embed-lambda --build-arg BAKE_MODEL=0 ...   # no model download (CI, fake backend)
+# Production images are built for arm64 by the deploy workflow, like the API image.
+
+# ---- build: dependencies and application code on the official Lambda Python base ----
+FROM public.ecr.aws/lambda/python:3.12 AS build
+ENV PYTHONDONTWRITEBYTECODE=1
+WORKDIR /build
+COPY backend/pyproject.toml backend/requirements.lock backend/
+COPY backend/src backend/src
+COPY services/embedder/pyproject.toml services/embedder/requirements.lock services/embedder/
+COPY services/embedder/src services/embedder/src
+
+# 1. The backend, pinned by its own lock file.
+RUN pip install --no-cache-dir -c backend/requirements.lock ./backend
+# 2. fastembed and its dependencies, pinned by the embedder's lock file. The two lock files pin a few shared packages
+#    (pydantic, starlette, boto3, ...) to different versions, so only the embedder-only pins are used here; shared
+#    packages keep the backend's versions.
+RUN python - <<'PY' > /tmp/embedder-only.txt
+import re
+
+def pins(path):
+    found = {}
+    for line in open(path, encoding="utf-8"):
+        match = re.match(r"^([A-Za-z0-9_.\-]+)==(\S+)", line.strip())
+        if match:
+            found[re.sub(r"[-_.]+", "-", match.group(1)).lower()] = line.strip()
+    return found
+
+backend, embedder = pins("backend/requirements.lock"), pins("services/embedder/requirements.lock")
+print("\n".join(line for name, line in embedder.items() if name not in backend))
+PY
+RUN pip install --no-cache-dir -c backend/requirements.lock -c /tmp/embedder-only.txt fastembed
+# 3. The embedder's own source (backends and settings), without its web-service dependencies.
+RUN pip install --no-cache-dir --no-deps ./services/embedder
+
+# ---- modelsrc: the baked model. Override with --build-context modelsrc=docker-image://<existing image> to reuse one. ----
+FROM build AS modelsrc
+ARG EMBEDDER_MODEL_NAME=jinaai/jina-embeddings-v2-small-en
+# BAKE_MODEL=0 builds without downloading the model (CI checks packaging and the handler with the fake backend).
+ARG BAKE_MODEL=1
+RUN mkdir -p /models \
+ && if [ "$BAKE_MODEL" = "1" ]; then \
+      python -c "from fastembed import TextEmbedding; TextEmbedding(model_name='${EMBEDDER_MODEL_NAME}', cache_dir='/models')"; \
+    fi \
+ && chmod -R a+rX /models
+
+# ---- final ----
+FROM build
+COPY --from=modelsrc /models /models
+# Lambda's filesystem is read-only except /tmp and the model is baked in, so never reach for the Hugging Face hub.
+ENV EMBEDDER_CACHE_DIR=/models \
+    EMBEDDER_MODEL_NAME=jinaai/jina-embeddings-v2-small-en \
+    EMBEDDER_SERVICE_BACKEND=fastembed \
+    EMBEDDER_BATCH_SIZE=1 \
+    HF_HUB_OFFLINE=1 \
+    HF_HOME=/tmp/hf \
+    HOME=/tmp
+# The base image's runtime interface client calls the handler named in CMD; the deployed function overrides it with
+# image_config.command anyway.
+CMD ["job_hunter.embed_worker.handler"]

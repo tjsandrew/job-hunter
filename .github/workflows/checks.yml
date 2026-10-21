@@ -141,6 +141,10 @@ jobs:
             curl -fsS -H 'content-type: application/json' -d '{"inputs": ["Python backend engineer"]}' http://localhost:8100/v1/embed | python3 -c 'import json,sys; body=json.load(sys.stdin); assert len(body["embeddings"][0]) == 512, body'
             docker rm -f smoke
           done
+      - name: Build the embed worker image without the model and check that it imports
+        run: |
+          docker build -f backend/Dockerfile.embed-lambda --build-arg BAKE_MODEL=0 -t embed-worker:check .
+          docker run --rm --entrypoint python embed-worker:check -c "import job_hunter.embed_worker, embedder_service.backends; print('embed worker image ok')"
       - name: Logs on failure
         if: failure()
         run: docker logs smoke || true

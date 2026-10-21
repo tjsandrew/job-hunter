@@ -6,6 +6,9 @@ import re
 import subprocess
 
 
+EMBED_WORKER_IMAGE_FILES = ("backend/Dockerfile.embed-lambda", "backend/requirements.lock", "backend/pyproject.toml")
+
+
 def changed_paths(base):
     if not re.fullmatch(r"[a-f0-9]{40}", base or "") or base == "0" * 40:
         return None  # Initial/unknown history: run everything, never skip unsafely.
@@ -29,8 +32,10 @@ def select_checks(paths, event):
         "backend": event == "push" or workflow or backend,
         "package": workflow or any(path.startswith("backend/") for path in paths),
         "scripts": event == "push" or workflow or any(path.startswith("scripts/") or path == "backend/requirements.lock" for path in paths),
-        # The embedder is its own service (own tests, own images); only its folder affects it.
-        "embedder": event == "push" or workflow or any(path.startswith("services/embedder/") for path in paths),
+        # The embedder is its own service (own tests, own images); its folder affects it, and so do the files that
+        # decide whether the embed worker image (backend code plus the embedder's model) still builds.
+        "embedder": event == "push" or workflow or any(
+            path.startswith("services/embedder/") or path.startswith(EMBED_WORKER_IMAGE_FILES) for path in paths),
     }
 
 
