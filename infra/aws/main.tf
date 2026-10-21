@@ -140,6 +140,10 @@ module "backend" {
   discovery_max_new                  = var.discovery_max_new
   discovery_schedule_enabled         = var.discovery_schedule_enabled
   discovery_schedule_expression      = var.discovery_schedule_expression
+
+  aurora_max_acu      = var.aurora_max_acu
+  gateway_rate_limit  = var.gateway_rate_limit
+  gateway_burst_limit = var.gateway_burst_limit
 }
 
 resource "aws_iam_openid_connect_provider" "github" {

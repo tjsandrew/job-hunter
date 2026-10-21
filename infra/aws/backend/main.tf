@@ -15,6 +15,20 @@ variable "image_uri" {
     error_message = "Build and push the initial image before enabling the backend."
   }
 }
+# Raised only for an agreed load-test window, then restored the same day. API Lambda
+# concurrency is changed with put-function-concurrency (Terraform ignores it after creation).
+variable "aurora_max_acu" {
+  type    = number
+  default = 1
+}
+variable "gateway_rate_limit" {
+  type    = number
+  default = 20
+}
+variable "gateway_burst_limit" {
+  type    = number
+  default = 40
+}
 data "aws_availability_zones" "available" { state = "available" }
 resource "aws_vpc" "app" {
   cidr_block           = "10.52.0.0/16"
@@ -87,7 +101,7 @@ resource "aws_rds_cluster" "app" {
   final_snapshot_identifier    = "${var.name}-final"
   serverlessv2_scaling_configuration {
     min_capacity             = 0
-    max_capacity             = 1
+    max_capacity             = var.aurora_max_acu
     seconds_until_auto_pause = 1800
   }
   # Do not try to downgrade a minor version applied by AWS maintenance.
@@ -265,8 +279,8 @@ resource "aws_apigatewayv2_stage" "app" {
   name        = "$default"
   auto_deploy = true
   default_route_settings {
-    throttling_burst_limit = 40
-    throttling_rate_limit  = 20
+    throttling_burst_limit = var.gateway_burst_limit
+    throttling_rate_limit  = var.gateway_rate_limit
   }
   route_settings {
     route_key              = aws_apigatewayv2_route.public["GET /v1/health"].route_key

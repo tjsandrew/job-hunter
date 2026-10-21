@@ -118,6 +118,22 @@ variable "for_you_enabled" {
   }
 }
 
+variable "aurora_max_acu" {
+  description = "Aurora Serverless v2 ceiling. 1 normally; raise only for an agreed load-test window (each ACU-hour ~USD 0.20)."
+  type        = number
+  default     = 1
+}
+variable "gateway_rate_limit" {
+  description = "Shared authenticated API requests/second. Raise only for an agreed load-test window."
+  type        = number
+  default     = 20
+}
+variable "gateway_burst_limit" {
+  description = "Shared authenticated API burst. Raise only for an agreed load-test window."
+  type        = number
+  default     = 40
+}
+
 variable "activity_alert_emails" {
   description = "SNS recipients for the notification-only Aurora activity alarm; empty uses budget_alert_emails. Recipients must confirm their SNS email subscriptions."
   type        = set(string)
