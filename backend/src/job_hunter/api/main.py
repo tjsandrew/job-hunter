@@ -337,7 +337,8 @@ def recommendations_for_you(db: Session = Depends(db_for, scope="function"), lim
     result, reason = semantic.semantic_for_you(db, confirmed, prefs.data if prefs else {}, skipped)
     if result is None:
         base = recommendations(db=db, limit=limit, offset=offset, q=q)
-        return {**base, "ranking_mode": "keyword_fallback", "fallback_reason": reason}
+        code = "profile_embedding_pending" if reason == semantic.NO_VECTOR else "no_profile"   # the page offers "Check again" only for the first
+        return {**base, "ranking_mode": "keyword_fallback", "fallback_reason": reason, "fallback_code": code}
     ordered, fused = result.ranked, False
     if embedding_settings.for_you_fusion_enabled():
         try:   # merge the keyword ranking in; if it cannot be computed, keep the semantic order rather than fail the page
@@ -354,7 +355,7 @@ def recommendations_for_you(db: Session = Depends(db_for, scope="function"), lim
             "next_offset": offset + limit if offset + limit < total else None,
             "degraded_mode": False, "ranking_mode": "semantic", "ranking_fusion": FUSION_VERSION if fused else None,
             "ranking_version": semantic.FUSED_RANKING_VERSION if fused else semantic.RANKING_VERSION,
-            "fallback_reason": None, "blocked_by_checks": len(result.blocked),
+            "fallback_reason": None, "fallback_code": None, "blocked_by_checks": len(result.blocked),
             "ranking_status": semantic.FUSED_STATUS if fused else semantic.SEMANTIC_STATUS}
 
 def job_out(job: Job) -> dict:

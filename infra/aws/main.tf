@@ -116,6 +116,7 @@ module "backend" {
   activity_alert_emails = length(var.activity_alert_emails) > 0 ? var.activity_alert_emails : toset(var.budget_alert_emails)
   embed_image_uri       = var.embed_image_uri
   embed_on_save         = var.embed_on_save
+  for_you_enabled       = var.for_you_enabled
 }
 
 resource "aws_iam_openid_connect_provider" "github" {

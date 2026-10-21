@@ -63,6 +63,15 @@ variable "embed_on_save" {
     error_message = "embed_on_save must be 0 or queue."
   }
 }
+variable "for_you_enabled" {
+  description = "1 serves the semantic For you list (GET /v1/recommendations/for-you); 0 answers 404 FOR_YOU_DISABLED and the web app hides the toggle. Needs embed_on_save = queue, or no profile vector is ever produced."
+  type        = string
+  default     = "0"
+  validation {
+    condition     = contains(["0", "1"], var.for_you_enabled)
+    error_message = "for_you_enabled must be 0 or 1."
+  }
+}
 
 variable "activity_alert_emails" {
   description = "SNS recipients for the notification-only Aurora activity alarm; empty uses budget_alert_emails. Recipients must confirm their SNS email subscriptions."

@@ -322,6 +322,29 @@ describe('Discover: For you and All jobs', () => {
     expect(await screen.findByText('No confirmed profile yet, so the keyword ranker was used.')).toBeInTheDocument();
   });
 
+  it('while the profile is still being prepared, says so and offers Check again, which asks For you once more', async () => {
+    const user = userEvent.setup();
+    const preparing = "We're still preparing your matches. This usually takes under a minute after you update your profile, so you're seeing all jobs for now. Refresh in a moment.";
+    mockApi.recommendationsForYou.mockResolvedValueOnce({ ...semantic(), ranking_mode: 'keyword_fallback' as const, fallback_reason: preparing, fallback_code: 'profile_embedding_pending' as const, degraded_mode: true, ranking_status: 'Keyword text similarity and skill matching' })
+      .mockResolvedValue(semantic());
+    render(<App />);
+    expect(await screen.findByText(preparing)).toBeInTheDocument();
+    expect(screen.queryByText(/Keyword text similarity/i)).not.toBeInTheDocument();   // one banner, not two
+    const calls = mockApi.recommendationsForYou.mock.calls.length;
+    await user.click(screen.getByRole('button', { name: 'Check again' }));
+    await waitFor(() => expect(mockApi.recommendationsForYou.mock.calls.length).toBe(calls + 1), { timeout: 1500 });
+    await waitFor(() => expect(screen.queryByText(preparing)).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Check again' })).not.toBeInTheDocument();
+    expect(await screen.findByText('Backend Engineer')).toBeInTheDocument();
+  });
+
+  it('offers no Check again when the fallback is only that there is no confirmed profile', async () => {
+    mockApi.recommendationsForYou.mockResolvedValue({ ...semantic(), ranking_mode: 'keyword_fallback' as const, fallback_reason: 'No confirmed profile yet, so the keyword ranker was used.', fallback_code: 'no_profile' as const, degraded_mode: true });
+    render(<App />);
+    expect(await screen.findByText('No confirmed profile yet, so the keyword ranker was used.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Check again' })).not.toBeInTheDocument();
+  });
+
   it('hints at adding roles and seniority when the profile is thin, and sends typed search to For you', async () => {
     const user = userEvent.setup();
     mockApi.recommendationsForYou.mockResolvedValue(semantic());

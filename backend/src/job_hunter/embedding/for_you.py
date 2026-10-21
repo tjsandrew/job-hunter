@@ -29,7 +29,8 @@ FUSED_RANKING_VERSION = f"{RANKING_VERSION}+{FUSION_VERSION}"
 SEMANTIC_STATUS = "Semantic similarity after role and level checks; the order is meaningful, not the scores"
 FUSED_STATUS = "Keyword and semantic matching combined after role and level checks; the order is meaningful, not the scores"
 NO_PROFILE = "No confirmed profile yet, so the keyword ranker was used."
-NO_VECTOR = "The profile has not been embedded yet (run the backfill), so the keyword ranker was used."
+NO_VECTOR = ("We're still preparing your matches. This usually takes under a minute after you update your profile, "
+             "so you're seeing all jobs for now. Refresh in a moment.")
 SEARCH_FIELDS = ("title", "company", "description", "location", "category", "skills")
 SIMILARITY_REASON = "Close to the experience in your profile"
 MAX_SKILLS_SHOWN = 3

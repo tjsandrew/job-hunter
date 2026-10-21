@@ -117,7 +117,7 @@ export const api = {
   recommendationsForYou: (q = '', offset = 0, limit = 20) => {
     const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
     if (q.trim()) params.set('q', q.trim());
-    return request<{ items: Recommendation[]; total: number; next_offset: number | null; degraded_mode?: boolean; ranking_status?: string; ranking_mode?: 'semantic' | 'keyword_fallback'; fallback_reason?: string | null; blocked_by_checks?: number }>(`/recommendations/for-you?${params}`);
+    return request<{ items: Recommendation[]; total: number; next_offset: number | null; degraded_mode?: boolean; ranking_status?: string; ranking_mode?: 'semantic' | 'keyword_fallback'; fallback_reason?: string | null; fallback_code?: 'no_profile' | 'profile_embedding_pending' | null; blocked_by_checks?: number }>(`/recommendations/for-you?${params}`);
   },
   reviewJob: (id: string, decision: 'saved' | 'dismissed' | 'none') => request(`/jobs/${encodeURIComponent(id)}/review`, json('PUT', { decision })),
   applications: () => request<{ items: Application[] }>('/applications'),

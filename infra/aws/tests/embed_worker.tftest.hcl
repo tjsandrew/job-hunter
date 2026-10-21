@@ -78,6 +78,36 @@ run "stage_two_creates_the_worker_with_bounded_settings" {
   }
 }
 
+run "for_you_is_off_by_default_and_switchable" {
+  command = plan
+  module { source = "./backend" }
+  assert {
+    condition     = aws_lambda_function.api.environment[0].variables["FOR_YOU_ENABLED"] == "0"
+    error_message = "For you stays off unless for_you_enabled is set."
+  }
+}
+
+run "for_you_can_be_switched_on" {
+  command = plan
+  module { source = "./backend" }
+  variables {
+    for_you_enabled = "1"
+  }
+  assert {
+    condition     = aws_lambda_function.api.environment[0].variables["FOR_YOU_ENABLED"] == "1"
+    error_message = "for_you_enabled = 1 must reach the API."
+  }
+}
+
+run "reject_an_unknown_for_you_value" {
+  command = plan
+  module { source = "./backend" }
+  variables {
+    for_you_enabled = "true"
+  }
+  expect_failures = [var.for_you_enabled]
+}
+
 run "reject_a_mutable_embed_image" {
   command = plan
   module { source = "./backend" }
