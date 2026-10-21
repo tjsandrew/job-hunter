@@ -24,7 +24,7 @@ run "stage_one_creates_the_queue_but_no_function_and_changes_nothing_for_users" 
     error_message = "Without an image digest only the queue, IAM, alarm and flag expiry exist: no function, mapping or bucket notification."
   }
   assert {
-    condition     = aws_sqs_queue.embed.visibility_timeout_seconds == 6 * 900 + 5 && aws_sqs_queue.embed.sqs_managed_sse_enabled && aws_sqs_queue.embed_dlq.sqs_managed_sse_enabled
+    condition     = aws_sqs_queue.embed.visibility_timeout_seconds == 6 * 900 && aws_sqs_queue.embed.sqs_managed_sse_enabled && aws_sqs_queue.embed_dlq.sqs_managed_sse_enabled
     error_message = "The queue visibility timeout must be six times the function timeout plus the batching window, and both queues must be encrypted."
   }
   assert {
@@ -57,8 +57,8 @@ run "stage_two_creates_the_worker_with_bounded_settings" {
     error_message = "The queue mapping's maximum concurrency must not exceed the function's reserved concurrency, or messages are throttled."
   }
   assert {
-    condition     = aws_lambda_event_source_mapping.embed[0].batch_size == 10 && aws_lambda_event_source_mapping.embed[0].maximum_batching_window_in_seconds == 5
-    error_message = "A burst of flags (up to 10 within 5 s) must collapse into one invocation; the worker ignores flag contents."
+    condition     = aws_lambda_event_source_mapping.embed[0].batch_size == 10 && aws_lambda_event_source_mapping.embed[0].maximum_batching_window_in_seconds == 0
+    error_message = "Flags already waiting (up to 10) share one invocation, with no batching window: a lone save must never be delayed."
   }
   assert {
     condition     = aws_lambda_function.embed[0].image_config[0].command[0] == "job_hunter.embed_worker.handler" && aws_lambda_function.embed[0].environment[0].variables["DATABASE_USERNAME"] == "jobhunter_embedder"

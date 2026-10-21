@@ -31,10 +31,11 @@ variable "embed_on_save" {
 locals {
   embed_enabled = var.embed_image_uri != ""
   embed_timeout = 900
-  # Flags arriving within this window are handed to one invocation (up to embed_batch_size of them). Every flag means the
-  # same thing ("look at the database"), and the worker ignores their contents, so collapsing a burst is safe. The cost is
-  # that a lone save can wait up to this long before the worker starts.
-  embed_batch_window = 5
+  # Up to embed_batch_size flags that are already waiting are handed to one invocation. Every flag means the same thing
+  # ("look at the database") and the worker ignores their contents, so collapsing a burst is safe. The window is 0 on purpose:
+  # the worker starts as soon as a flag arrives (a lone save waits for nothing), and flags that pile up while it runs are
+  # collected into the next invocation. A positive window would collapse bursts further but delay every save by that long.
+  embed_batch_window = 0
   embed_batch_size   = 10
   embed_flag_prefix  = "embed-requests/"
   embed_alarm_names  = ["embed-dlq", "embed-errors", "embed-runaway"]
@@ -150,7 +151,7 @@ resource "aws_lambda_event_source_mapping" "embed" {
   event_source_arn = aws_sqs_queue.embed.arn
   function_name    = aws_lambda_function.embed[0].arn
   batch_size       = local.embed_batch_size
-  # A burst of saves becomes one invocation instead of one per save; the worker takes the lock once and does all the work.
+  # Flags that queue up while the worker runs are drained together, not one invocation each.
   maximum_batching_window_in_seconds = local.embed_batch_window
   scaling_config { maximum_concurrency = 2 }
 }

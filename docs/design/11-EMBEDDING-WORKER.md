@@ -76,8 +76,8 @@ Function settings (initial values, tune after measuring on real Lambda):
 | Memory | 3,008 MB | local measurements give about the same cost per job as 2 GB (about 4.6 to 4.7 GB-seconds) and about 30% faster; peak memory is about 1 GB at batch size 1 |
 | Timeout | 900 s | Lambda maximum; the worker stops early and chains (below) |
 | Reserved concurrency | 2 | must be at least the queue mapping's maximum concurrency or messages are throttled |
-| Queue mapping | batch size 10, batching window 5 s, maximum concurrency 2 | a burst of saves becomes one invocation instead of one each. Safe because every flag means the same thing and the worker ignores their contents. A lone save waits up to 5 s longer; the retry unit is the whole batch, which is harmless because the pass is idempotent |
-| Queue visibility timeout | 6 x function timeout + batching window | AWS guidance for SQS event sources |
+| Queue mapping | batch size 10, batching window 0, maximum concurrency 2 | up to 10 flags that are already waiting share one invocation, so a burst of saves does not cost one invocation each. Safe because every flag means the same thing and the worker ignores their contents. The window is 0 so a lone save is never delayed: the worker starts as soon as a flag arrives, and flags that pile up while it runs are drained together. A positive window (say 5 s) would collapse bursts further but delay every save by that long. The retry unit is the whole batch, which is harmless because the pass is idempotent |
+| Queue visibility timeout | 6 x function timeout (+ the batching window, 0) | AWS guidance for SQS event sources |
 | Dead-letter queue | after 5 receives | alarm on depth > 0 |
 | VPC | same private subnets and security group as the API | needs Aurora; needs no internet (model baked in, `HF_HUB_OFFLINE=1`) |
 | Log retention | 7 days | same as the other functions |
