@@ -27,6 +27,15 @@ variable "embed_on_save" {
     error_message = "embed_on_save must be 0 or queue (the in-request embed needs the local HTTP embedder, which AWS does not have)."
   }
 }
+variable "for_you_enabled" {
+  description = "1 serves the semantic For you list (GET /v1/recommendations/for-you); 0 answers 404 FOR_YOU_DISABLED and the web app hides the toggle. Needs embed_on_save = queue, or no profile vector is ever produced."
+  type        = string
+  default     = "0"
+  validation {
+    condition     = contains(["0", "1"], var.for_you_enabled)
+    error_message = "for_you_enabled must be 0 or 1."
+  }
+}
 
 locals {
   embed_enabled = var.embed_image_uri != ""

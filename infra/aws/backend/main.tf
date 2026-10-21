@@ -168,7 +168,7 @@ resource "aws_lambda_function" "api" {
       DB_POOL_SIZE    = "1", PDF_STORAGE_DIR = "/tmp/exports", AUTO_CREATE_SCHEMA = "false"
       DOCUMENT_BUCKET = aws_s3_bucket.documents.id, CORS_ORIGINS = var.origin
       COGNITO_ISSUER  = var.cognito_issuer, COGNITO_CLIENT_ID = var.client_id
-      API_SCOPE       = "jobhunter/use", MODEL_BACKEND = "heuristic", FOR_YOU_ENABLED = "0", EMBED_ON_SAVE = var.embed_on_save
+      API_SCOPE       = "jobhunter/use", MODEL_BACKEND = "heuristic", FOR_YOU_ENABLED = var.for_you_enabled, EMBED_ON_SAVE = var.embed_on_save
     }
   }
   # Manual controls own concurrency after creation; infrastructure updates must

@@ -101,3 +101,24 @@ def test_for_you_route_serves_the_semantic_order_when_fusion_is_off(monkeypatch)
         app.dependency_overrides.pop(db_for, None)
     assert body["ranking_fusion"] is None and body["items"] == ["a", "b", "c"]
     assert not body["ranking_version"].endswith("+rrf-v1")
+
+
+@pytest.mark.parametrize("reason,code", [("NO_VECTOR", "profile_embedding_pending"), ("NO_PROFILE", "no_profile")])
+def test_for_you_fallback_says_whether_the_profile_is_still_being_prepared(monkeypatch, reason, code):
+    from job_hunter.api import main
+
+    try:
+        client = _wire_for_you(monkeypatch, None)
+        monkeypatch.setattr(main.semantic, "semantic_for_you", lambda *a, **k: (None, getattr(main.semantic, reason)))
+        monkeypatch.setattr(main, "recommendations", lambda **k: {"items": [], "total": 0, "next_offset": None, "degraded_mode": True})
+        body = client.get("/v1/recommendations/for-you").json()
+    finally:
+        app.dependency_overrides.pop(db_for, None)
+    assert body["ranking_mode"] == "keyword_fallback" and body["fallback_code"] == code
+    assert body["fallback_reason"] == getattr(main.semantic, reason)
+
+
+def test_the_preparing_message_is_user_facing():
+    from job_hunter.embedding.for_you import NO_VECTOR
+
+    assert "preparing your matches" in NO_VECTOR and "backfill" not in NO_VECTOR and "keyword ranker" not in NO_VECTOR
