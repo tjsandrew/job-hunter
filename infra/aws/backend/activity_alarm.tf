@@ -25,14 +25,14 @@ resource "aws_sns_topic_policy" "activity" {
 
 resource "aws_cloudwatch_metric_alarm" "activity" {
   alarm_name          = local.activity_alarm_name
-  alarm_description   = "Notify the team when Aurora is active in at least 12 of the last 24 hourly periods. Notification only; no automatic shutdown."
+  alarm_description   = "Notify the team when Aurora capacity remains above zero in every reported sample for at least 18 of the last 24 hourly periods. Notification only; no automatic shutdown."
   namespace           = "AWS/RDS"
   metric_name         = "ServerlessDatabaseCapacity"
   dimensions          = { DBInstanceIdentifier = aws_rds_cluster_instance.writer.identifier }
-  statistic           = "Maximum"
+  statistic           = "Minimum"
   period              = 3600
   evaluation_periods  = 24
-  datapoints_to_alarm = 12
+  datapoints_to_alarm = 18
   comparison_operator = "GreaterThanThreshold"
   threshold           = 0
   treat_missing_data  = "notBreaching"

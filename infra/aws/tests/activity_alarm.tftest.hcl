@@ -31,8 +31,8 @@ run "guarded_aurora" {
     error_message = "Staging must retain auto-pause and the lowest supported 1 ACU maximum."
   }
   assert {
-    condition     = aws_cloudwatch_metric_alarm.activity.period == 3600 && aws_cloudwatch_metric_alarm.activity.evaluation_periods == 24 && aws_cloudwatch_metric_alarm.activity.datapoints_to_alarm == 12 && aws_cloudwatch_metric_alarm.activity.treat_missing_data == "notBreaching"
-    error_message = "The activity guard must use 12 of 24 hourly periods without treating paused/missing periods as activity."
+    condition     = aws_cloudwatch_metric_alarm.activity.period == 3600 && aws_cloudwatch_metric_alarm.activity.evaluation_periods == 24 && aws_cloudwatch_metric_alarm.activity.datapoints_to_alarm == 18 && aws_cloudwatch_metric_alarm.activity.statistic == "Minimum" && aws_cloudwatch_metric_alarm.activity.threshold == 0 && aws_cloudwatch_metric_alarm.activity.comparison_operator == "GreaterThanThreshold" && aws_cloudwatch_metric_alarm.activity.treat_missing_data == "notBreaching"
+    error_message = "The activity guard must use 18 of 24 hourly minima above zero, without treating paused/missing periods as activity."
   }
   assert {
     condition     = anytrue([for route in aws_apigatewayv2_stage.app.route_settings : route.route_key == "GET /v1/health" && route.throttling_rate_limit == 1 && route.throttling_burst_limit == 2])
