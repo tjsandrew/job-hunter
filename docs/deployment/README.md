@@ -51,7 +51,7 @@ Solid arrows show application traffic or credential retrieval. Dashed arrows sho
 | Password database authentication | Separate API and migration credentials, retrieved by the release runner and injected into Lambda configuration. No runtime Secrets Manager request or paid interface endpoint. IAM database login is denied by this account’s organization policy. |
 | GitHub Actions / ECR / Terraform | Test and publish immutable application artifacts; use GitHub OIDC instead of stored AWS keys. Terraform provisions infrastructure separately from application releases. |
 
-The private database spans a two-subnet network with one serverless writer. There is no NAT gateway, VM or paid interface endpoint. A free S3 gateway endpoint provides document access. External AI/model calls and embedding workers are deferred.
+The private database spans a two-subnet network with one serverless writer. There is no NAT gateway, VM or paid interface endpoint. A free S3 gateway endpoint provides document access. External AI/model calls and embedding workers are deferred; the planned embedding worker (S3 flag, SQS queue, dedicated Lambda) and its rollout steps are in [design brief 11](../design/11-EMBEDDING-WORKER.md).
 
 ## Implemented locally
 

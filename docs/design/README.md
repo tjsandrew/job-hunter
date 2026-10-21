@@ -27,6 +27,7 @@ Read this file and [shared contracts](CONTRACTS.md) before implementing a compon
 | [07 Frontend and user journey](07-FRONTEND.md) | React screens, swipe/buttons, task polling, tracking | API contract; develop with mocks before integrations exist |
 | [08 Integration and evaluation](08-INTEGRATION-AND-EVALUATION.md) | End-to-end tests, load tests, user evaluation, cost comparison | Runs incrementally; final evidence needs 01–07 |
 | [09 Resume editor](09-RESUME-EDITOR.md) | Resume-focused editing, templates, live preview and PDF export | 02, 06, 07; works without AI or AWS |
+| [11 Embedding worker (AWS)](11-EMBEDDING-WORKER.md) | How jobs and profiles are embedded in the deployed environment: S3 flag, SQS, dedicated Lambda, cost rationale and when to switch to a direct SQS send | 01, 02, 05; local Compose is unchanged |
 
 ## 2. Product commitments and POC interpretation
 

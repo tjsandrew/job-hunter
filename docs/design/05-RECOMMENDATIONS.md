@@ -10,6 +10,8 @@ Read [README](README.md) and [contracts](CONTRACTS.md). Own `recommendations/` a
 
 Inputs: authenticated user, active confirmed profile version, preferences revision, ready/open canonical job versions, prior reviews and pagination cursor. Output: ranked cards containing job ID/version, title/employer/location, salary if known, source/freshness, matched skills, evidence, ranking version and a next cursor. Never label a similarity score as a probability of getting hired.
 
+How vectors are produced in the deployed environment (and when they are recomputed) is described in [11 Embedding worker](11-EMBEDDING-WORKER.md).
+
 ## Ranking v1
 
 1. Apply explicit constraints first: selected locations/work modes/seniority and salary where comparable. Treat role keywords as ranking signals by default. Missing salary passes unless the user selects “exclude unknown”; never convert currency/period or infer eligibility silently.
