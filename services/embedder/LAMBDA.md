@@ -20,6 +20,10 @@ Checked on 2026-10-20 with `--read-only --tmpfs /tmp --memory N --cpus M` (Lambd
 - **Not exercised locally:** the Web Adapter itself (Docker does not run Lambda extensions), the readiness gate, image pull
   time on real Lambda, and IAM/VPC. Verify these on a real function first.
 
+**CI:** the `embedder` job in `.github/workflows/checks.yml` runs the 30 service tests, builds this image and the regular one with
+`--build-arg BAKE_MODEL=0` (no model download), starts each with the fake backend and calls `/health`, `/v1/model` and `/v1/embed`.
+That checks packaging and the contract on an x86 runner only: not ARM64, not the Web Adapter, not the real model.
+
 ## What the numbers say (batch size 1, job texts capped at 8,000 characters, desktop PC also in use so treat as rough)
 
 | Lambda memory (about vCPU) | start to `/health` 200 | 1 text | 8 texts | 32 texts | 64 texts | peak memory |

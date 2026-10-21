@@ -19,7 +19,7 @@ def changed_paths(base):
 
 def select_checks(paths, event):
     if paths is None:
-        return dict.fromkeys(("web", "backend", "package", "scripts"), True)
+        return dict.fromkeys(("web", "backend", "package", "scripts", "embedder"), True)
     workflow = any(path.startswith(".github/workflows/") for path in paths)
     backend = any(path.startswith(("backend/", "contracts/")) or path in {
         "compose.yaml", "Makefile", "scripts/smoke.py", "scripts/check_profile_bank_migration.py", "scripts/schema_0009_columns.json"
@@ -29,6 +29,8 @@ def select_checks(paths, event):
         "backend": event == "push" or workflow or backend,
         "package": workflow or any(path.startswith("backend/") for path in paths),
         "scripts": event == "push" or workflow or any(path.startswith("scripts/") or path == "backend/requirements.lock" for path in paths),
+        # The embedder is its own service (own tests, own images); only its folder affects it.
+        "embedder": event == "push" or workflow or any(path.startswith("services/embedder/") for path in paths),
     }
 
 

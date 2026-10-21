@@ -20,7 +20,12 @@ RUN pip install --no-cache-dir -c requirements.lock .
 #      to reuse an already-downloaded model instead of fetching it again. ----
 FROM build AS modelsrc
 ARG EMBEDDER_MODEL_NAME=jinaai/jina-embeddings-v2-small-en
-RUN python -c "from fastembed import TextEmbedding; TextEmbedding(model_name='${EMBEDDER_MODEL_NAME}', cache_dir='/models')" \
+# BAKE_MODEL=0 builds without downloading the model (CI checks packaging and the contract with the fake backend).
+ARG BAKE_MODEL=1
+RUN mkdir -p /models \
+ && if [ "$BAKE_MODEL" = "1" ]; then \
+      python -c "from fastembed import TextEmbedding; TextEmbedding(model_name='${EMBEDDER_MODEL_NAME}', cache_dir='/models')"; \
+    fi \
  && chmod -R a+rX /models
 
 # ---- final ----
