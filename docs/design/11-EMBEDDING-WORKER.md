@@ -126,11 +126,13 @@ The worker must find users whose confirmed profile needs embedding, which the no
 - **Concurrency safety:** a Postgres advisory lock makes overlapping runs safe. A run that cannot take the lock exits successfully; the running worker releases the lock and then checks for pending work once more, so rows saved just before the release are still picked up.
 - **No runaway chaining:** the worker writes a new flag only if time ran out, work remains and this run embedded at least one previously pending row. Every chained run must therefore make progress, and progress is bounded by the finite pending set.
 - **Cheap no-op runs:** if nothing is pending the function exits before loading the model.
-- **Pause:** the existing pause/resume control must include the embed function (reserved concurrency 0 when paused).
+- **Pause:** the pause/resume control also pauses the embed function (reserved concurrency 0). Flags that arrive while paused return to the queue and, after five receives, land in the dead-letter queue (alarm). That is harmless: the database is the source of truth, so after resuming, clear the dead-letter queue and write one flag.
 - **Aurora cost:** the flag is written right after a save, so the database is already awake. Do not add a frequent poller; it would stop Aurora pausing to zero. An optional once-a-day reconcile schedule is deliberately off.
 - **Deploy safety:** the new steps in the deploy workflow and `scripts/deploy_aws.py` are skipped unless the embed variables are set, so merging this change deploys nothing new by itself.
 
 ## 7. Rollout (staged, each step reviewable and near-free)
+
+The step-by-step checklist, with the commands, is [EMBEDDING-WORKER-ROLLOUT.md](../deployment/EMBEDDING-WORKER-ROLLOUT.md). In outline:
 
 1. `terraform plan` only, reviewed by a human. Then apply the first stage: ECR repository, queue and dead-letter queue, queue policy, lifecycle rule, IAM, alarms. No function yet.
 2. Set the GitHub variables for the embed repository and function; Deploy staging builds and pushes the embed image.

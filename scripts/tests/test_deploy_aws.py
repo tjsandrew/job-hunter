@@ -96,3 +96,30 @@ class CredentialInjection(unittest.TestCase):
         self.assertEqual(args["Environment"]["Variables"]["DOCUMENT_BUCKET"], "documents")
         self.assertEqual(args["Environment"]["Variables"]["DATABASE_USERNAME"], "jobhunter_app")
         self.assertEqual(args["Environment"]["Variables"]["DATABASE_PASSWORD"], "x" * 64)
+
+
+class EmbedWorkerRelease(unittest.TestCase):
+    def test_is_skipped_until_the_function_is_configured(self):
+        with patch.dict(release.os.environ, {}, clear=False), patch.object(release.boto3, "client") as factory, patch("builtins.print"):
+            release.os.environ.pop("EMBED_FUNCTION", None)
+            release.embed(NEW)
+        factory.assert_not_called()
+
+    def test_updates_code_with_its_own_credential_and_a_revision_guard(self):
+        client = Mock()
+        client.get_function.return_value = function(OLD, "embed-revision")
+        with patch.dict(release.os.environ, {"EMBED_FUNCTION": "embed"}), patch.object(release.boto3, "client", return_value=client), \
+                patch.object(release, "configure_password") as configure, patch("builtins.print"):
+            release.embed(NEW)
+        configure.assert_called_once_with(client, "embed", "jobhunter_embedder")   # never the application or migration password
+        client.update_function_code.assert_called_once_with(FunctionName="embed", ImageUri=NEW, RevisionId="embed-revision")
+        client.get_waiter.return_value.wait.assert_called_with(FunctionName="embed")
+
+    def test_a_missing_credential_is_reported_clearly_before_anything_changes(self):
+        client, store = Mock(), Mock()
+        store.get_secret_value.return_value = {"SecretString": '{"jobhunter_app":"' + "x" * 64 + '"}'}
+        with patch.dict(release.os.environ, {"DATABASE_CREDENTIALS_SECRET_ARN": "credential-secret"}), \
+                patch.object(release.boto3, "client", return_value=store):
+            with self.assertRaisesRegex(RuntimeError, "run the operator bootstrap"):
+                release.configure_password(client, "embed", "jobhunter_embedder")
+        client.update_function_configuration.assert_not_called()
