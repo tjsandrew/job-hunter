@@ -6,3 +6,7 @@ activity_alert_emails = ["jsandrewtiong@gmail.com"]
 monthly_budget_usd    = 40
 enable_backend        = true
 api_image_uri         = "091512051916.dkr.ecr.ap-southeast-1.amazonaws.com/jobhunter-staging@sha256:3c45fd7770878fd58f1c5f912de55c520e9596d3e188a165b877e0085fd55072"
+
+# Embedding worker (docs/design/11-EMBEDDING-WORKER.md). Immutable digest of the first worker image (Deploy staging run summary).
+# The function ignores later image changes, so this only has to stay non-empty: an empty value would plan to remove the worker.
+embed_image_uri = "091512051916.dkr.ecr.ap-southeast-1.amazonaws.com/jobhunter-staging-embed@sha256:34e4c13f5fa430d5d6fae3a5daa8737f24872a267f164e915b04fb40343d4ea2"
