@@ -128,6 +128,7 @@ export const api = {
   archiveDocument: (id: string) => request<void>(`/documents/${encodeURIComponent(id)}`, json('DELETE')),
   restoreDocument: (id: string) => request<Resume>(`/documents/${encodeURIComponent(id)}/restore`, json('POST')),
   duplicateDocument: (id: string, title?: string, job_id?: string) => request<Resume>(`/documents/${encodeURIComponent(id)}/duplicate`, json('POST', { title, job_id })),
+  tailorDocument: (id: string, job_id: string, title?: string, mode: 'rules' | 'ai' = 'rules') => request<{ document: Resume; matched: string[]; missing: string[]; ai: { status: 'off' | 'applied' | 'unchanged' | 'fallback'; changed: number; reason: string | null } }>(`/documents/${encodeURIComponent(id)}/tailor`, json('POST', { job_id, title, mode })),
   reviewDocument: (id: string, expected_revision: number) => request<Resume>(`/documents/${encodeURIComponent(id)}/review`, json('POST', { expected_revision })),
   exportDocument: (id: string) => request<{ export_id: string; revision: number; download_url: string }>(`/documents/${encodeURIComponent(id)}/exports`, json('POST')),
   previewDocument: (id: string) => request<Blob>(`/documents/${encodeURIComponent(id)}/preview.pdf`),

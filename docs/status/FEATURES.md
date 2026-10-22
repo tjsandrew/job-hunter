@@ -13,6 +13,7 @@ Updated 5 October 2026 (Singapore). Baseline: the group's submitted preliminary 
 | Semantic "For you" recommendations | Embedding-based list: eligibility filters, then role and seniority checks, then similarity ranking; profile embedded on confirm and preferences save, jobs embedded by `make backfill`; falls back to the keyword list. See [13-embedding-preparation.md](13-embedding-preparation.md) |
 | Synthetic demo cases | One populated fictional Alex Tan profile and complete application resume; no sample chooser. QA resumes are archived out of the library. |
 | Resume Studio | Manual creation, job-specific copies, sections/entries/bullets, autosave, revision checks, undo/redo, two templates |
+| Resume tailoring | Rule-based: bullets reordered to match the job, with matched/missing skills (free, unlimited). AI: an optional rewrite through the `MODEL_BACKEND` model, limited to 5 jobs per user for good; reworded bullets that add numbers or names are discarded, and any model failure falls back to the rule-based result |
 | Resume customization | Font family and size, margins, line spacing, A4/Letter; honored by server PDF output |
 | PDF lifecycle | Approximate live HTML preview plus authoritative server PDF preview; review current revision; export/download immutable PDF |
 | Application preparation | Open an application, create/copy a resume for that job, edit/review it, attach its exact exported revision, then return to the application |

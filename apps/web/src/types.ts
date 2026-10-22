@@ -11,7 +11,7 @@ export type Recommendation = { job: Job; score?: number | null; reasons?: string
 export type ResumePacket = { export_id: string; document_id: string; title: string; revision: number; download_url: string };
 export type Application = { id: string; job_id: string; status: string; notes: string; applied_at: string | null; revision: number; job?: Job; resume_packet?: ResumePacket | null; cover_letter_text?: string | null; packet_updated_at?: string | null };
 export type ProfileDraft = Record<string, unknown>;
-export type Me = { user_id: string; display_name: string; plan: string; allowance: { limit: number; used: number; remaining: number; period: string }; ai_available: boolean };
+export type Me = { user_id: string; display_name: string; plan: string; allowance: { limit: number; used: number; remaining: number; period: string; enabled?: boolean }; ai_available: boolean };
 export type ApiError = Error & { status?: number; code?: string };
 
 export type ItemKind = 'experience' | 'education' | 'project' | 'skill' | 'certification' | 'award' | 'volunteering' | 'custom';

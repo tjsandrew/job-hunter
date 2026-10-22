@@ -155,6 +155,13 @@ class DocumentExport(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
+class AiTailorUse(Base):
+    __tablename__ = "ai_tailor_uses"
+    user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    job_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
 class Upload(Base):
     __tablename__ = "uploads"
     __table_args__ = (UniqueConstraint("id", "user_id", name="uq_upload_id_user"),)
