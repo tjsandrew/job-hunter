@@ -531,3 +531,65 @@ def test_from_bank_builds_certifications_awards_and_volunteering(isolated_users)
     assert "Docker Certified Associate" in text_out and "Taught Python to teenagers." in text_out
     wrong = {**plan, "sections": [{"kind": "awards", "items": [{"item_id": cert["id"], "picks": []}]}]}
     assert build(wrong).status_code == 422
+
+
+CONTENT_FOR_TAILOR = {"name": "Tailor Test", "sections": [{"id": "s", "title": "Experience", "entries": [
+    {"id": "e", "heading": "Engineer", "subheading": "Acme", "dates": "", "bullets": ["Ran lunches", "Wrote Python pipelines"]}]}]}
+
+
+@pytest.fixture
+def tailor_jobs(isolated_users):
+    engine, user_ids = isolated_users
+    with Session(engine) as db, db.begin():
+        jobs = [Job(title=f"Tailor Job {index}", description="Build Python pipelines", skills=["Python"]) for index in range(6)]
+        db.add_all(jobs); db.flush()
+        ids = [str(job.id) for job in jobs]
+    yield ids
+    with Session(engine) as db, db.begin():
+        for user_id in user_ids.values():
+            db.execute(text("SELECT set_config('app.user_id', :uid, true)"), {"uid": str(user_id)})
+            db.execute(text("DELETE FROM ai_tailor_uses WHERE user_id=:uid"), {"uid": user_id})
+            db.execute(text("DELETE FROM documents WHERE job_id = ANY(CAST(:ids AS uuid[])) AND user_id=:uid"), {"ids": ids, "uid": user_id})
+        db.execute(text("DELETE FROM jobs WHERE id = ANY(CAST(:ids AS uuid[]))"), {"ids": ids})
+
+
+def tailor(document, job_id, headers=ALICE, **extra):
+    return client.post(f"/v1/documents/{document['id']}/tailor", headers=headers, json={"job_id": job_id, **extra})
+
+
+def test_rules_tailoring_copies_reorders_and_leaves_the_original(tailor_jobs):
+    source = client.post("/v1/documents", headers=ALICE, json={"title": "Base", "content": CONTENT_FOR_TAILOR}).json()
+    response = tailor(source, tailor_jobs[0])
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["document"]["job_id"] == tailor_jobs[0] and body["ai"]["status"] == "off"
+    assert body["document"]["content"]["sections"][0]["entries"][0]["bullets"] == ["Wrote Python pipelines", "Ran lunches"]
+    assert client.get(f"/v1/documents/{source['id']}", headers=ALICE).json()["content"] == source["content"]
+
+
+def test_tailoring_someone_elses_resume_is_not_found(tailor_jobs):
+    source = client.post("/v1/documents", headers=ALICE, json={"title": "Base", "content": CONTENT_FOR_TAILOR}).json()
+    assert tailor(source, tailor_jobs[0], CASEY).status_code == 404
+
+
+def test_ai_tailoring_needs_a_configured_model(tailor_jobs, monkeypatch):
+    monkeypatch.setattr(settings, "model_backend", "heuristic")
+    source = client.post("/v1/documents", headers=ALICE, json={"title": "Base", "content": CONTENT_FOR_TAILOR}).json()
+    response = tailor(source, tailor_jobs[0], mode="ai")
+    assert response.status_code == 503 and response.json()["error"]["code"] == "AI_NOT_CONFIGURED"
+
+
+def test_ai_tailoring_allows_five_jobs_in_total(tailor_jobs, monkeypatch):
+    class Reword:
+        def rewrite(self, entries, job):
+            return [[bullet.replace("Ran", "Organised") for bullet in bullets] for bullets in entries]
+    monkeypatch.setattr("job_hunter.preparation.ai_tailoring.build_model", lambda: Reword())
+    source = client.post("/v1/documents", headers=ALICE, json={"title": "Base", "content": CONTENT_FOR_TAILOR}).json()
+    for job_id in tailor_jobs[:5]:
+        response = tailor(source, job_id, mode="ai")
+        assert response.status_code == 201 and response.json()["ai"]["status"] == "applied", response.text
+    assert client.get("/v1/me", headers=ALICE).json()["allowance"]["remaining"] == 0
+    assert tailor(source, tailor_jobs[0], mode="ai").status_code == 201
+    over = tailor(source, tailor_jobs[5], mode="ai")
+    assert over.status_code == 402 and over.json()["error"]["code"] == "AI_LIMIT_REACHED"
+    assert tailor(source, tailor_jobs[5]).status_code == 201

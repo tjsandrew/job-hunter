@@ -5,7 +5,7 @@ import logging
 import math
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -14,7 +14,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ValidationError, field_validator
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from job_hunter.config import settings
@@ -24,10 +24,12 @@ from job_hunter.embedding.retrieval import FUSION_VERSION
 from job_hunter.adapters.database import get_db
 from job_hunter.domain.identity import DEV_USERS
 from job_hunter.domain.models import (User, Profile, Preference, Job, JobReview, Application,
-                                      ProfileVersion, Document, DocumentExport, Upload, now_utc)
+                                      ProfileVersion, Document, DocumentExport, Upload, AiTailorUse, now_utc)
 from job_hunter.domain.models import Base
 from job_hunter.adapters.database import engine
 from job_hunter.preparation.rendering import pdf_bytes
+from job_hunter.preparation import ai_tailoring
+from job_hunter.preparation.tailoring import tailor
 from job_hunter.profile_bank import services as bank_services
 from job_hunter.profile_bank.services import BankError
 from job_hunter.api.profile_bank import build_router
@@ -155,6 +157,11 @@ class DuplicateWrite(BaseModel):
     title: str | None = None
     job_id: UUID | None = None
 
+class TailorWrite(BaseModel):
+    job_id: UUID
+    title: str | None = None
+    mode: Literal["rules", "ai"] = "rules"
+
 class UploadCreate(BaseModel):
     filename: str = Field(min_length=1, max_length=255)
     content_type: str
@@ -240,14 +247,19 @@ def inspect_docx(data: bytes) -> dict[str, Any]:
 def health():
     return {"status": "ok"}
 
+def ai_uses(db: Session, user_id: UUID) -> int:
+    return db.scalar(select(func.count()).select_from(AiTailorUse).where(AiTailorUse.user_id == user_id))
+
 @app.get("/v1/me")
 def me(db: Session = Depends(db_for, scope="function")):
     user = current_user(db)
-    limit = 50 if user.plan == "premium" else 5
-    period = datetime.now(ZoneInfo("Asia/Singapore")).strftime("%Y-%m")
+    used = ai_uses(db, user.id)
+    available = ai_tailoring.build_model() is not None
     return {"user_id": str(user.id), "display_name": user.display_name, "plan": user.plan,
-            "allowance": {"limit": limit, "used": None, "remaining": None, "period": period, "enabled": False},
-            "ai_available": False, "ai_status": "AI generation is not configured in this local POC"}
+            "allowance": {"limit": ai_tailoring.LIMIT, "used": used, "remaining": max(ai_tailoring.LIMIT - used, 0),
+                          "period": "lifetime", "enabled": available},
+            "ai_available": available,
+            "ai_status": "AI tailoring is ready" if available else "No AI model is configured"}
 
 @app.exception_handler(BankError)
 async def bank_error_handler(request: Request, exc: BankError):
@@ -561,6 +573,33 @@ def duplicate_document(document_id: UUID, body: DuplicateWrite, db: Session = De
                     template=item.template, content=item.content, layout=item.layout, revision=1, job_id=body.job_id)
     db.add(copy); db.flush()
     return doc_out(copy)
+
+@app.post("/v1/documents/{document_id}/tailor", status_code=201)
+def tailor_document(document_id: UUID, body: TailorWrite, db: Session = Depends(db_for, scope="function")):
+    item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id, Document.kind == "resume"))
+    job = db.get(Job, body.job_id)
+    if item is None or job is None: not_found()
+    content, keywords = tailor(item.content, job_out(job))
+    ai = {"status": "off", "changed": 0, "reason": None}
+    if body.mode == "ai":
+        model = ai_tailoring.build_model()
+        if model is None:
+            raise HTTPException(503, detail={"code": "AI_NOT_CONFIGURED", "message": "No AI model is configured"})
+        user_id = current_user(db).id
+        spent = db.get(AiTailorUse, (user_id, job.id)) is not None
+        if not spent and ai_uses(db, user_id) >= ai_tailoring.LIMIT:
+            raise HTTPException(402, detail={"code": "AI_LIMIT_REACHED", "message": f"You have used all {ai_tailoring.LIMIT} AI tailorings"})
+        try:
+            content, changed = ai_tailoring.rewrite_content(content, job_out(job), model)
+            ai = {"status": "applied" if changed else "unchanged", "changed": changed, "reason": None}
+            if changed and not spent:
+                db.add(AiTailorUse(user_id=user_id, job_id=job.id))
+        except ai_tailoring.AiUnavailable as exc:
+            ai = {"status": "fallback", "changed": 0, "reason": str(exc)}
+    copy = Document(user_id=item.user_id, title=(body.title or f"{item.title} — {job.title}")[:240], kind=item.kind,
+                    template=item.template, content=content, layout=item.layout, revision=1, job_id=job.id)
+    db.add(copy); db.flush()
+    return {"document": doc_out(copy), **keywords, "ai": ai}
 
 @app.post("/v1/documents/{document_id}/review")
 def review_document(document_id: UUID, body: DocumentReview, db: Session = Depends(db_for, scope="function")):

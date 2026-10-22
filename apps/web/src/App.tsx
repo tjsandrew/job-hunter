@@ -211,10 +211,16 @@ export default function App() {
     finally { setBusyResumeAction(false); }
   };
 
-  const createTailoredCopy = async (source: Resume) => {
+  const aiNote = { off: '', applied: ' AI reworded some bullets; check them.', unchanged: ' AI made no changes.', fallback: ' AI was unavailable, so only the rule-based ordering was applied.' };
+  const createTailoredCopy = async (source: Resume, mode: 'rules' | 'ai' = 'rules') => {
     if (!resumeAttachTarget) return;
     setBusyResumeAction(true);
-    try { const copy = await api.duplicateDocument(source.id, `${source.title} — ${resumeAttachTarget.title}`, resumeAttachTarget.job_id); setResumes((items) => [copy, ...items]); openResume(copy); announce('A separate resume draft was created for this application. Review it before attaching.'); }
+    try {
+      const { document: copy, matched, missing, ai } = await api.tailorDocument(source.id, resumeAttachTarget.job_id, `${source.title} — ${resumeAttachTarget.title}`, mode);
+      if (mode === 'ai') api.me().then(setMe).catch(() => undefined);
+      setResumes((items) => [copy, ...items]); openResume(copy);
+      announce(`A tailored draft was created for this application.${aiNote[ai.status]} Matched: ${matched.join(', ') || 'none'}. Missing: ${missing.join(', ') || 'none'}. Review it before attaching.`);
+    }
     catch (error) { announce((error as Error).message); }
     finally { setBusyResumeAction(false); }
   };
@@ -382,7 +388,7 @@ export default function App() {
           {page === 'discover' && <Discover jobs={jobs} loading={recommendationLoading} total={recommendationTotal} hasMore={nextJobOffset !== null} loadingMore={loadingMoreJobs} onLoadMore={loadMoreJobs} query={query} setQuery={setQuery} busyJob={busyJob} onReview={review} onDetails={setJobDetail} degraded={recommendationsDegraded} rankingStatus={rankingStatus} mode={effectiveMode} forYouAvailable={forYouAvailable} setMode={setDiscoverMode} forYouNote={forYouNote} forYouPending={forYouPending} onRecheck={() => setForYouRecheck((x) => x + 1)} thinProfile={!(preferences.roles || []).length || !preferences.seniority} />}
           {page === 'profile' && <ProfileView key={user} userKey={user} onChanged={() => setRefresh(value => value + 1)} onBasicsSaved={draft => setProfile(profileToForm(draft))} onOpenResume={openResume} onOpenLibrary={openResumeLibrary} preferences={preferences} setPreferences={setPreferences} savePreferences={savePreferences} savingPreferences={prefSaving} uploading={uploading} uploadMessage={uploadMessage} extractedResumeText={extractedResumeText} onUpload={uploadProfileResume} resumes={resumes} onBusyChange={setProfileBusy} />}
           {page === 'tracker' && <Tracker apps={filteredApps} loading={recordsLoading} query={trackerQuery} setQuery={setTrackerQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onEdit={setTrackerEdit} />}
-          {page === 'studio' && <Studio onDelete={deleteResume} resumes={resumes} loading={recordsLoading} active={activeResume} attachTarget={resumeAttachTarget} tab={studioTab} setTab={setStudioTab} busy={busyResumeAction} saving={saving} saveLabel={saveLabel} history={history} future={future} onCreate={createResume} onOpen={openResume} onCreateTailoredCopy={createTailoredCopy} onCopyResume={copyResume} onBuilt={resumeBuilt} onApplyDefaults={applyStyleDefaults} jobs={buildJobs} onAttach={attachResumeToApplication} onReturn={returnToApplication} onBack={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before leaving the editor.'); return; } setActiveResume(null); }} onUpdate={updateResume} onContent={pushContent} onUndo={undo} onRedo={redo} onDuplicate={duplicateResume} onReview={reviewResume} onExport={exportResume} onPreview={previewResume} onReload={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before reloading.'); return; } reloadResume(); }} />}
+          {page === 'studio' && <Studio onDelete={deleteResume} resumes={resumes} loading={recordsLoading} active={activeResume} attachTarget={resumeAttachTarget} tab={studioTab} setTab={setStudioTab} busy={busyResumeAction} saving={saving} saveLabel={saveLabel} history={history} future={future} onCreate={createResume} onOpen={openResume} onCreateTailoredCopy={createTailoredCopy} onTailorWithAI={(resume) => createTailoredCopy(resume, 'ai')} ai={{ available: !!me?.ai_available, remaining: me?.allowance.remaining ?? 0, limit: me?.allowance.limit ?? 5 }} onCopyResume={copyResume} onBuilt={resumeBuilt} onApplyDefaults={applyStyleDefaults} jobs={buildJobs} onAttach={attachResumeToApplication} onReturn={returnToApplication} onBack={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before leaving the editor.'); return; } setActiveResume(null); }} onUpdate={updateResume} onContent={pushContent} onUndo={undo} onRedo={redo} onDuplicate={duplicateResume} onReview={reviewResume} onExport={exportResume} onPreview={previewResume} onReload={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before reloading.'); return; } reloadResume(); }} />}
         </>}
       </div>
     </main>

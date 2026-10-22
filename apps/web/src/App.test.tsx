@@ -9,7 +9,7 @@ vi.mock('./api', async (importOriginal) => {
   return { ...original, api: {
     getBank: vi.fn(), uploads: vi.fn(), imports: vi.fn(), me: vi.fn(), getProfile: vi.fn(), getPreferences: vi.fn(), getSeniorityOptions: vi.fn(), recommendations: vi.fn(), recommendationsForYou: vi.fn(), applications: vi.fn(), documents: vi.fn(),
     uploadResume: vi.fn(), reviewJob: vi.fn(), putProfile: vi.fn(), confirmProfile: vi.fn(), putPreferences: vi.fn(), putApplication: vi.fn(), createDocument: vi.fn(), patchDocument: vi.fn(),
-    duplicateDocument: vi.fn(), reviewDocument: vi.fn(), exportDocument: vi.fn(), previewDocument: vi.fn(), downloadExport: vi.fn(),
+    duplicateDocument: vi.fn(), tailorDocument: vi.fn(), reviewDocument: vi.fn(), exportDocument: vi.fn(), previewDocument: vi.fn(), downloadExport: vi.fn(),
   } };
 });
 const mockApi = vi.mocked(api);
@@ -227,7 +227,7 @@ describe('Job Hunter user journey', () => {
     const original = { id: 'resume-base', title: 'My resume', kind: 'resume' as const, revision: 2, template: 'modern' as const, content: { name: 'Alice Tan', email: 'alice@example.com', phone: '', location: 'Singapore', summary: '', sections: [] }, layout: { font_size: 11, margin: 18 }, reviewed_revision: 2 };
     const copy = { ...original, id: 'resume-role', job_id: 'role-3', title: 'My resume — UX Designer', revision: 1, reviewed_revision: null };
     mockApi.applications.mockResolvedValue({ items: [application] }); mockApi.documents.mockResolvedValue({ items: [original] });
-    mockApi.duplicateDocument.mockResolvedValue(copy); mockApi.reviewDocument.mockResolvedValue({ ...copy, reviewed_revision: 1 });
+    mockApi.tailorDocument.mockResolvedValue({ document: copy, matched: ['SQL'], missing: ['Figma'], ai: { status: 'off', changed: 0, reason: null } }); mockApi.reviewDocument.mockResolvedValue({ ...copy, reviewed_revision: 1 });
     mockApi.putApplication.mockResolvedValue({ ...application, revision: 2, resume_packet: { export_id: 'export-role', document_id: copy.id, title: copy.title, revision: 1, download_url: '/v1/exports/export-role' } });
     render(<App />); await screen.findByText('Product Designer');
     await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Application tracker' }));
@@ -235,11 +235,41 @@ describe('Job Hunter user journey', () => {
     await user.click(screen.getByRole('button', { name: 'Prepare resume' }));
     await user.selectOptions(screen.getByRole('combobox', { name: 'Choose a resume to tailor' }), original.id);
     await user.click(screen.getByRole('button', { name: 'Create tailored copy' }));
-    await waitFor(() => expect(mockApi.duplicateDocument).toHaveBeenCalledWith(original.id, 'My resume — UX Designer', 'role-3'));
+    await waitFor(() => expect(mockApi.tailorDocument).toHaveBeenCalledWith(original.id, 'role-3', 'My resume — UX Designer', 'rules'));
+    expect(await screen.findByText(/Matched: SQL. Missing: Figma./)).toBeInTheDocument();
     await user.click(await screen.findByRole('button', { name: 'Mark as reviewed' }));
     await user.click(await screen.findByRole('button', { name: 'Attach reviewed revision' }));
     await waitFor(() => expect(mockApi.putApplication).toHaveBeenCalledWith('role-3', { resume_document_id: copy.id, expected_resume_revision: 1, expected_revision: 1 }));
     expect(await screen.findByRole('dialog', { name: 'UX Designer' })).toBeInTheDocument();
+  });
+  it('tailors with AI from the application, showing the allowance left', async () => {
+    const user = userEvent.setup();
+    const application = { id: 'app-3', job_id: 'role-3', status: 'saved', notes: '', applied_at: null, revision: 1, job: { id: 'role-3', title: 'UX Designer', company: 'Harbor', location: null } };
+    const original = { id: 'resume-base', title: 'My resume', kind: 'resume' as const, revision: 2, template: 'modern' as const, content: { name: 'Alice Tan', email: 'alice@example.com', phone: '', location: 'Singapore', summary: '', sections: [] }, layout: { font_size: 11, margin: 18 }, reviewed_revision: 2 };
+    const copy = { ...original, id: 'resume-role', job_id: 'role-3', title: 'My resume — UX Designer', revision: 1, reviewed_revision: null };
+    mockApi.me.mockResolvedValue({ user_id: '1', display_name: 'Alice Tan', plan: 'free', allowance: { limit: 5, used: 2, remaining: 3, period: 'lifetime' }, ai_available: true });
+    mockApi.applications.mockResolvedValue({ items: [application] }); mockApi.documents.mockResolvedValue({ items: [original] });
+    mockApi.tailorDocument.mockResolvedValue({ document: copy, matched: [], missing: [], ai: { status: 'applied', changed: 2, reason: null } });
+    render(<App />); await screen.findByText('Product Designer');
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Application tracker' }));
+    await user.click(screen.getAllByRole('button', { name: 'Edit application: UX Designer' })[0]);
+    await user.click(screen.getByRole('button', { name: 'Prepare resume' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Choose a resume to tailor' }), original.id);
+    await user.click(screen.getByRole('button', { name: 'Tailor with AI (3 of 5 left)' }));
+    await waitFor(() => expect(mockApi.tailorDocument).toHaveBeenCalledWith(original.id, 'role-3', 'My resume — UX Designer', 'ai'));
+    expect(await screen.findByText(/AI reworded some bullets/)).toBeInTheDocument();
+  });
+  it('disables Tailor with AI when no model is configured', async () => {
+    const user = userEvent.setup();
+    const application = { id: 'app-3', job_id: 'role-3', status: 'saved', notes: '', applied_at: null, revision: 1, job: { id: 'role-3', title: 'UX Designer', company: 'Harbor', location: null } };
+    const original = { id: 'resume-base', title: 'My resume', kind: 'resume' as const, revision: 2, template: 'modern' as const, content: { name: 'Alice Tan', email: 'alice@example.com', phone: '', location: 'Singapore', summary: '', sections: [] }, layout: { font_size: 11, margin: 18 }, reviewed_revision: 2 };
+    mockApi.applications.mockResolvedValue({ items: [application] }); mockApi.documents.mockResolvedValue({ items: [original] });
+    render(<App />); await screen.findByText('Product Designer');
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Application tracker' }));
+    await user.click(screen.getAllByRole('button', { name: 'Edit application: UX Designer' })[0]);
+    await user.click(screen.getByRole('button', { name: 'Prepare resume' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Choose a resume to tailor' }), original.id);
+    expect(screen.getByRole('button', { name: /Tailor with AI/ })).toBeDisabled();
   });
   it('reopens the selected application resume and returns to that application, even with identical job titles', async () => {
     const user = userEvent.setup();
