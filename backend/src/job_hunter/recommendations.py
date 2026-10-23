@@ -275,6 +275,49 @@ def _work_mode_matches(job: Mapping[str, Any], preferences: Mapping[str, Any]) -
     return any(aliases.get(value.casefold().replace("_", "-").strip(), value.casefold()) == actual_value for value in wanted)
 
 
+# Multipliers to a yearly figure. Boards spell periods differently ("year", "Monthly", "per_hour"); hourly assumes
+# a 40-hour week, 52 weeks a year.
+_PERIODS_PER_YEAR = {"year": 1, "month": 12, "week": 52, "day": 260, "hour": 2080}
+
+
+def _per_year(period: Any) -> int | None:
+    value = str(period or "").casefold()
+    if "annual" in value or "year" in value:
+        return 1
+    return next((count for name, count in _PERIODS_PER_YEAR.items() if name in value), None)
+
+
+def _number(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) and number > 0 else None
+
+
+def _salary_matches(job: Mapping[str, Any], preferences: Mapping[str, Any]) -> bool:
+    """The top of the job's stated range reaches the user's minimum salary.
+
+    Only a salary that can be compared filters: a job with no salary, another currency, or a period that cannot be
+    converted passes, so turning the filter on never hides most boards' listings.
+    """
+    wanted = _number(preferences.get("salary_min"))
+    if wanted is None:
+        return True
+    offered = _number(job.get("salary_max")) or _number(job.get("salary_min"))
+    if offered is None:
+        return True
+    wanted_currency = str(preferences.get("salary_currency") or "").strip().casefold()
+    job_currency = str(job.get("salary_currency") or "").strip().casefold()
+    if wanted_currency and job_currency and wanted_currency != job_currency:
+        return True
+    wanted_per_year = _per_year(preferences.get("salary_period") or "year")
+    job_per_year = _per_year(job.get("salary_period"))
+    if wanted_per_year is None or job_per_year is None:
+        return True
+    return offered * job_per_year >= wanted * wanted_per_year
+
+
 def _posted_sort_key(job: Mapping[str, Any], index: int) -> tuple[float, str, int]:
     value = job.get("posted_at") or job.get("fetched_at")
     timestamp = 0.0
@@ -305,8 +348,8 @@ def rank_jobs(
     Scores are bounded numeric relevance values, not probabilities. Explicit
     location/work-mode preferences are hard filters. Missing location passes
     only when no location was selected; selected location + unknown job location
-    is ineligible. Unknown salary is not filtered because salary filters are not
-    currently implemented in this local ranker.
+    is ineligible. A minimum salary filters only jobs whose salary can be
+    compared (see ``_salary_matches``); unknown salary passes.
 
     Returned items contain the original job mapping and reproducible component
     scores, exact matched-skill evidence, reasons, and ranking version.
@@ -326,6 +369,8 @@ def rank_jobs(
         if not _location_matches(job.get("location"), wanted_locations):
             continue
         if not _work_mode_matches(job, preferences):
+            continue
+        if not _salary_matches(job, preferences):
             continue
         eligible.append((index, job))
 
