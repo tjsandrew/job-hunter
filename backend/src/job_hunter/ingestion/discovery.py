@@ -1,4 +1,4 @@
-"""Read-only, bounded discovery from documented public employer ATS feeds."""
+"""Read-only, bounded discovery from public employer ATS feeds and MyCareersFuture search."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from html.parser import HTMLParser
 import json
 import logging
 import os
+import time
 from typing import Any, Callable, Mapping, Sequence
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
@@ -19,7 +20,23 @@ logger = logging.getLogger(__name__)
 GREENHOUSE_API = "https://boards-api.greenhouse.io/v1/boards"
 LEVER_API = "https://api.lever.co/v0/postings"
 SMARTRECRUITERS_API = "https://api.smartrecruiters.com/v1/companies"
+MYCAREERSFUTURE_API = "https://api.mycareersfuture.gov.sg/v2/jobs"
+# MyCareersFuture is one national board searched by keyword, so every listing is stored under one fixed
+# board: a job found by two keywords keeps the same (source, source_board, external_id) identity.
+MYCAREERSFUTURE_BOARD = "sg"
 USER_AGENT = "JobHunter-PoC/1.0 (public employer job-board reader)"
+
+# MyCareersFuture position levels -> seniority ladder keys (job_hunter.seniority). Only levels with a clear
+# ladder meaning are mapped. MCF's "Executive" is an ordinary white-collar grade, not the ladder's top
+# "executive" level, and "Manager" / "Professional" / "Non-executive" say little about seniority, so those
+# are left to the title classifier.
+_MCF_POSITION_LEVELS = {
+    "fresh/entry level": "junior",
+    "junior executive": "junior",
+    "senior executive": "senior",
+    "middle management": "lead",
+    "senior management": "executive",
+}
 
 
 @dataclass(frozen=True)
@@ -29,15 +46,19 @@ class DiscoveryConfig:
     greenhouse_boards: Sequence[str] = ()
     lever_boards: Sequence[str] = ()
     smartrecruiters_boards: Sequence[str] = ()
+    mycareersfuture_searches: Sequence[str] = ()   # search keywords, each read like one board
     timeout_seconds: float = 10.0
     page_size: int = 100
     max_pages_per_board: int = 10
     max_records_per_board: int = 1000
     singapore_only: bool = False
+    mycareersfuture_delay_seconds: float = 1.0     # pause between MyCareersFuture pages
 
     def __post_init__(self) -> None:
         if not 0 < self.timeout_seconds <= 60:
             raise ValueError("timeout_seconds must be between 0 and 60")
+        if not 0 <= self.mycareersfuture_delay_seconds <= 10:
+            raise ValueError("mycareersfuture_delay_seconds must be between 0 and 10")
         if not 1 <= self.page_size <= 100:
             raise ValueError("page_size must be between 1 and 100")
         if not 1 <= self.max_pages_per_board <= 10:
@@ -221,9 +242,35 @@ def _salary(value: Any, currency: Any = None, period: Any = None) -> tuple[Any, 
     return low, high, str(currency) if currency else None, str(period) if period else None
 
 
+def _mcf_location(address: Any) -> str | None:
+    """District names plus "Singapore", or the overseas country, within the 200 character column."""
+    if not isinstance(address, Mapping):
+        return "Singapore"
+    if address.get("isOverseas") is True:
+        country = address.get("overseasCountry")
+        return str(country).strip() if country else None
+    districts = address.get("districts")
+    names = [
+        str(d["location"]).strip()
+        for d in (districts if isinstance(districts, list) else [])
+        if isinstance(d, Mapping) and d.get("location")
+    ]
+    location = ", ".join([*dict.fromkeys(names), "Singapore"])
+    return location if len(location) <= 200 else "Singapore"
+
+
+def _mcf_names(items: Any, key: str) -> list[str]:
+    """``[{key: "Python"}, ...]`` -> ``["Python", ...]``, skipping blanks and repeats."""
+    if not isinstance(items, list):
+        return []
+    names = [str(item[key]).strip() for item in items if isinstance(item, Mapping) and item.get(key)]
+    return list(dict.fromkeys(name for name in names if name))
+
+
 def _normalise(
     *, source: str, board: str, raw: Mapping[str, Any], fetched_at: str
 ) -> dict[str, Any] | None:
+    extra: dict[str, Any] = {}
     if source == "greenhouse":
         external_id = raw.get("id")
         location_obj = raw.get("location") or {}
@@ -252,6 +299,35 @@ def _normalise(
         posted_at = _iso_datetime(raw.get("createdAt"), milliseconds=True)
         expires_at = None
         salary_min, salary_max, salary_currency, salary_period = _salary(raw.get("salaryRange"))
+    elif source == "mycareersfuture":
+        external_id = raw.get("uuid")
+        metadata = raw.get("metadata") or {}
+        metadata = metadata if isinstance(metadata, Mapping) else {}
+        company = raw.get("postedCompany") or {}
+        employer = company.get("name") if isinstance(company, Mapping) else None
+        location = _mcf_location(raw.get("address"))
+        title = raw.get("title")
+        url = metadata.get("jobDetailsUrl")
+        description = raw.get("description")
+        work_mode = None
+        posted_at = _iso_datetime(metadata.get("newPostingDate"))
+        expires_at = _iso_datetime(metadata.get("expiryDate"))
+        salary = raw.get("salary") or {}
+        salary = salary if isinstance(salary, Mapping) else {}
+        salary_type = salary.get("type")
+        salary_min, salary_max = salary.get("minimum"), salary.get("maximum")
+        salary_currency = "SGD" if salary_min is not None or salary_max is not None else None
+        salary_period = salary_type.get("salaryType") if isinstance(salary_type, Mapping) else None
+        levels = [
+            _MCF_POSITION_LEVELS[name.casefold()]
+            for name in _mcf_names(raw.get("positionLevels"), "position")
+            if name.casefold() in _MCF_POSITION_LEVELS
+        ]
+        extra = {
+            "skills": _mcf_names(raw.get("skills"), "skill"),
+            # Ladder keys, read by import_jobs as the source-stated level; None leaves it to the title.
+            "stated_seniority": list(dict.fromkeys(levels)) or None,
+        }
     else:
         external_id = raw.get("id")
         company = raw.get("company") or {}
@@ -295,6 +371,7 @@ def _normalise(
         "expires_at": expires_at,
         "fetched_at": fetched_at,
         "dedup_key": f"{source}:{board}:{external_id}",
+        **extra,
     }
 
 
@@ -398,6 +475,52 @@ def _discover_smartrecruiters(board: str, config: DiscoveryConfig) -> tuple[list
     return result, truncated
 
 
+def _discover_mycareersfuture(keyword: str, config: DiscoveryConfig) -> tuple[list[dict[str, Any]], bool]:
+    """Page through one MyCareersFuture keyword search, pausing between pages."""
+    result: list[dict[str, Any]] = []
+    truncated = False
+    page_limit = min(config.page_size, config.max_records_per_board)
+    total: int | None = None
+    for page in range(config.max_pages_per_board):
+        remaining = config.max_records_per_board - len(result)
+        if remaining <= 0:
+            truncated = True
+            break
+        if page:
+            time.sleep(config.mycareersfuture_delay_seconds)
+        # Page numbers are built here rather than following the response's next link, so every
+        # request stays on the documented host with the configured bounds.
+        query = urlencode({"search": keyword, "limit": page_limit, "page": page})
+        payload = _fetch_json(f"{MYCAREERSFUTURE_API}?{query}", config.timeout_seconds, "mycareersfuture")
+        if not isinstance(payload, Mapping) or not isinstance(payload.get("results"), list):
+            raise ProviderRequestError("mycareersfuture", "invalid_schema", "expected object with results[]")
+        try:
+            total = int(payload.get("total"))
+        except (TypeError, ValueError):
+            total = None
+        fetched_at = _now_utc()
+        raw_jobs = payload["results"]
+        page_jobs = [
+            normalized
+            for raw in raw_jobs
+            if isinstance(raw, Mapping)
+            if (normalized := _normalise(
+                source="mycareersfuture", board=MYCAREERSFUTURE_BOARD, raw=raw, fetched_at=fetched_at
+            ))
+        ]
+        result.extend(page_jobs[:remaining])
+        if len(page_jobs) > remaining:
+            truncated = True
+            break
+        if len(raw_jobs) < page_limit or (total is not None and (page + 1) * page_limit >= total):
+            break
+        if page == config.max_pages_per_board - 1:
+            truncated = True
+    if config.singapore_only:
+        result = [job for job in result if _is_singapore(job)]
+    return result, truncated
+
+
 def discover_report(config: DiscoveryConfig) -> DiscoveryReport:
     """Fetch configured boards; isolate a failed board from successful boards."""
     report = DiscoveryReport()
@@ -405,12 +528,21 @@ def discover_report(config: DiscoveryConfig) -> DiscoveryReport:
         ("greenhouse", config.greenhouse_boards, _discover_greenhouse),
         ("lever", config.lever_boards, _discover_lever),
         ("smartrecruiters", config.smartrecruiters_boards, _discover_smartrecruiters),
+        ("mycareersfuture", config.mycareersfuture_searches, _discover_mycareersfuture),
     ]
+    # Keyword searches overlap (one listing can match "data analyst" and "data engineer"); keep the first copy.
+    seen: set[str] = set()
     for source, boards, fetch in sources:
         for board in boards:
             try:
                 jobs, truncated = fetch(board, config)
-                report.jobs.extend(jobs)
+                for job in jobs:
+                    key = job.get("dedup_key")
+                    if key is not None and key in seen:
+                        continue
+                    if key is not None:
+                        seen.add(key)
+                    report.jobs.append(job)
                 if truncated:
                     report.truncated_boards.append(f"{source}:{board}")
             except (ProviderHTTPError, ProviderRequestError) as exc:
@@ -438,10 +570,12 @@ def _config_from_env(args: argparse.Namespace) -> DiscoveryConfig:
     greenhouse = args.greenhouse or [v.strip() for v in os.getenv("GREENHOUSE_BOARDS", "").split(",") if v.strip()]
     lever = args.lever or [v.strip() for v in os.getenv("LEVER_BOARDS", "").split(",") if v.strip()]
     smartrecruiters = args.smartrecruiters or [v.strip() for v in os.getenv("SMARTRECRUITERS_BOARDS", "").split(",") if v.strip()]
+    mycareersfuture = args.mycareersfuture or [v.strip() for v in os.getenv("MYCAREERSFUTURE_SEARCHES", "").split(",") if v.strip()]
     return DiscoveryConfig(
         greenhouse_boards=greenhouse,
         lever_boards=lever,
         smartrecruiters_boards=smartrecruiters,
+        mycareersfuture_searches=mycareersfuture,
         timeout_seconds=args.timeout,
         page_size=args.page_size,
         max_pages_per_board=args.max_pages,
@@ -451,10 +585,11 @@ def _config_from_env(args: argparse.Namespace) -> DiscoveryConfig:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Preview current public Greenhouse/Lever job listings")
+    parser = argparse.ArgumentParser(description="Preview current public job-board listings")
     parser.add_argument("--greenhouse", action="append", default=[], help="Greenhouse public board token (repeatable)")
     parser.add_argument("--lever", action="append", default=[], help="Lever public site token (repeatable)")
     parser.add_argument("--smartrecruiters", action="append", default=[], help="SmartRecruiters public company identifier (repeatable)")
+    parser.add_argument("--mycareersfuture", action="append", default=[], help="MyCareersFuture search keyword (repeatable)")
     parser.add_argument("--singapore-only", action="store_true")
     parser.add_argument("--timeout", type=float, default=10.0)
     parser.add_argument("--page-size", type=int, default=100)
@@ -463,8 +598,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--limit", type=int, default=10, help="maximum records printed")
     args = parser.parse_args(argv)
     config = _config_from_env(args)
-    if not config.greenhouse_boards and not config.lever_boards and not config.smartrecruiters_boards:
-        parser.error("configure a public board with --greenhouse, --lever, or --smartrecruiters")
+    if not (config.greenhouse_boards or config.lever_boards or config.smartrecruiters_boards
+            or config.mycareersfuture_searches):
+        parser.error("configure a public board with --greenhouse, --lever, --smartrecruiters, or --mycareersfuture")
     report = discover_report(config)
     print(json.dumps({
         "fetched_at": _now_utc(),
