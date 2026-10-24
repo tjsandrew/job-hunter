@@ -25,8 +25,8 @@ jobs:
       # The embedding worker (docs/design/11-EMBEDDING-WORKER.md). Both unset means these steps are skipped.
       EMBED_ECR_REPOSITORY: ${{ vars.EMBED_ECR_REPOSITORY }}
       EMBED_FUNCTION: ${{ vars.EMBED_FUNCTION }}
-      # The fit-analysis worker (docs/design/12-FIT-ANALYSIS.md). Unset means the step is skipped.
-      FIT_FUNCTION: ${{ vars.FIT_FUNCTION }}
+      # The shared LLM worker: fit analysis and resume rewrite (docs/design/12-FIT-ANALYSIS.md). Unset means the step is skipped.
+      LLM_FUNCTION: ${{ vars.LLM_FUNCTION }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -101,7 +101,7 @@ jobs:
           IMAGE_TAG: ${{ vars.ECR_REPOSITORY }}:${{ github.run_id }}-${{ github.run_attempt }}
         run: >-
           docker run --rm --entrypoint python "$IMAGE_TAG"
-          -c 'from pathlib import Path; from job_hunter.adapters.aws_config import RDS_CA; from job_hunter.api.lambda_handler import handler; from job_hunter.migrate_aws import handler as migrate; from job_hunter.fit_worker import handler as fit_worker; from job_hunter.preparation import rendering; assert Path(RDS_CA).is_file(); assert list(Path(rendering.__file__).parent.glob("fonts/*.ttf"))'
+          -c 'from pathlib import Path; from job_hunter.adapters.aws_config import RDS_CA; from job_hunter.api.lambda_handler import handler; from job_hunter.migrate_aws import handler as migrate; from job_hunter.llm_worker import handler as llm_worker; from job_hunter.preparation import rendering; assert Path(RDS_CA).is_file(); assert list(Path(rendering.__file__).parent.glob("fonts/*.ttf"))'
       - name: Record immutable image for infrastructure bootstrap
         if: env.ECR_REPOSITORY != ''
         env:
@@ -144,12 +144,12 @@ jobs:
         env:
           IMAGE_DIGEST: ${{ steps.embed_image.outputs.digest }}
         run: python scripts/deploy_aws.py --embed-image "$EMBED_ECR_REPOSITORY@$IMAGE_DIGEST"
-      - name: Deploy the fit-analysis worker
-        if: env.FIT_FUNCTION != '' && env.ECR_REPOSITORY != ''
+      - name: Deploy the LLM worker
+        if: env.LLM_FUNCTION != '' && env.ECR_REPOSITORY != ''
         env:
           IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
           # Repository secret: Settings > Secrets and variables > Actions > New repository secret. Masked in logs.
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-        run: python scripts/deploy_aws.py --fit-image "$ECR_REPOSITORY@$IMAGE_DIGEST"
+        run: python scripts/deploy_aws.py --llm-image "$ECR_REPOSITORY@$IMAGE_DIGEST"
       - name: Deploy tested website to Amplify
         run: python scripts/deploy_aws.py --web apps/web/dist

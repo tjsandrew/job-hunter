@@ -117,7 +117,7 @@ module "backend" {
   embed_image_uri       = var.embed_image_uri
   embed_on_save         = var.embed_on_save
   for_you_enabled       = var.for_you_enabled
-  fit_worker_enabled    = var.fit_worker_enabled
+  llm_worker_enabled    = var.llm_worker_enabled
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
@@ -157,7 +157,7 @@ output "deployment" {
     MIGRATION_FUNCTION              = try(module.backend[0].migration_function, "")
     EMBED_ECR_REPOSITORY            = aws_ecr_repository.embed.repository_url
     EMBED_FUNCTION                  = try(module.backend[0].embed_function, "")
-    FIT_FUNCTION                    = try(module.backend[0].fit_function, "")
+    LLM_FUNCTION                    = try(module.backend[0].llm_function, "")
     VITE_AUTH_MODE                  = "cognito"
     VITE_COGNITO_ISSUER             = "https://${aws_cognito_user_pool.users.endpoint}"
     VITE_COGNITO_CLIENT_ID          = aws_cognito_user_pool_client.web.id

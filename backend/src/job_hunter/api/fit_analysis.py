@@ -1,8 +1,8 @@
 """Routes for the job fit analysis (design brief 12).
 
 The model is slow (30-40 s), so ``POST`` only records the request and starts the work; the web app polls ``GET``.
-Where the work runs depends on ``FIT_BACKEND`` (see ``job_hunter.fit_transport``): in this process after the response
-(local), or in the fit-worker Lambda through S3 (AWS). Either way the stored result passes ``verify_result`` first.
+Where the work runs depends on ``LLM_WORKER`` (see ``job_hunter.llm_transport``): in this process after the response
+(local), or in the LLM worker Lambda through S3 (AWS), as task ``fit``. Either way the stored result passes ``verify_result`` first.
 """
 from __future__ import annotations
 
@@ -14,14 +14,15 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from job_hunter import fit_transport
+from job_hunter import llm_transport
 from job_hunter.adapters import storage
 from job_hunter.config import settings
 from job_hunter.domain.models import FitAnalysis, Job, JobRequirements, Profile, ProfileVersion, now_utc
-from job_hunter.llm import LlmError, build_client
+from job_hunter.llm import build_client
+from job_hunter.llm.tasks import run_task
 from job_hunter.preparation import allowance
 from job_hunter.preparation.fit import grounding, prompts
-from job_hunter.preparation.fit.requirements import MIN_DESCRIPTION, NoRequirements, input_hash, normalise
+from job_hunter.preparation.fit.requirements import MIN_DESCRIPTION, input_hash, normalise
 from job_hunter.preparation.fit.verify import verify_result
 
 PENDING_TIMEOUT = timedelta(minutes=5)   # a request with no answer after this long is reported as failed
@@ -30,7 +31,7 @@ log = logging.getLogger(__name__)
 
 def available() -> bool:
     """Whether fit analysis can run at all with the current settings."""
-    if settings.fit_backend == "s3":
+    if settings.llm_worker == "s3":
         return bool(settings.document_bucket)
     return build_client(settings) is not None
 
@@ -91,16 +92,7 @@ def _cached_requirements(db: Session, job: Job) -> list | None:
 def run_inline(analysis_id: UUID, user_id: UUID, request: dict, client=None) -> None:
     """Background task (local development): call the model, then store the checked answer under the user's own scope."""
     from job_hunter.adapters.database import SessionLocal
-    try:
-        raw = fit_transport.run_request(client or build_client(settings), request)
-    except NoRequirements:
-        raw = {"error": "NO_REQUIREMENTS"}
-    except LlmError as exc:
-        log.warning("fit analysis %s: %s", analysis_id, exc)
-        raw = {"error": "MODEL_UNAVAILABLE"}
-    except Exception:
-        log.exception("fit analysis %s failed", analysis_id)
-        raw = {"error": "ANALYSIS_FAILED"}
+    raw, _ = run_task(client or build_client(settings), request)
     with SessionLocal() as db, db.begin():
         db.execute(text("SELECT set_config('app.user_id', :uid, true)"), {"uid": str(user_id)})
         item = db.get(FitAnalysis, analysis_id)
@@ -121,9 +113,9 @@ def build_router(db_dependency, current_user):
         """Pick up the worker's answer, or give up on a request that has had too long."""
         if item.status != "pending":
             return
-        if settings.fit_backend == "s3":
+        if settings.llm_worker == "s3":
             try:
-                raw = fit_transport.get_result(storage.s3(), settings.document_bucket, item.id)
+                raw = llm_transport.get_result(storage.s3(), settings.document_bucket, item.id)
             except Exception:
                 log.exception("fit result %s unreadable", item.id)
                 raw = {"error": "INVALID_RESULT"}
@@ -167,11 +159,11 @@ def build_router(db_dependency, current_user):
         if item.id is None:
             item.id = uuid4()
         db.flush()
-        request = fit_transport.build_request(item.id, {"title": job.title, "description": job.description}, evidence,
-                                              _cached_requirements(db, job))
-        if settings.fit_backend == "s3":
+        request = llm_transport.build_request("fit", item.id, {"job": {"title": job.title, "description": job.description},
+                                                               "evidence": evidence, "requirements": _cached_requirements(db, job)})
+        if settings.llm_worker == "s3":
             try:
-                fit_transport.put_request(storage.s3(), settings.document_bucket, request)
+                llm_transport.put_request(storage.s3(), settings.document_bucket, request)
             except Exception:
                 log.exception("fit request %s not written", item.id)
                 raise HTTPException(503, detail={"code": "AI_UNAVAILABLE", "message": "The analysis could not be started"})

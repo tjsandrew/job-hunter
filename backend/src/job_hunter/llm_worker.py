@@ -1,8 +1,8 @@
-"""Lambda entry point of the fit-analysis worker (``job_hunter.fit_worker.handler``).
+"""Lambda entry point of the shared LLM worker (``job_hunter.llm_worker.handler``).
 
 It runs OUTSIDE the VPC (the model is on the internet) and never touches the database. S3 invokes it when the API writes
-``fit-requests/<id>.json``; it runs the analysis and writes ``fit-results/<id>.json`` next to it. A failure is written as
-``{"error": "<code>"}`` so the web app learns about it at once instead of waiting for a timeout.
+``llm-requests/<id>.json``; it runs the request's task (``job_hunter.llm.tasks``) and writes ``llm-results/<id>.json`` next to
+it. A failure is written as ``{"error": "<code>"}`` so the web app learns about it at once instead of waiting for a timeout.
 
 Environment: DOCUMENT_BUCKET, LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, optional LLM_REASONING_EFFORT and LLM_TIMEOUT_SECONDS.
 Settings are read straight from the environment: ``job_hunter.config`` would reject a Lambda that has no Cognito settings.
@@ -14,9 +14,9 @@ import logging
 import os
 from urllib.parse import unquote_plus
 
-from job_hunter.fit_transport import MAX_FILE, REQUEST_PREFIX, result_key, run_request
 from job_hunter.llm import HostedClient, LlmError
-from job_hunter.preparation.fit.requirements import NoRequirements
+from job_hunter.llm.tasks import run_task
+from job_hunter.llm_transport import MAX_FILE, REQUEST_PREFIX, request_key, result_key
 
 log = logging.getLogger(__name__)
 
@@ -30,23 +30,17 @@ def process(s3, bucket: str, key: str, client=None) -> str:
     """Handle one request object; returns ``"ok"`` or the error code that was written."""
     try:
         request = json.loads(s3.get_object(Bucket=bucket, Key=key)["Body"].read(MAX_FILE))
-        analysis_id = request["analysis_id"]
-        if key != f"{REQUEST_PREFIX}{analysis_id}.json":
-            raise ValueError("request key does not match its analysis id")
+        request_id = request["request_id"]
+        if key != request_key(request_id):
+            raise ValueError("request key does not match its request id")
     except Exception:
-        log.exception("unreadable fit request %s", key)
+        log.exception("unreadable LLM request %s", key)
         return "BAD_REQUEST"
     try:
-        body, outcome = run_request(client or _client(), request), "ok"
-    except NoRequirements:
-        body, outcome = {"error": "NO_REQUIREMENTS"}, "NO_REQUIREMENTS"
-    except LlmError as exc:
-        log.warning("model failed for %s: %s", analysis_id, exc)     # LlmError text never contains the key
+        body, outcome = run_task(client or _client(), request)
+    except LlmError:          # no key or URL configured: say so instead of leaving the user waiting
         body, outcome = {"error": "MODEL_UNAVAILABLE"}, "MODEL_UNAVAILABLE"
-    except Exception:
-        log.exception("fit analysis %s failed", analysis_id)
-        body, outcome = {"error": "ANALYSIS_FAILED"}, "ANALYSIS_FAILED"
-    s3.put_object(Bucket=bucket, Key=result_key(analysis_id), Body=json.dumps(body).encode(), ContentType="application/json")
+    s3.put_object(Bucket=bucket, Key=result_key(request_id), Body=json.dumps(body).encode(), ContentType="application/json")
     return outcome
 
 

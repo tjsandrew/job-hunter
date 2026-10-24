@@ -17,5 +17,6 @@ embed_on_save = "queue"
 # Serve the semantic For you list. Apply only AFTER the Deploy staging run that ships the API with the "still preparing" message.
 for_you_enabled = "1"
 
-# Fit-analysis worker (docs/design/12-FIT-ANALYSIS.md). The key comes from the GitHub secret LLM_API_KEY at release time.
-fit_worker_enabled = true
+# Shared LLM worker for fit analysis and the AI resume rewrite (docs/design/12-FIT-ANALYSIS.md). The key comes from the GitHub
+# secret LLM_API_KEY at release time. Never apply without this line: the worker would be removed.
+llm_worker_enabled = true

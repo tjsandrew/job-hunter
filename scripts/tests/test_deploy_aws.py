@@ -15,7 +15,7 @@ def function(image, revision):
     return {"Code": {"ResolvedImageUri": image}, "Configuration": {"RevisionId": revision}}
 
 
-class FitWorkerRelease(unittest.TestCase):
+class LlmWorkerRelease(unittest.TestCase):
     def setUp(self):
         self.client = Mock()
         self.client.get_function.return_value = function(OLD, "r1")
@@ -24,28 +24,28 @@ class FitWorkerRelease(unittest.TestCase):
         sdk.start()
         self.addCleanup(sdk.stop)
 
-    def run_fit(self, env):
+    def run_llm(self, env):
         with patch.dict(release.os.environ, env, clear=False):
-            for name in ("FIT_FUNCTION", "LLM_API_KEY"):
+            for name in ("LLM_FUNCTION", "LLM_API_KEY"):
                 if name not in env:
                     release.os.environ.pop(name, None)
             with patch("builtins.print") as shown:
-                release.fit(NEW)
+                release.llm(NEW)
         return shown
 
     def test_nothing_happens_before_the_worker_exists(self):
-        self.run_fit({})
+        self.run_llm({})
         self.client.update_function_code.assert_not_called()
 
     def test_the_image_and_key_are_set_and_other_settings_are_kept_and_the_key_is_never_printed(self):
-        shown = self.run_fit({"FIT_FUNCTION": "staging-fit", "LLM_API_KEY": "clsk_secret_value"})
-        self.client.update_function_code.assert_called_once_with(FunctionName="staging-fit", ImageUri=NEW, RevisionId="r1")
+        shown = self.run_llm({"LLM_FUNCTION": "staging-llm", "LLM_API_KEY": "clsk_secret_value"})
+        self.client.update_function_code.assert_called_once_with(FunctionName="staging-llm", ImageUri=NEW, RevisionId="r1")
         self.client.update_function_configuration.assert_called_once_with(
-            FunctionName="staging-fit", RevisionId="r2", Environment={"Variables": {"LLM_MODEL": "gemma4:26b", "LLM_API_KEY": "clsk_secret_value"}})
+            FunctionName="staging-llm", RevisionId="r2", Environment={"Variables": {"LLM_MODEL": "gemma4:26b", "LLM_API_KEY": "clsk_secret_value"}})
         self.assertNotIn("clsk_secret_value", " ".join(str(call) for call in shown.call_args_list))
 
     def test_without_the_secret_the_existing_key_is_left_alone(self):
-        self.run_fit({"FIT_FUNCTION": "staging-fit"})
+        self.run_llm({"LLM_FUNCTION": "staging-llm"})
         self.client.update_function_code.assert_called_once()
         self.client.update_function_configuration.assert_not_called()
 

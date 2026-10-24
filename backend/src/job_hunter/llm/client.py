@@ -5,8 +5,8 @@
 
 * ``FakeLlm``       tests: canned answers, records every call.
 * ``OllamaClient``  local development against a host Ollama (same model family as the Lambda).
-* ``HostedClient``  a hosted model with an OpenAI-style API (the school's SoCLaaS gateway, Groq, Gemini, OpenRouter); needs internet.
-* ``LlamaCppClient`` the LLM Lambda: a GGUF model baked into the image, run in-process on the CPU (no network).
+* ``HostedClient``  a hosted model with an OpenAI-style API (the school's SoCLaaS gateway, Groq, Gemini, OpenRouter); needs
+  internet. The LLM worker Lambda and local development both use it.
 """
 from __future__ import annotations
 
@@ -180,44 +180,11 @@ def _retry_after(error: HTTPError) -> float | None:
         return None
 
 
-class LlamaCppClient:
-    """The model file is loaded once per Lambda container and reused by warm invocations."""
-    name = "llamacpp"
-    _model: Any = None
-
-    def __init__(self, model_path: str, *, threads: int | None = None, context: int = 8192):
-        self.model_path, self.threads, self.context = model_path, threads, context
-
-    def _load(self) -> Any:
-        if LlamaCppClient._model is None:
-            try:
-                from llama_cpp import Llama  # optional dependency, installed only in the LLM Lambda image
-            except ImportError as exc:
-                raise LlmError("llama-cpp-python is not installed") from exc
-            try:
-                LlamaCppClient._model = Llama(model_path=self.model_path, n_ctx=self.context, n_threads=self.threads,
-                                              verbose=False)
-            except (OSError, ValueError) as exc:
-                raise LlmError("The model file could not be loaded") from exc
-        return LlamaCppClient._model
-
-    def complete_json(self, system: str, user: str, *, max_tokens: int = 1024) -> dict[str, Any]:
-        result = self._load().create_chat_completion(
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-            temperature=0, max_tokens=max_tokens, response_format={"type": "json_object"})
-        try:
-            return parse_json_object(result["choices"][0]["message"]["content"])
-        except (KeyError, IndexError, TypeError) as exc:
-            raise LlmError("The model reply could not be read") from exc
-
-
 def build_client(settings: Any) -> LlmClient | None:
     """The client for ``settings.model_backend``, or ``None`` when no language model is configured."""
     backend = settings.model_backend
     if backend == "ollama":
         return OllamaClient(settings.ollama_url, settings.ollama_model, settings.llm_timeout_seconds)
-    if backend == "llamacpp":
-        return LlamaCppClient(settings.llm_model_path)
     if backend == "hosted":
         return HostedClient(settings.llm_base_url, settings.llm_api_key, settings.llm_model, settings.llm_timeout_seconds,
                             settings.llm_reasoning_effort)

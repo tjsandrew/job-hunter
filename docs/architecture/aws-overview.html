@@ -77,7 +77,7 @@ flowchart LR
     end
     eb["EventBridge schedule"]
     disc["Discovery Lambda: outside VPC, needs internet"]
-    fit["Fit-worker Lambda: outside VPC, no database. Same image as the API"]
+    fit["LLM worker Lambda: outside VPC, no database. Same image as the API. Tasks: fit, tailor"]
   end
   user --> amp
   user --> cog
@@ -89,10 +89,10 @@ flowchart LR
   s3 --> sqs
   sqs --> emb
   emb --> db
-  api -.->|"1. fit-requests/id.json: job text, cached requirements, profile evidence"| s3
+  api -.->|"1. llm-requests/id.json: task fit, job text, cached requirements, profile evidence"| s3
   s3 -.->|"2. S3 event"| fit
   fit -.->|"3. extract, judge, suggest (HTTPS)"| soc
-  fit -.->|"4. fit-results/id.json"| s3
+  fit -.->|"4. llm-results/id.json"| s3
   s3 -.->|"5. API reads, re-verifies, stores"| api
   eb -.-> disc
   src -.-> disc
@@ -101,16 +101,16 @@ flowchart LR
   imp -.-> db
 </pre>
     </div>
-    <p class="note">The embedding Lambda runs an embedding model that turns text into numbers. It cannot write or judge text, so fit analysis uses a language model on the school's SoCLaaS gateway, called from a small worker outside the VPC.</p>
+    <p class="note">The embedding Lambda runs an embedding model that turns text into numbers. It cannot write or judge text, so fit analysis and the AI resume rewrite use a language model on the school's SoCLaaS gateway, called from one shared LLM worker outside the VPC.</p>
   </section>
 
   <section class="card">
     <h2>Fit analysis flow</h2>
     <ol style="margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px">
-      <li>The web app calls <code>POST /v1/jobs/{id}/fit-analysis</code>. The API Lambda checks the monthly slot (free 5, premium 50), adds a <code>fit_analyses</code> row marked pending, and writes <code>fit-requests/&lt;analysis_id&gt;.json</code> to the private documents bucket. The file holds the job text, the job's cached requirements (if any, from <code>job_requirements</code>) and the profile evidence text, so the worker needs no database.</li>
-      <li>The S3 event starts the <b>fit-worker Lambda</b>. It runs outside the VPC with no database access, and uses the same container image as the API with the handler <code>job_hunter.fit_worker.handler</code>.</li>
+      <li>The web app calls <code>POST /v1/jobs/{id}/fit-analysis</code>. The API Lambda checks the monthly slot (free 5, premium 50), adds a <code>fit_analyses</code> row marked pending, and writes <code>llm-requests/&lt;analysis_id&gt;.json</code> (<code>task: fit</code>) to the private documents bucket. The file holds the job text, the job's cached requirements (if any, from <code>job_requirements</code>) and the profile evidence text, so the worker needs no database.</li>
+      <li>The S3 event starts the <b>LLM worker Lambda</b> (one worker for every AI task; reserved concurrency 5). It runs outside the VPC with no database access, and uses the same container image as the API with the handler <code>job_hunter.llm_worker.handler</code>.</li>
       <li>The worker calls the SoCLaaS gateway (<code>soclaas-api.comp.nus.edu.sg/v1</code>, model <code>gemma4:26b</code>) over the public internet: extract requirements, judge each one against the profile, suggest improvements.</li>
-      <li>The worker writes <code>fit-results/&lt;analysis_id&gt;.json</code> to S3. Request and result files expire after 1 day.</li>
+      <li>The worker writes <code>llm-results/&lt;analysis_id&gt;.json</code> to S3. Request and result files expire after 1 day.</li>
       <li>The web app polls <code>GET /v1/fit-analyses/{id}</code>. The API Lambda reads the result and <b>checks it again</b>: it drops invented evidence ids and numbers and works out the coverage percentage in code. It then saves the result in Aurora (<code>fit_analyses</code>, per-user row-level security) and caches the job's requirements in <code>job_requirements</code>, shared by all users.</li>
     </ol>
     <p class="note">About 28 to 39 seconds and roughly USD 0.0008 per analysis in the benchmark. Embeddings still only rank jobs for "For you".</p>
@@ -122,10 +122,10 @@ flowchart LR
       <thead><tr><th>Piece</th><th>Where</th><th>Internet</th><th>Database</th></tr></thead>
       <tbody>
         <tr><td>API Lambda, Embed Lambda, Import Lambda</td><td>inside the VPC</td><td>no</td><td>yes</td></tr>
-        <tr><td>Fit-worker Lambda</td><td>outside the VPC</td><td>yes, only to SoCLaaS</td><td>no</td></tr>
+        <tr><td>LLM worker Lambda</td><td>outside the VPC</td><td>yes, only to SoCLaaS</td><td>no</td></tr>
         <tr><td>Discovery Lambda</td><td>outside the VPC</td><td>yes, to job sources</td><td>no</td></tr>
       </tbody></table></div>
-    <p class="note">Secrets and settings: <code>LLM_API_KEY</code> is a GitHub Actions secret. <code>scripts/deploy_aws.py</code> puts it into the fit-worker's environment during the deploy workflow, the same way as the database passwords. <code>MODEL_BACKEND=hosted</code>, <code>LLM_BASE_URL</code>, <code>LLM_MODEL</code> and <code>LLM_REASONING_EFFORT=none</code> are plain Terraform environment variables.</p>
+    <p class="note">Secrets and settings: <code>LLM_API_KEY</code> is a GitHub Actions secret. <code>scripts/deploy_aws.py</code> puts it into the LLM worker's environment during the deploy workflow, the same way as the database passwords. <code>MODEL_BACKEND=hosted</code>, <code>LLM_BASE_URL</code>, <code>LLM_MODEL</code> and <code>LLM_REASONING_EFFORT=none</code> are plain Terraform environment variables.</p>
   </section>
 
   <section class="card">
@@ -136,9 +136,9 @@ flowchart LR
         <tr><td>Login, hosting, API</td><td>cloud, resume upload</td><td>Amplify, Cognito, API Gateway, API Lambda</td><td><span class="pill live">live</span></td></tr>
         <tr><td>Resume upload and profile</td><td>resume upload</td><td>API Lambda, S3 presigned URLs, Aurora</td><td><span class="pill live">live</span> rule-based parsing</td></tr>
         <tr><td>Embeddings and "For you"</td><td>recommendations</td><td>S3 flag, SQS, Embed Lambda, Aurora</td><td><span class="pill live">live</span></td></tr>
-        <tr><td>Resume tailoring</td><td>tailoring</td><td>API Lambda (keyword rules)</td><td><span class="pill live">live</span> AI rewrite local only</td></tr>
+        <tr><td>Resume tailoring</td><td>tailoring</td><td>API Lambda (keyword rules)</td><td><span class="pill live">live</span> AI rewrite through the LLM worker (task <code>tailor</code>, waits up to 25 s)</td></tr>
         <tr><td>Job discovery</td><td>ingestion</td><td>local command today; EventBridge and a Lambda outside the VPC next</td><td><span class="pill plan">planned</span> Discover is empty on staging</td></tr>
-        <tr><td>Fit analysis</td><td>fit analysis</td><td>API Lambda, S3, and the fit-worker Lambda (outside the VPC) calling SoCLaaS</td><td><span class="pill plan">planned</span> code and tests written locally</td></tr>
+        <tr><td>Fit analysis</td><td>fit analysis</td><td>API Lambda, S3, and the LLM worker Lambda (outside the VPC) calling SoCLaaS</td><td><span class="pill plan">planned</span> code and tests written locally</td></tr>
       </tbody></table></div>
   </section>
 

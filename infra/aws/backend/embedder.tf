@@ -97,9 +97,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "embed_flags" {
     filter { prefix = local.embed_flag_prefix }
     expiration { expired_object_delete_marker = true }
   }
-  # Fit request and result files hold profile text and are only needed while an analysis runs (design brief 12).
+  # LLM request and result files hold profile and resume text and are only needed while a request runs (design brief 12).
+  # The legacy fit-* prefixes are the worker's first names; they stay here until the old objects have expired.
   dynamic "rule" {
-    for_each = toset(local.fit_prefixes)
+    for_each = toset(concat(local.llm_prefixes, local.llm_legacy_prefixes))
     content {
       id     = "expire-${trimsuffix(rule.value, "/")}"
       status = "Enabled"
@@ -108,11 +109,14 @@ resource "aws_s3_bucket_lifecycle_configuration" "embed_flags" {
       noncurrent_version_expiration { noncurrent_days = 1 }
     }
   }
-  rule {
-    id     = "remove-expired-fit-markers"
-    status = "Enabled"
-    filter { prefix = "fit-" }
-    expiration { expired_object_delete_marker = true }
+  dynamic "rule" {
+    for_each = toset(["llm-", "fit-"])
+    content {
+      id     = "remove-expired-${rule.value}markers"
+      status = "Enabled"
+      filter { prefix = rule.value }
+      expiration { expired_object_delete_marker = true }
+    }
   }
   depends_on = [aws_s3_bucket_versioning.documents]
 }
@@ -181,9 +185,9 @@ resource "aws_lambda_event_source_mapping" "embed" {
   maximum_batching_window_in_seconds = local.embed_batch_window
   scaling_config { maximum_concurrency = 2 }
 }
-# S3 allows ONE notification configuration per bucket, so the fit worker's trigger (fit_worker.tf) lives here too.
+# S3 allows ONE notification configuration per bucket, so the LLM worker's trigger (llm_worker.tf) lives here too.
 resource "aws_s3_bucket_notification" "embed" {
-  count  = (local.embed_enabled || local.fit_enabled) ? 1 : 0
+  count  = (local.embed_enabled || local.llm_enabled) ? 1 : 0
   bucket = aws_s3_bucket.documents.id
   dynamic "queue" {
     for_each = local.embed_enabled ? [1] : []
@@ -194,15 +198,15 @@ resource "aws_s3_bucket_notification" "embed" {
     }
   }
   dynamic "lambda_function" {
-    for_each = local.fit_enabled ? [1] : []
+    for_each = local.llm_enabled ? [1] : []
     content {
-      lambda_function_arn = aws_lambda_function.fit[0].arn
+      lambda_function_arn = aws_lambda_function.llm[0].arn
       events              = ["s3:ObjectCreated:*"]
-      filter_prefix       = local.fit_request_prefix
+      filter_prefix       = local.llm_request_prefix
     }
   }
-  # Uploads and exports never trigger a worker: only the embed flag prefix and the fit request prefix do.
-  depends_on = [aws_sqs_queue_policy.embed, aws_lambda_permission.fit_from_s3]
+  # Uploads and exports never trigger a worker: only the embed flag prefix and the LLM request prefix do.
+  depends_on = [aws_sqs_queue_policy.embed, aws_lambda_permission.llm_from_s3]
 }
 
 # ---- alarms (notification only, through the existing activity topic) ----

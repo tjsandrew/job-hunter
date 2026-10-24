@@ -2,7 +2,9 @@ import pytest
 
 from job_hunter.config import settings
 from job_hunter.preparation import ai_tailoring
-from job_hunter.preparation.ai_tailoring import AiUnavailable, FakeRewriter, OllamaRewriter, build_model, rewrite_content
+from job_hunter.llm import OllamaClient
+from job_hunter.preparation.ai_tailoring import AiUnavailable, FakeRewriter, build_model, rewrite_content
+from job_hunter.preparation.tailor_llm import LlmRewriter
 
 JOB = {"title": "Data Engineer", "skills": ["Python"], "description": "Build pipelines."}
 
@@ -55,15 +57,16 @@ def test_fake_backend_changes_nothing():
     assert bullets_of(result) == ["a"] and changed == 0
 
 
-@pytest.mark.parametrize("backend,expected", [("heuristic", type(None)), ("bedrock", type(None)), ("fake", FakeRewriter), ("ollama", OllamaRewriter)])
+@pytest.mark.parametrize("backend,expected", [("heuristic", type(None)), ("bedrock", type(None)), ("fake", FakeRewriter), ("ollama", LlmRewriter)])
 def test_backend_follows_existing_model_setting(monkeypatch, backend, expected):
     monkeypatch.setattr(settings, "model_backend", backend)
+    monkeypatch.setattr(settings, "llm_worker", "inline")
     assert isinstance(build_model(), expected)
 
 
 def test_unreachable_ollama_is_unavailable():
     with pytest.raises(AiUnavailable):
-        OllamaRewriter("http://127.0.0.1:1", "m").rewrite([["a"]], JOB)
+        LlmRewriter(OllamaClient("http://127.0.0.1:1", "m", timeout=2)).rewrite([["a"]], JOB)
 
 
 def test_limit_is_five():
