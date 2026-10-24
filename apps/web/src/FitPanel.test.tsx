@@ -28,6 +28,21 @@ const panel = (props: Partial<{ available: boolean; remaining: number }> = {}, o
   render(<FitPanel jobId="j1" available remaining={5} onUsed={onUsed} {...props} />);
 
 describe('FitPanel', () => {
+  it('keeps showing the result when the page re-renders with a new onUsed callback (no flicker, no reload)', async () => {
+    mockApi.jobFit.mockResolvedValue(ready());
+    const first = vi.fn();
+    const { rerender } = render(<FitPanel jobId="j1" available remaining={5} onUsed={first} />);
+    expect(await screen.findByText('50%')).toBeInTheDocument();
+    expect(first).toHaveBeenCalledTimes(1);
+    const second = vi.fn();
+    rerender(<FitPanel jobId="j1" available remaining={4} onUsed={second} />);   // what the page does after it refreshes the allowance
+    expect(screen.getByText('50%')).toBeInTheDocument();
+    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
+    await waitFor(() => expect(mockApi.jobFit).toHaveBeenCalledTimes(1));
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).not.toHaveBeenCalled();
+  });
+
   it('shows a saved analysis with the percentage, its meaning, evidence and suggestions', async () => {
     mockApi.jobFit.mockResolvedValue(ready());
     panel();

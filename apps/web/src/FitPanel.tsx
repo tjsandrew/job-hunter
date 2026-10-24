@@ -76,11 +76,15 @@ export function FitPanel({ jobId, available, remaining, onUsed }: { jobId: strin
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const settled = useRef<string | null>(null);
+  // The page passes a new onUsed function on every render. Reading it through a ref keeps `apply` stable: when it changed with
+  // every render, finishing an analysis made the page re-render, which reloaded the panel and made the result vanish and return.
+  const usedRef = useRef(onUsed);
+  usedRef.current = onUsed;
 
   const apply = useCallback((next: FitAnalysis) => {
     setAnalysis(next);
-    if (next.status === 'ready' && settled.current !== next.id) { settled.current = next.id; onUsed(); }
-  }, [onUsed]);
+    if (next.status === 'ready' && settled.current !== next.id) { settled.current = next.id; usedRef.current(); }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
