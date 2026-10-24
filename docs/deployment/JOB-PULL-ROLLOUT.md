@@ -1,0 +1,39 @@
+# Job pull rollout
+
+How real job postings get into the staging database, and how to switch it on. Design: [brief 04](../design/04-JOB-INGESTION.md), "As built". Architecture picture: [aws-overview.html](../architecture/aws-overview.html).
+
+## What it is
+
+Aurora is private and the VPC has no internet, so two Lambdas on the API image share the work:
+
+| Function | Where | Does |
+|---|---|---|
+| `jobhunter-staging-discovery` | outside the VPC | reads Greenhouse, Lever, MyCareersFuture (and Adzuna with keys), Singapore only; stores `imports/<pull id>.json`; invokes the import function and returns its counts |
+| `jobhunter-staging-import` | inside the VPC | reads the snapshot over the S3 gateway endpoint, inserts the next N new jobs as role `jobhunter_app`, links duplicates, writes the embed flag after the commit |
+
+A pull adds at most N new jobs (default 10); jobs already stored are refreshed, the rest are left for the next pull. Nothing needs a NAT gateway or a new bucket notification.
+
+## Cost and safety
+
+- Each pull wakes Aurora (0 to 1 ACU, auto-pause), which costs a little and triggers the Aurora activity alarm email. Tell the team before the first one.
+- Reserved concurrency: discovery 1, import 1. With the API (10), migrate (1), embed (2) and LLM (5) that is 20 reserved: check `aws lambda get-account-settings` still leaves at least 10 unreserved.
+- The EventBridge schedule (`discovery_schedule_enabled`, `rate(1 day)`) is off. Turn it on only when daily fresh jobs are worth the wake-ups.
+- Adzuna keys are GitHub secrets, written into the discovery function by Deploy staging. They are never in Terraform, a snapshot, a log or a failure report.
+
+## First-time rollout (in this order)
+
+1. Check Deploy staging is not running; merge the pull request.
+2. Terraform from CloudShell (recipe in [design brief 12](../design/12-FIT-ANALYSIS.md), section 11). `staging.tfvars` has `discovery_enabled = true`. The plan should show only additions (two roles, two log groups, two functions) and small changes to the release role policy, the S3 lifecycle rules and the deployment output. It must not destroy the database, Cognito, Amplify, the embed worker or the LLM worker.
+3. Publish the new function names: `terraform -chdir=infra/aws output -json deployment | python3 scripts/configure_github_deploy.py` (adds `DISCOVERY_FUNCTION` and `IMPORT_FUNCTION`).
+4. Optional Adzuna: register at developer.adzuna.com, add the secrets `ADZUNA_APP_ID` and `ADZUNA_APP_KEY`, then set `discovery_adzuna_searches = ["data engineer"]` in `staging.tfvars` and apply again.
+5. **Deploy staging** on `main`: migration 0016 (duplicate links) runs, the new image goes onto both functions, and the import function gets its database password.
+6. **Pull jobs** on `main` with 10. The run summary shows the counts. Open Discover (All jobs); the For you ranking includes the new jobs after the embed worker has run, a few minutes later.
+7. Existing rows: `python -m job_hunter.import_jobs --relink` (owner connection) fills the duplicate links of jobs imported before migration 0016. New pulls do it as they go.
+
+## Checking and troubleshooting
+
+- Logs: `/aws/lambda/jobhunter-staging-discovery` and `/aws/lambda/jobhunter-staging-import`.
+- `Nothing was loaded`: every source failed or returned no Singapore jobs; the summary lists each source problem.
+- `import step failed`: read the import function log (database password missing means Deploy staging has not run since the apply).
+- `missing_credentials` for adzuna: the two secrets are not set, or Deploy staging has not run since they were added.
+- Staging paused: the workflow refuses; resume first.

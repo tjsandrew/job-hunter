@@ -21,7 +21,7 @@ The initial tracker did not store a resume or cover letter. The current change a
 | Area | Still missing or limited | Next useful step |
 |---|---|---|
 | Job coverage | 70 source listings, below the 300–500 intermediate / 1,000 Singapore target; employer/category bias remains | Add permitted sources and employers with explicit Singapore coverage; cache responses and stop on rate limits |
-| Job lifecycle | Manual imports; no automatic refresh, robust expiry reconciliation, immutable job-content versions or cross-provider opening deduplication | Record source-specific freshness/closure rules and test repeat imports/changed/removed postings |
+| Job lifecycle | Cloud pulls start by hand (workflow) or by an optional schedule that is off; cross-provider deduplication is built; still no robust expiry reconciliation or immutable job-content versions | Record source-specific freshness/closure rules and test repeat imports/changed/removed postings |
 | Discovery | Full source descriptions and text search are available; comprehensive category/salary/seniority/work-mode filters remain incomplete | Add filters only where normalized source facts support them; preserve unknown values |
 | Matching | Semantic "For you" exists (embedding model, keyword fusion, embedding worker live in staging); still pending: independent relevance labels on a larger job set, job-vector refresh from ingestion, and a decision on caching or a pgvector query (recommendations are recomputed per request). Evidence-grounded fit analysis is built (see AI preparation) | Evaluate against labelled examples; do not present keyword scores or raw similarity as match percentages |
 | Profile extraction | PDF and Word import with a review step before anything is applied (heuristic parsing by default; the model path is a placeholder); no OCR, so scanned PDFs are rejected | Add OCR if scanned resumes matter |
@@ -39,7 +39,7 @@ The initial tracker did not store a resume or cover letter. The current change a
 
 Deployed in staging (Terraform, GitHub Actions release): Cognito, API Gateway and the API Lambda, Aurora Serverless v2 with row-level security, private S3 uploads and downloads, the S3 → SQS → Lambda embedding worker, the shared LLM worker Lambda (fit analysis, AI resume rewrite), IAM through GitHub OIDC, budget and activity alarms, and pause/resume of the backend. See [deployment/README.md](../deployment/README.md).
 
-Not built or not decided: scheduled job discovery (EventBridge and an ingestion Lambda; the VPC has no internet egress and no NAT gateway), loading jobs into staging, Bedrock (blocked by the university account policy), CloudFront/WAF, security headers such as CSP and HSTS, and measured latency, load and cost numbers. Local tests cannot establish AWS behaviour.
+Built, waiting for the Terraform apply and a deploy: loading jobs into staging (Pull jobs workflow, Discovery and Import Lambdas; the VPC still has no NAT gateway) and cross-source duplicate links. Not built or not decided: a schedule that is on by default, Bedrock (blocked by the university account policy), CloudFront/WAF, security headers such as CSP and HSTS, and measured latency, load and cost numbers. Local tests cannot establish AWS behaviour.
 
 Raw LaTeX source editing, collaboration, large template libraries and automatic application submission are not required for this POC.
 

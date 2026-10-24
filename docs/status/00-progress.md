@@ -11,6 +11,7 @@ Updated 5 October 2026 (Singapore).
 - Profiles/preferences, TF-IDF/skill/role recommendations with server search/pagination, a semantic "For you" list (embedder service, stored vectors, role/seniority checks) with the keyword list as fallback, save/pass and application tracking.
 - Manual resume editor: structured sections, two templates, autosave, undo/redo, revision review, server PDF preview/export. PDF uploads expose extracted text as a candidate for manual review.
 - Live ingestion/import: 70 Singapore-location source identities across Stripe (52), Cloudflare (1), Coinbase (7), Lalamove (10). Four employers, two providers (Greenhouse/Lever). This is below the 300–500 intermediate / 1,000 target and excludes synthetic seeds. No comprehensive category coverage or cross-provider opening deduplication claim.
+- 24 October 2026: MyCareersFuture and Adzuna adapters merged or written, cross-source dedup (migration 0016) and the cloud job pull (Discovery and Import Lambdas, Pull jobs workflow) built; none of it is applied to staging yet (see docs/deployment/JOB-PULL-ROLLOUT.md).
 - Local normalized snapshot in the document volume; offline replay created no duplicates. JustPostedJobs collection stopped after 429.
 
 ## Verification

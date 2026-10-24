@@ -50,6 +50,52 @@ class LlmWorkerRelease(unittest.TestCase):
         self.client.update_function_configuration.assert_not_called()
 
 
+class JobPullRelease(unittest.TestCase):
+    def setUp(self):
+        self.client = Mock()
+        self.client.get_function.return_value = function(OLD, "r1")
+        self.client.get_function_configuration.return_value = {"RevisionId": "r2", "Environment": {"Variables": {"GREENHOUSE_BOARDS": "stripe"}}}
+        sdk = patch.object(release.boto3, "client", return_value=self.client)
+        sdk.start()
+        self.addCleanup(sdk.stop)
+        passwords = patch.object(release, "configure_password")
+        self.configure = passwords.start()
+        self.addCleanup(passwords.stop)
+
+    def run_pull(self, env):
+        names = ("DISCOVERY_FUNCTION", "IMPORT_FUNCTION", "ADZUNA_APP_ID", "ADZUNA_APP_KEY")
+        with patch.dict(release.os.environ, env, clear=False):
+            for name in names:
+                if name not in env:
+                    release.os.environ.pop(name, None)
+            with patch("builtins.print") as shown:
+                release.pull_jobs(NEW)
+        return shown
+
+    def test_nothing_happens_before_the_functions_exist(self):
+        self.run_pull({})
+        self.client.update_function_code.assert_not_called()
+        self.configure.assert_not_called()
+
+    def test_both_functions_get_the_image_and_only_the_importer_gets_the_database_password(self):
+        self.run_pull({"DISCOVERY_FUNCTION": "staging-discovery", "IMPORT_FUNCTION": "staging-import"})
+        self.configure.assert_called_once_with(self.client, "staging-import", "jobhunter_app")
+        self.assertEqual([call.kwargs["FunctionName"] for call in self.client.update_function_code.call_args_list],
+                         ["staging-import", "staging-discovery"])
+        self.client.update_function_code.assert_any_call(FunctionName="staging-discovery", ImageUri=NEW, RevisionId="r1")
+        self.client.update_function_configuration.assert_not_called()
+
+    def test_source_keys_are_added_to_the_discovery_function_only_and_never_printed(self):
+        shown = self.run_pull({"DISCOVERY_FUNCTION": "staging-discovery", "ADZUNA_APP_ID": "id123", "ADZUNA_APP_KEY": "key456"})
+        self.configure.assert_not_called()
+        self.client.update_function_configuration.assert_called_once_with(
+            FunctionName="staging-discovery", RevisionId="r2",
+            Environment={"Variables": {"GREENHOUSE_BOARDS": "stripe", "ADZUNA_APP_ID": "id123", "ADZUNA_APP_KEY": "key456"}})
+        printed = " ".join(str(call) for call in shown.call_args_list)
+        self.assertNotIn("id123", printed)
+        self.assertNotIn("key456", printed)
+
+
 class ReleaseRecovery(unittest.TestCase):
     def setUp(self):
         self.client = Mock()

@@ -117,6 +117,43 @@ def llm(image: str):
         print("LLM worker updated; LLM_API_KEY secret is not set, so its model key is unchanged")
 
 
+def pull_jobs(image: str):
+    """Update the two job-pull Lambdas (design brief 04) to the API image.
+
+    ``DISCOVERY_FUNCTION`` (outside the VPC, fetches the public job feeds) and ``IMPORT_FUNCTION`` (inside the VPC, writes
+    Aurora) run the same image as the API; each is skipped when its variable is unset, so a release before they exist is
+    unchanged. The import function also gets its own database password (the application role: the shared jobs table has no
+    row-level security). Optional source keys (Adzuna) come from GitHub secrets in this step's environment, never argv,
+    and are never printed. Like the other workers this runs after the API release: the migration has already run."""
+    client = boto3.client("lambda", config=Config(read_timeout=120, connect_timeout=10, retries={"total_max_attempts": 1}))
+    importer = os.environ.get("IMPORT_FUNCTION")
+    discovery = os.environ.get("DISCOVERY_FUNCTION")
+    if not importer and not discovery:
+        print("DISCOVERY_FUNCTION and IMPORT_FUNCTION are not set; the job pull is not deployed.")
+        return
+    if importer:
+        configure_password(client, importer, "jobhunter_app")
+        _update_code(client, importer, image)
+        print("Job import function updated")
+    if discovery:
+        _update_code(client, discovery, image)
+        keys = {name: os.environ[name] for name in ("ADZUNA_APP_ID", "ADZUNA_APP_KEY") if os.environ.get(name)}
+        if keys:
+            current = client.get_function_configuration(FunctionName=discovery)
+            variables = dict(current.get("Environment", {}).get("Variables", {}))
+            variables.update(keys)
+            client.update_function_configuration(FunctionName=discovery, RevisionId=current["RevisionId"],
+                                                 Environment={"Variables": variables})
+            client.get_waiter("function_updated_v2").wait(FunctionName=discovery)
+        print("Job discovery function updated" + ("; source keys set from secrets" if keys else ""))
+
+
+def _update_code(client, function, image):
+    current = client.get_function(FunctionName=function)
+    client.update_function_code(FunctionName=function, ImageUri=image, RevisionId=current["Configuration"]["RevisionId"])
+    client.get_waiter("function_updated_v2").wait(FunctionName=function)
+
+
 def verify_api():
     base = os.environ["VITE_API_BASE_URL"].rstrip("/")
     with urlopen(base + "/health", timeout=30) as response:
@@ -161,6 +198,7 @@ if __name__ == "__main__":
     parser.add_argument("--image")
     parser.add_argument("--embed-image", help="immutable digest of the embedding worker image (design brief 11)")
     parser.add_argument("--llm-image", help="immutable digest of the API image, reused for the LLM worker (design brief 12)")
+    parser.add_argument("--pull-image", help="immutable digest of the API image, reused for the job-pull functions (design brief 04)")
     parser.add_argument("--web", type=Path)
     args = parser.parse_args()
     if args.image:
@@ -175,5 +213,9 @@ if __name__ == "__main__":
         if "@sha256:" not in args.llm_image:
             parser.error("Use an immutable image digest")
         llm(args.llm_image)
+    if args.pull_image:
+        if "@sha256:" not in args.pull_image:
+            parser.error("Use an immutable image digest")
+        pull_jobs(args.pull_image)
     if args.web:
         frontend(args.web)

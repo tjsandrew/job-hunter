@@ -57,6 +57,19 @@ describe('Job Hunter user journey', () => {
     expect(await within(dialog).findByRole('button', { name: 'Check my fit' })).toBeDisabled();
   });
 
+  it('shows a posting once and names the other sites that list it', async () => {
+    const user = userEvent.setup();
+    const seen = [{ job_id: 'dup-1', source: 'mycareersfuture', source_board: 'sg', source_url: 'https://www.mycareersfuture.gov.sg/job/x' }, { job_id: 'dup-2', source: 'adzuna', source_board: 'sg', source_url: 'javascript:alert(1)' }];
+    mockApi.recommendations.mockResolvedValue({ items: [{ job: { id: 'role-seen', title: 'Data Engineer', company: 'Stripe', location: 'Singapore', source: 'greenhouse', source_board: 'stripe', source_url: 'https://boards.greenhouse.io/stripe/jobs/1', description: 'Build pipelines.', also_seen_on: seen }, reasons: [] }], total: 1, next_offset: null, degraded_mode: false });
+    render(<App />); await screen.findByText('Data Engineer');
+    expect(screen.getByText('Also on MyCareersFuture, Adzuna')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Read full description' }));
+    const dialog = screen.getByRole('dialog', { name: 'Data Engineer' });
+    expect(within(dialog).getByText('Also listed on MyCareersFuture, Adzuna')).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: /Also on MyCareersFuture/ })).toHaveAttribute('href', 'https://www.mycareersfuture.gov.sg/job/x');
+    expect(within(dialog).queryByRole('link', { name: /Also on Adzuna/ })).not.toBeInTheDocument();   // an unsafe link is never rendered
+  });
+
   it('searches the backend and loads later recommendation pages', async () => {
     const user = userEvent.setup(); render(<App />);
     await screen.findByText('Product Designer');

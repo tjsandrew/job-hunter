@@ -24,6 +24,12 @@ MYCAREERSFUTURE_API = "https://api.mycareersfuture.gov.sg/v2/jobs"
 # MyCareersFuture is one national board searched by keyword, so every listing is stored under one fixed
 # board: a job found by two keywords keeps the same (source, source_board, external_id) identity.
 MYCAREERSFUTURE_BOARD = "sg"
+# Adzuna is an aggregator searched by keyword in one country. Its description is only a short snippet of the posting, so it
+# ranks last when the same posting is on another source (ingestion/dedup.py). The keys come from the environment, never from
+# the configuration object, so they cannot appear in a log line, a snapshot or a failure report.
+ADZUNA_API = "https://api.adzuna.com/v1/api/jobs/sg/search"
+ADZUNA_BOARD = "sg"
+ADZUNA_MAX_PER_PAGE = 50
 USER_AGENT = "JobHunter-PoC/1.0 (public employer job-board reader)"
 
 # MyCareersFuture position levels -> seniority ladder keys (job_hunter.seniority). Only levels with a clear
@@ -47,18 +53,22 @@ class DiscoveryConfig:
     lever_boards: Sequence[str] = ()
     smartrecruiters_boards: Sequence[str] = ()
     mycareersfuture_searches: Sequence[str] = ()   # search keywords, each read like one board
+    adzuna_searches: Sequence[str] = ()            # search keywords; needs ADZUNA_APP_ID and ADZUNA_APP_KEY in the environment
     timeout_seconds: float = 10.0
     page_size: int = 100
     max_pages_per_board: int = 10
     max_records_per_board: int = 1000
     singapore_only: bool = False
     mycareersfuture_delay_seconds: float = 1.0     # pause between MyCareersFuture pages
+    adzuna_delay_seconds: float = 1.0              # pause between Adzuna pages
 
     def __post_init__(self) -> None:
         if not 0 < self.timeout_seconds <= 60:
             raise ValueError("timeout_seconds must be between 0 and 60")
         if not 0 <= self.mycareersfuture_delay_seconds <= 10:
             raise ValueError("mycareersfuture_delay_seconds must be between 0 and 10")
+        if not 0 <= self.adzuna_delay_seconds <= 10:
+            raise ValueError("adzuna_delay_seconds must be between 0 and 10")
         if not 1 <= self.page_size <= 100:
             raise ValueError("page_size must be between 1 and 100")
         if not 1 <= self.max_pages_per_board <= 10:
@@ -328,6 +338,25 @@ def _normalise(
             # Ladder keys, read by import_jobs as the source-stated level; None leaves it to the title.
             "stated_seniority": list(dict.fromkeys(levels)) or None,
         }
+    elif source == "adzuna":
+        external_id = raw.get("id")
+        company = raw.get("company") or {}
+        employer = company.get("display_name") if isinstance(company, Mapping) else None
+        place = raw.get("location") or {}
+        location = place.get("display_name") if isinstance(place, Mapping) else None
+        title = raw.get("title")
+        url = raw.get("redirect_url")
+        description = raw.get("description")      # a snippet, not the full posting
+        work_mode = None
+        posted_at = _iso_datetime(raw.get("created"))
+        expires_at = None
+        # Adzuna fills the salary with its own estimate when the employer gave none (salary_is_predicted == "1"): an estimate
+        # is not what the posting says, so it is not stored. Stated salaries are yearly.
+        predicted = str(raw.get("salary_is_predicted") or "0") not in {"0", ""}
+        salary_min = None if predicted else raw.get("salary_min")
+        salary_max = None if predicted else raw.get("salary_max")
+        salary_currency = "SGD" if salary_min is not None or salary_max is not None else None
+        salary_period = "year" if salary_currency else None
     else:
         external_id = raw.get("id")
         company = raw.get("company") or {}
@@ -521,6 +550,52 @@ def _discover_mycareersfuture(keyword: str, config: DiscoveryConfig) -> tuple[li
     return result, truncated
 
 
+def _discover_adzuna(keyword: str, config: DiscoveryConfig) -> tuple[list[dict[str, Any]], bool]:
+    """Page through one Adzuna keyword search for Singapore, pausing between pages."""
+    app_id, app_key = os.getenv("ADZUNA_APP_ID", ""), os.getenv("ADZUNA_APP_KEY", "")
+    if not app_id or not app_key:
+        raise ProviderRequestError("adzuna", "missing_credentials", "ADZUNA_APP_ID and ADZUNA_APP_KEY are not set")
+    result: list[dict[str, Any]] = []
+    truncated = False
+    per_page = min(config.page_size, ADZUNA_MAX_PER_PAGE, config.max_records_per_board)
+    total: int | None = None
+    for page in range(1, config.max_pages_per_board + 1):      # Adzuna pages start at 1
+        remaining = config.max_records_per_board - len(result)
+        if remaining <= 0:
+            truncated = True
+            break
+        if page > 1:
+            time.sleep(config.adzuna_delay_seconds)
+        query = urlencode({"app_id": app_id, "app_key": app_key, "what": keyword, "results_per_page": per_page,
+                           "sort_by": "date", "content-type": "application/json"})
+        payload = _fetch_json(f"{ADZUNA_API}/{page}?{query}", config.timeout_seconds, "adzuna")
+        if not isinstance(payload, Mapping) or not isinstance(payload.get("results"), list):
+            raise ProviderRequestError("adzuna", "invalid_schema", "expected object with results[]")
+        try:
+            total = int(payload.get("count"))
+        except (TypeError, ValueError):
+            total = None
+        fetched_at = _now_utc()
+        raw_jobs = payload["results"]
+        page_jobs = [
+            normalized
+            for raw in raw_jobs
+            if isinstance(raw, Mapping)
+            if (normalized := _normalise(source="adzuna", board=ADZUNA_BOARD, raw=raw, fetched_at=fetched_at))
+        ]
+        result.extend(page_jobs[:remaining])
+        if len(page_jobs) > remaining:
+            truncated = True
+            break
+        if len(raw_jobs) < per_page or (total is not None and page * per_page >= total):
+            break
+        if page == config.max_pages_per_board:
+            truncated = True
+    if config.singapore_only:
+        result = [job for job in result if _is_singapore(job)]
+    return result, truncated
+
+
 def discover_report(config: DiscoveryConfig) -> DiscoveryReport:
     """Fetch configured boards; isolate a failed board from successful boards."""
     report = DiscoveryReport()
@@ -529,6 +604,7 @@ def discover_report(config: DiscoveryConfig) -> DiscoveryReport:
         ("lever", config.lever_boards, _discover_lever),
         ("smartrecruiters", config.smartrecruiters_boards, _discover_smartrecruiters),
         ("mycareersfuture", config.mycareersfuture_searches, _discover_mycareersfuture),
+        ("adzuna", config.adzuna_searches, _discover_adzuna),
     ]
     # Keyword searches overlap (one listing can match "data analyst" and "data engineer"); keep the first copy.
     seen: set[str] = set()
@@ -571,11 +647,13 @@ def _config_from_env(args: argparse.Namespace) -> DiscoveryConfig:
     lever = args.lever or [v.strip() for v in os.getenv("LEVER_BOARDS", "").split(",") if v.strip()]
     smartrecruiters = args.smartrecruiters or [v.strip() for v in os.getenv("SMARTRECRUITERS_BOARDS", "").split(",") if v.strip()]
     mycareersfuture = args.mycareersfuture or [v.strip() for v in os.getenv("MYCAREERSFUTURE_SEARCHES", "").split(",") if v.strip()]
+    adzuna = args.adzuna or [v.strip() for v in os.getenv("ADZUNA_SEARCHES", "").split(",") if v.strip()]
     return DiscoveryConfig(
         greenhouse_boards=greenhouse,
         lever_boards=lever,
         smartrecruiters_boards=smartrecruiters,
         mycareersfuture_searches=mycareersfuture,
+        adzuna_searches=adzuna,
         timeout_seconds=args.timeout,
         page_size=args.page_size,
         max_pages_per_board=args.max_pages,
@@ -590,6 +668,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--lever", action="append", default=[], help="Lever public site token (repeatable)")
     parser.add_argument("--smartrecruiters", action="append", default=[], help="SmartRecruiters public company identifier (repeatable)")
     parser.add_argument("--mycareersfuture", action="append", default=[], help="MyCareersFuture search keyword (repeatable)")
+    parser.add_argument("--adzuna", action="append", default=[], help="Adzuna search keyword (repeatable; needs ADZUNA_APP_ID and ADZUNA_APP_KEY)")
     parser.add_argument("--singapore-only", action="store_true")
     parser.add_argument("--timeout", type=float, default=10.0)
     parser.add_argument("--page-size", type=int, default=100)
@@ -599,8 +678,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     config = _config_from_env(args)
     if not (config.greenhouse_boards or config.lever_boards or config.smartrecruiters_boards
-            or config.mycareersfuture_searches):
-        parser.error("configure a public board with --greenhouse, --lever, --smartrecruiters, or --mycareersfuture")
+            or config.mycareersfuture_searches or config.adzuna_searches):
+        parser.error("configure a public board with --greenhouse, --lever, --smartrecruiters, --mycareersfuture, or --adzuna")
     report = discover_report(config)
     print(json.dumps({
         "fetched_at": _now_utc(),

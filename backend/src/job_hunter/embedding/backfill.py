@@ -39,7 +39,7 @@ from .profile_sync import NO_CONFIRMED_PROFILE, embed_user_profile
 def backfill_jobs(session: Session, embedder, *, batch_size: int = 32, limit: int | None = None,
                   force: bool = False, log: Callable[[str], None] = lambda message: None) -> Counter:
     """Embed open jobs in batches; returns a count per outcome status."""
-    query = select(Job).where(Job.status == "open").order_by(Job.id)
+    query = select(Job).where(Job.status == "open", Job.canonical_job_id.is_(None)).order_by(Job.id)   # duplicates need no vector
     if limit:
         query = query.limit(limit)
     jobs = list(session.scalars(query))

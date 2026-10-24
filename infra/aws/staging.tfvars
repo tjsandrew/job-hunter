@@ -20,3 +20,7 @@ for_you_enabled = "1"
 # Shared LLM worker for fit analysis and the AI resume rewrite (docs/design/12-FIT-ANALYSIS.md). The key comes from the GitHub
 # secret LLM_API_KEY at release time. Never apply without this line: the worker would be removed.
 llm_worker_enabled = true
+
+# Job pull (docs/design/04-JOB-INGESTION.md): two Lambdas that load a few new public job postings into Aurora when the Pull jobs
+# GitHub workflow runs. No schedule (each run wakes Aurora). Never apply without this line: the functions would be removed.
+discovery_enabled = true

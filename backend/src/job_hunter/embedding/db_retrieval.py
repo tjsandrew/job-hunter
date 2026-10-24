@@ -57,6 +57,8 @@ def load_job_candidates(session: Session, *, model: str, text_version: str = JOB
                         ) -> list[tuple[dict[str, Any], RetrievalCandidate]]:
     """Every job with a ready vector for this model and text version, with its eligibility fields.
 
+    A duplicate of another source's posting (``jobs.canonical_job_id`` set) is left out: users see the canonical row.
+
     A job's role family and seniority are read from the job row (``jobs.category``, ``jobs.seniority``), where
     ingestion put them. An empty, unknown or not-yet-classified value counts as unknown / open to all levels, so
     it never blocks a job."""
@@ -66,7 +68,7 @@ def load_job_candidates(session: Session, *, model: str, text_version: str = JOB
                job_embeddings.c.embedding)
         .join(job_embeddings, job_embeddings.c.job_id == Job.id)
         .where(job_embeddings.c.text_version == text_version, job_embeddings.c.status == STATUS_READY,
-               job_embeddings.c.model == model)).all()
+               job_embeddings.c.model == model, Job.canonical_job_id.is_(None))).all()
     loaded = []
     for (job_id, title, company, location, work_mode, status, category, seniority, salary_min, salary_max,
          salary_currency, salary_period, embedding) in rows:

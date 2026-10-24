@@ -27,6 +27,9 @@ jobs:
       EMBED_FUNCTION: ${{ vars.EMBED_FUNCTION }}
       # The shared LLM worker: fit analysis and resume rewrite (docs/design/12-FIT-ANALYSIS.md). Unset means the step is skipped.
       LLM_FUNCTION: ${{ vars.LLM_FUNCTION }}
+      # The job pull: discovery outside the VPC and import inside it (docs/design/04-JOB-INGESTION.md). Unset means the step is skipped.
+      DISCOVERY_FUNCTION: ${{ vars.DISCOVERY_FUNCTION }}
+      IMPORT_FUNCTION: ${{ vars.IMPORT_FUNCTION }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -101,7 +104,7 @@ jobs:
           IMAGE_TAG: ${{ vars.ECR_REPOSITORY }}:${{ github.run_id }}-${{ github.run_attempt }}
         run: >-
           docker run --rm --entrypoint python "$IMAGE_TAG"
-          -c 'from pathlib import Path; from job_hunter.adapters.aws_config import RDS_CA; from job_hunter.api.lambda_handler import handler; from job_hunter.migrate_aws import handler as migrate; from job_hunter.llm_worker import handler as llm_worker; from job_hunter.preparation import rendering; assert Path(RDS_CA).is_file(); assert list(Path(rendering.__file__).parent.glob("fonts/*.ttf"))'
+          -c 'from pathlib import Path; from job_hunter.adapters.aws_config import RDS_CA; from job_hunter.api.lambda_handler import handler; from job_hunter.migrate_aws import handler as migrate; from job_hunter.llm_worker import handler as llm_worker; from job_hunter.discovery_worker import handler as discovery_worker; from job_hunter.import_worker import handler as import_worker; from job_hunter.preparation import rendering; assert Path(RDS_CA).is_file(); assert list(Path(rendering.__file__).parent.glob("fonts/*.ttf"))'
       - name: Record immutable image for infrastructure bootstrap
         if: env.ECR_REPOSITORY != ''
         env:
@@ -151,5 +154,13 @@ jobs:
           # Repository secret: Settings > Secrets and variables > Actions > New repository secret. Masked in logs.
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
         run: python scripts/deploy_aws.py --llm-image "$ECR_REPOSITORY@$IMAGE_DIGEST"
+      - name: Deploy the job pull functions
+        if: (env.DISCOVERY_FUNCTION != '' || env.IMPORT_FUNCTION != '') && env.ECR_REPOSITORY != ''
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          # Optional source keys (Adzuna), repository secrets. Masked in logs; an unset secret leaves the function's key unchanged.
+          ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
+          ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
+        run: python scripts/deploy_aws.py --pull-image "$ECR_REPOSITORY@$IMAGE_DIGEST"
       - name: Deploy tested website to Amplify
         run: python scripts/deploy_aws.py --web apps/web/dist

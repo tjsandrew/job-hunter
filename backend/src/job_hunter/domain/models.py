@@ -95,6 +95,12 @@ class Job(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     embedding: Mapped[list[float] | None] = mapped_column(Vector(512))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    # Cross-source de-duplication (job_hunter/ingestion/dedup.py). Each source keeps its own row; rows that are the same posting are
+    # linked. canonical_job_id is NULL on the row users see and the canonical row's id on its duplicates; also_seen_on lists, on
+    # the canonical row, the other sources of the same posting; match_key is normalised employer + title + location.
+    canonical_job_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("jobs.id", ondelete="SET NULL"), index=True)
+    match_key: Mapped[str | None] = mapped_column(String(500), index=True)
+    also_seen_on: Mapped[list | None] = mapped_column(JSON)
 
 
 class JobReview(Base):

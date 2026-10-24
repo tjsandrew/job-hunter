@@ -15,7 +15,7 @@ Job Hunter helps job seekers in Singapore discover openings, shortlist them agai
 - Application tracker with an attached reviewed resume PDF and cover letter
 - Sign-in with Amazon Cognito in the deployed app; free and premium plans with a monthly AI allowance (5 or 50 jobs per Singapore month, one use per job shared by fit analysis and AI tailoring)
 
-Not built: AI cover-letter generation, swipe gestures (Save and Pass are buttons), cross-source duplicate detection, scheduled job discovery in the cloud, payments. The full list and its gaps are in [docs/status/FEATURES.md](docs/status/FEATURES.md) and [docs/status/PENDING.md](docs/status/PENDING.md).
+Built, waiting for the next Terraform apply and deploy: the job pull (GitHub Actions "Pull jobs" loads 10 new public postings into staging) and cross-source duplicate detection (see [docs/deployment/JOB-PULL-ROLLOUT.md](docs/deployment/JOB-PULL-ROLLOUT.md)). Not built: AI cover-letter generation, swipe gestures (Save and Pass are buttons), a job schedule that is switched on by default, payments. The full list and its gaps are in [docs/status/FEATURES.md](docs/status/FEATURES.md) and [docs/status/PENDING.md](docs/status/PENDING.md).
 
 Fit analysis and the AI resume rewrite use the school's SoCLaaS model gateway (`gemma4:26b`). Locally it runs inside the API process (`MODEL_BACKEND=hosted` plus `LLM_*` settings in a git-ignored `.env`, see `.env.example`). In AWS the API writes a request file to S3 and the shared LLM worker Lambda outside the VPC calls the model. Locally the fit button stays disabled until a model is configured; in AWS it is enabled whenever the S3 worker route is configured, even if the worker has no key yet.
 
@@ -96,7 +96,7 @@ GitHub Actions runs the same checks on every push and pull request ([.github/wor
 
 The staging stack is defined in Terraform (`infra/aws`) and released by GitHub Actions. **Merging to `main` does not deploy**: run **Actions → Deploy staging → Run workflow** on `main`. Terraform changes are applied by hand by an operator with AWS access; CI only validates them.
 
-What runs in `ap-southeast-1`: Amplify Hosting (React build), Cognito (invite-only sign-in), API Gateway HTTP API with a JWT authorizer, the API as a container-image Lambda in a VPC, Aurora PostgreSQL Serverless v2 (0–1 ACU, auto-pause, row-level security), a private S3 documents bucket, an S3 → SQS → Lambda embedding worker, and the shared LLM worker Lambda (fit analysis, AI resume rewrite) outside the VPC. There is no NAT gateway, ALB, Fargate, EventBridge schedule or Bedrock: the proposal's design was replaced by this serverless one. The architecture page is [docs/architecture/aws-overview.html](docs/architecture/aws-overview.html).
+What runs in `ap-southeast-1`: Amplify Hosting (React build), Cognito (invite-only sign-in), API Gateway HTTP API with a JWT authorizer, the API as a container-image Lambda in a VPC, Aurora PostgreSQL Serverless v2 (0–1 ACU, auto-pause, row-level security), a private S3 documents bucket, an S3 → SQS → Lambda embedding worker, and the shared LLM worker Lambda (fit analysis, AI resume rewrite) outside the VPC. The job pull adds a Discovery Lambda outside the VPC and an Import Lambda inside it (an EventBridge schedule exists but is off). There is no NAT gateway, ALB, Fargate or Bedrock: the proposal's design was replaced by this serverless one. The architecture page is [docs/architecture/aws-overview.html](docs/architecture/aws-overview.html).
 
 Start here:
 
