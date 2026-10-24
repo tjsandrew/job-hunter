@@ -13,6 +13,7 @@ Job Hunter helps job seekers in Singapore discover openings, shortlist them agai
 - Resume Studio: structured editor, autosave, undo/redo, two templates, build from the profile bank, server-rendered PDF export
 - Resume tailoring: a rule-based reorder (always available) and an optional AI rewrite
 - Application tracker with an attached reviewed resume PDF and cover letter
+- Every page, job list, opened listing and resume has its own address (`/discover/saved`, `/jobs/<id>`, `/resumes/<id>`, ...), so a refresh, the Back button and a pasted link land where you were; signing in returns you to the page you opened (`apps/web/src/routes.ts`)
 - Sign-in with Amazon Cognito in the deployed app; free and premium plans with a monthly AI allowance (5 or 50 jobs per Singapore month, one use per job shared by fit analysis and AI tailoring)
 
 Built, waiting for the next Terraform apply and deploy: the job pull (GitHub Actions "Pull jobs" loads 10 new public postings into staging) and cross-source duplicate detection (see [docs/deployment/JOB-PULL-ROLLOUT.md](docs/deployment/JOB-PULL-ROLLOUT.md)). Not built: AI cover-letter generation, swipe gestures (Save and Pass are buttons), a job schedule that is switched on by default, payments. The full list and its gaps are in [docs/status/FEATURES.md](docs/status/FEATURES.md) and [docs/status/PENDING.md](docs/status/PENDING.md).
