@@ -1,5 +1,7 @@
 # Local POC to AWS: required portability contract
 
+> **Note (24 October 2026):** the AWS milestone has started and a staging deployment is live ([README.md](README.md)). The portability rules below still apply to the code; the service mapping is the original proposal and differs from what was deployed (Aurora Serverless v2 for RDS, Amplify for CloudFront, Terraform for CDK, no Bedrock).
+
 **Current delivery scope:** [local application first; AWS-native services later](DELIVERY-SCOPE.md). This staging rule overrides earlier cloud requirements for the local milestone.
 
 Recorded 4 October 2026 at the user's request. This is a requirement for the local implementation, not a future optional enhancement. Read alongside [README](../design/README.md), [shared contracts](../design/CONTRACTS.md) and the relevant component brief.

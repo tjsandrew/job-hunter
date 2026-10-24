@@ -2,6 +2,8 @@
 
 Updated 5 October 2026 (Singapore).
 
+> **Historical checkpoint.** This page records the local proof of concept as it was on 5 October. Since then the profile bank and import, Cognito sign-in, the staging deployment on AWS, semantic "For you", job fit analysis and a monthly AI allowance were added. For the current state read [PENDING.md](PENDING.md), [FEATURES.md](FEATURES.md) and the [deployment guide](../deployment/README.md). Where the lines below say no AWS infrastructure exists, that was true on 5 October only.
+
 ## Implemented
 
 - Private repository: https://github.com/tjsandrew/job-hunter. Source, tests and notes belong here; private files and data volumes are excluded.

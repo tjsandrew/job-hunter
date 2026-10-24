@@ -1,6 +1,8 @@
 # Local POC → AWS deployment handoff
 
-Updated 5 October 2026. **No AWS deployment has been performed.** This is an implementation inventory and deployment plan, not evidence that cloud components exist. Read with [Lambda notes](LAMBDA-NOTES.md), [delivery scope](DELIVERY-SCOPE.md), [shared contracts](../design/CONTRACTS.md), [portability rules](LOCAL-TO-AWS.md) and [current outstanding work](../status/PENDING.md).
+> **Historical plan, superseded on 21 October 2026.** The team deployed a different, serverless design: Amplify, Cognito, API Gateway + Lambda, Aurora Serverless v2, S3, Terraform (not CDK), no NAT gateway, CloudFront, EventBridge or Bedrock. For what actually runs, read [README.md](README.md) in this folder; the table and sequence below are the original 5 October proposal and are kept as design history.
+
+Updated 5 October 2026. **At that date no AWS deployment had been performed.** This is an implementation inventory and deployment plan, not evidence that cloud components exist. Read with [Lambda notes](LAMBDA-NOTES.md), [delivery scope](DELIVERY-SCOPE.md), [shared contracts](../design/CONTRACTS.md), [portability rules](LOCAL-TO-AWS.md) and [current outstanding work](../status/PENDING.md).
 ## What can be reused, and what still needs building
 
 | Component | Actually built locally | Cloud destination | Work still required |

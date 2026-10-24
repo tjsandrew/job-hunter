@@ -1,5 +1,7 @@
 # Delivery scope: local application first, AWS-native services later
 
+> **Note (24 October 2026):** this staging rule governed the local milestone, which is complete. The "defer to the AWS milestone" column is now partly built: Cognito, API Gateway and Lambda, Aurora, S3 and the embedding worker are deployed to staging. See [README.md](README.md) for the current state.
+
 **Resume editor requirement:** [09-RESUME-EDITOR.md](../design/09-RESUME-EDITOR.md) adds a core local resume editor, manual resume creation, template/layout controls, preview, autosave and PDF export. Its document/API extensions supersede assumptions that every resume requires AI generation or a job.
 
 This staging decision reflects the user's latest direction: preserve AWS portability while avoiding time spent recreating cloud services locally. It takes precedence over earlier wording that requires cloud adapters, infrastructure or distributed-delivery machinery during the local milestone. The AWS design remains the eventual target, not a prerequisite for local development.

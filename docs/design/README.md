@@ -2,7 +2,9 @@
 
 **Current delivery scope:** [local application first; AWS-native services later](../deployment/DELIVERY-SCOPE.md). This staging rule overrides earlier cloud requirements for the local milestone.
 
-Prepared 4 October 2026. This is the target design, not an implementation checklist marked complete. A local application now exists; see [current status and gaps](../status/PENDING.md) and [component handoffs](../status/00-progress.md). No AWS deployment has been performed.
+Prepared 4 October 2026. This is the target design, not an implementation checklist marked complete. A local application now exists; see [current status and gaps](../status/PENDING.md) and [component handoffs](../status/00-progress.md).
+
+> **Deployment decisions changed (24 October 2026).** A staging deployment is live ([deployment guide](../deployment/README.md)). It uses Terraform (not CDK), API Gateway + Lambda, Aurora Serverless v2, Amplify, Cognito and no NAT gateway, and fit analysis uses the SoCLaaS model gateway because Bedrock is blocked by the university account policy. The "Target AWS architecture", technology-default and NAT sections below are the original proposal; where they disagree with the deployment guide, the deployment guide is correct. Fit analysis is specified in [brief 12](12-FIT-ANALYSIS.md).
 
 **Cloud implementation handoff:** [current local inventory, remaining AWS work and per-component deployment steps](../deployment/CLOUD-DEPLOYMENT-HANDOFF.md).
 
