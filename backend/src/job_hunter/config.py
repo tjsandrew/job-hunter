@@ -11,9 +11,16 @@ class Settings(BaseSettings):
     pdf_storage_dir: str = "./data/exports"
     cors_origins: str = "http://localhost:5173"
     migration_database_url: str | None = None
-    model_backend: Literal["heuristic", "fake", "ollama", "bedrock"] = "heuristic"
+    model_backend: Literal["heuristic", "fake", "ollama", "llamacpp", "hosted", "bedrock"] = "heuristic"
     ollama_url: str = "http://host.docker.internal:11434"
     ollama_model: str = "llama3.2"
+    llm_model_path: str = "/models/model.gguf"  # GGUF file baked into the LLM Lambda image (backend "llamacpp")
+    llm_timeout_seconds: int = 600
+    llm_base_url: str = ""   # backend "hosted": e.g. https://api.groq.com/openai/v1
+    llm_api_key: str = ""    # backend "hosted": from the environment or a secret store, never committed
+    llm_model: str = ""
+    llm_reasoning_effort: str = ""   # backend "hosted": "none" for reasoning models such as the SoCLaaS gemma/qwen ones
+    fit_backend: Literal["inline", "s3"] = "inline"   # "inline" calls the model in this process; "s3" hands the work to the fit-worker Lambda
     storage_backend: Literal["local", "s3"] = "local"
     document_bucket: str = ""
     database_auth: Literal["password", "iam"] = "password"
@@ -38,6 +45,8 @@ if settings.auth_mode == "cognito" and not (settings.cognito_issuer and settings
     raise RuntimeError("Cognito issuer and client ID are required")
 if settings.storage_backend == "s3" and not settings.document_bucket:
     raise RuntimeError("DOCUMENT_BUCKET is required for S3 storage")
+if settings.fit_backend == "s3" and not settings.document_bucket:
+    raise RuntimeError("DOCUMENT_BUCKET is required when FIT_BACKEND=s3")
 if settings.database_auth == "iam" and not (settings.database_host and settings.database_username):
     raise RuntimeError("IAM database authentication requires host and username")
 if settings.app_env == "aws" and not (settings.auth_mode == "cognito" and settings.storage_backend == "s3" and settings.database_host and settings.database_username):

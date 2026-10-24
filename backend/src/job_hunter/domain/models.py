@@ -162,6 +162,32 @@ class AiTailorUse(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
+class JobRequirements(Base):
+    """The requirements read from a posting by the language model; shared by every user and reused while the posting is unchanged."""
+    __tablename__ = "job_requirements"
+    job_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True)
+    input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    model: Mapped[str] = mapped_column(String(120), nullable=False)
+    requirements: Mapped[list] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class FitAnalysis(Base):
+    """A user's latest fit analysis of one job. ``result`` is set once the app has checked the model's answer."""
+    __tablename__ = "fit_analyses"
+    __table_args__ = (UniqueConstraint("user_id", "job_id", name="uq_fit_analysis_user_job"),)
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    job_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
+    profile_revision: Mapped[int | None] = mapped_column(Integer)
+    result: Mapped[dict | None] = mapped_column(JSONB)
+    error_code: Mapped[str | None] = mapped_column(String(60))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class Upload(Base):
     __tablename__ = "uploads"
     __table_args__ = (UniqueConstraint("id", "user_id", name="uq_upload_id_user"),)

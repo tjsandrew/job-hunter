@@ -11,7 +11,7 @@ export type Recommendation = { job: Job; score?: number | null; reasons?: string
 export type ResumePacket = { export_id: string; document_id: string; title: string; revision: number; download_url: string };
 export type Application = { id: string; job_id: string; status: string; notes: string; applied_at: string | null; revision: number; job?: Job; resume_packet?: ResumePacket | null; cover_letter_text?: string | null; packet_updated_at?: string | null };
 export type ProfileDraft = Record<string, unknown>;
-export type Me = { user_id: string; display_name: string; plan: string; allowance: { limit: number; used: number; remaining: number; period: string; enabled?: boolean }; ai_available: boolean };
+export type Me = { user_id: string; display_name: string; plan: string; allowance: { limit: number; used: number; remaining: number; period: string; enabled?: boolean }; ai_available: boolean; fit_available?: boolean };
 export type ApiError = Error & { status?: number; code?: string };
 
 export type ItemKind = 'experience' | 'education' | 'project' | 'skill' | 'certification' | 'award' | 'volunteering' | 'custom';
@@ -36,3 +36,14 @@ export type ImportDecision = { candidate_id: string; action: 'add' | 'merge' | '
 export type ImportResult = { import_id: string; bank_revision: number; counts: {added: number; merged: number; skipped: number; basics_updated: number}; conflicts: {candidate_id: string; fields: Record<string, {existing: unknown; incoming: unknown}>}[] };
 export type ProfileImport = { id: string; source_type: 'upload' | 'document' | 'json_resume' | 'text'; status: 'pending' | 'ready' | 'failed' | 'applied' | 'discarded'; parser: string; profile_epoch: number; input_ref: {sha256: string; upload_id?: string; document_id?: string; document_revision?: number}; candidates: ImportCandidate[]; error_code: string | null; created_at: string; applied_at: string | null; review_revision?: number; result: ImportResult | {message: string} | null };
 export type ImportSource = {upload_id: string} | {document_id: string} | {json_resume: Record<string,unknown>} | {text: string};
+
+export type FitVerdict = 'met' | 'partly' | 'not_evidenced' | 'needs_judgement';
+export type FitResult = {
+  requirements: { text: string; importance: 'must' | 'nice' }[];
+  verdicts: { verdict: FitVerdict; evidence: string[]; note: string; answered?: boolean }[];
+  suggestions: { kind: 'emphasise' | 'reword' | 'add'; requirement: number | null; bullet_id: string | null; text: string }[];
+  coverage: { percent: number | null; met: number; partly: number; considered: number; needs_judgement: number; unanswered: number; basis: string };
+  evidence: Record<string, string>;
+  model: string;
+};
+export type FitAnalysis = { id: string; job_id: string; status: 'pending' | 'ready' | 'failed'; error_code: string | null; profile_revision: number | null; stale: boolean; result: FitResult | null; created_at: string; completed_at: string | null };

@@ -579,6 +579,26 @@ def test_ai_tailoring_needs_a_configured_model(tailor_jobs, monkeypatch):
     assert response.status_code == 503 and response.json()["error"]["code"] == "AI_NOT_CONFIGURED"
 
 
+def test_ai_slots_renew_each_month(tailor_jobs, isolated_users, monkeypatch):
+    class Reword:
+        def rewrite(self, entries, job):
+            return [[bullet.replace("Ran", "Organised") for bullet in bullets] for bullets in entries]
+    monkeypatch.setattr("job_hunter.preparation.ai_tailoring.build_model", lambda: Reword())
+    engine, user_ids = isolated_users
+    source = client.post("/v1/documents", headers=ALICE, json={"title": "Base", "content": CONTENT_FOR_TAILOR}).json()
+    for job_id in tailor_jobs[:5]:
+        assert tailor(source, job_id, mode="ai").status_code == 201
+    assert client.get("/v1/me", headers=ALICE).json()["allowance"]["remaining"] == 0
+    with Session(engine) as db, db.begin():
+        db.execute(text("SELECT set_config('app.user_id', :uid, true)"), {"uid": str(user_ids["alice"])})
+        db.execute(text("UPDATE ai_tailor_uses SET created_at = now() - interval '40 days' WHERE user_id=:uid"),
+                   {"uid": user_ids["alice"]})
+    allowance = client.get("/v1/me", headers=ALICE).json()["allowance"]
+    assert allowance["used"] == 0 and allowance["remaining"] == 5
+    assert tailor(source, tailor_jobs[0], mode="ai").status_code == 201  # last month's row is reused, not duplicated
+    assert client.get("/v1/me", headers=ALICE).json()["allowance"]["used"] == 1
+
+
 def test_ai_tailoring_allows_five_jobs_in_total(tailor_jobs, monkeypatch):
     class Reword:
         def rewrite(self, entries, job):

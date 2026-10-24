@@ -12,7 +12,7 @@ Read [README](README.md) and [contracts](CONTRACTS.md). Own `preparation/` and p
 
 Inputs always pin `profile_version_id`, `job_version_id`, model/prompt/schema versions and user ownership. Reject unconfirmed profiles and unready job versions with actionable errors. Keep personal outputs private.
 
-Fit analysis contains `strengths`, `gaps`, `uncertain_requirements`, and `requested_documents`. Each item includes job requirement evidence and supporting profile fact IDs where present. Phrase missing evidence as “not evidenced in this profile”, not an assertion that the person lacks the skill. Do not output hiring probabilities or a fabricated competitiveness percentage.
+Fit analysis contains `strengths`, `gaps`, `uncertain_requirements`, and `requested_documents`. Each item includes job requirement evidence and supporting profile fact IDs where present. Phrase missing evidence as “not evidenced in this profile”, not an assertion that the person lacks the skill. Do not output hiring probabilities, raw similarity percentages or a fabricated competitiveness percentage. A **requirements-coverage percentage** is allowed when the application computes it itself from checked verdicts and labels what it measures (see 12).
 
 Resume draft contains sections and grounded bullet objects: `{text, source_fact_ids}`. Cover letter contains editable paragraphs with supporting fact IDs. Preserve actual names/employers/dates/qualifications. Prompts may reorder, select and rephrase facts, but may not invent numbers, experience or credentials. Only include application-document requirements actually stated in the listing; clearly separate optional suggestions.
 

@@ -28,6 +28,7 @@ Read this file and [shared contracts](CONTRACTS.md) before implementing a compon
 | [08 Integration and evaluation](08-INTEGRATION-AND-EVALUATION.md) | End-to-end tests, load tests, user evaluation, cost comparison | Runs incrementally; final evidence needs 01–07 |
 | [09 Resume editor](09-RESUME-EDITOR.md) | Resume-focused editing, templates, live preview and PDF export | 02, 06, 07; works without AI or AWS |
 | [11 Embedding worker (AWS)](11-EMBEDDING-WORKER.md) | How jobs and profiles are embedded in the deployed environment: S3 flag, SQS, dedicated Lambda, cost rationale and when to switch to a direct SQS send | 01, 02, 05; local Compose is unchanged |
+| [12 Fit analysis](12-FIT-ANALYSIS.md) | Per-job requirements coverage: extraction, grounded verdicts, coverage computed in code, SoCLaaS model, S3 worker outside the VPC, monthly allowance. |
 
 ## 2. Product commitments and POC interpretation
 
@@ -38,7 +39,7 @@ Read this file and [shared contracts](CONTRACTS.md) before implementing a compon
 | Resume, experience and preferences | Private upload, editable structured profile, user-confirmed immutable versions and preferences. |
 | Keyword and semantic recommendations | Deterministic filters plus a documented hybrid ranking baseline; no LLM request for each swipe. |
 | Swipe-based review and shortlist | Swipe interactions with equivalent visible buttons and keyboard access. |
-| AI fit/gap analysis | Evidence-linked alignment and missing evidence, not a calibrated probability of getting hired. |
+| AI fit/gap analysis | Evidence-linked alignment and missing evidence, plus a requirements-coverage percentage computed in code; never a probability of getting hired. See 12. |
 | Tailored resumes and cover letters, editable before use | A real resume editor with section/content editing, templates, live preview, user review and PDF export; preserve source facts. See 09. |
 | Application tracking | Per-user status, notes, source application link and timestamps. User submits externally. |
 | Freemium; five AI-assisted jobs/month on free tier | Enforced configurable monthly distinct-job allowance; seeded premium entitlement for demonstration. Real payment collection is deferred. |

@@ -28,13 +28,14 @@ from job_hunter.domain.models import (User, Profile, Preference, Job, JobReview,
 from job_hunter.domain.models import Base
 from job_hunter.adapters.database import engine
 from job_hunter.preparation.rendering import pdf_bytes
-from job_hunter.preparation import ai_tailoring
+from job_hunter.preparation import ai_tailoring, allowance
 from job_hunter.preparation.tailoring import tailor
 from job_hunter.profile_bank import services as bank_services
 from job_hunter.profile_bank.services import BankError
 from job_hunter.api.profile_bank import build_router
 from job_hunter.api.document_checks import check_bank_fields
 from job_hunter.api.resume_build import build_router as build_resume_router
+from job_hunter.api import fit_analysis
 from job_hunter.profile_bank.build import blank_document_parts
 from job_hunter.profile_bank.importing import ImportFailure
 from job_hunter.profile_bank.importing.docx import CONTENT_TYPES, declared_file_problem, detect_resume_file, extract_docx
@@ -248,17 +249,18 @@ def health():
     return {"status": "ok"}
 
 def ai_uses(db: Session, user_id: UUID) -> int:
-    return db.scalar(select(func.count()).select_from(AiTailorUse).where(AiTailorUse.user_id == user_id))
+    return allowance.uses(db, user_id)
 
 @app.get("/v1/me")
 def me(db: Session = Depends(db_for, scope="function")):
     user = current_user(db)
     used = ai_uses(db, user.id)
+    limit = allowance.limit_for(user.plan)
     available = ai_tailoring.build_model() is not None
     return {"user_id": str(user.id), "display_name": user.display_name, "plan": user.plan,
-            "allowance": {"limit": ai_tailoring.LIMIT, "used": used, "remaining": max(ai_tailoring.LIMIT - used, 0),
-                          "period": "lifetime", "enabled": available},
-            "ai_available": available,
+            "allowance": {"limit": limit, "used": used, "remaining": max(limit - used, 0),
+                          "period": allowance.month_label(), "enabled": available},
+            "ai_available": available, "fit_available": fit_analysis.available(),
             "ai_status": "AI tailoring is ready" if available else "No AI model is configured"}
 
 @app.exception_handler(BankError)
@@ -281,6 +283,7 @@ def confirm_profile(body: ConfirmWrite, db: Session = Depends(db_for, scope="fun
     return result
 
 app.include_router(build_router(db_for))
+app.include_router(fit_analysis.build_router(db_for, current_user))
 
 @app.get("/v1/preferences")
 def get_preferences(db: Session = Depends(db_for, scope="function")):
@@ -585,15 +588,15 @@ def tailor_document(document_id: UUID, body: TailorWrite, db: Session = Depends(
         model = ai_tailoring.build_model()
         if model is None:
             raise HTTPException(503, detail={"code": "AI_NOT_CONFIGURED", "message": "No AI model is configured"})
-        user_id = current_user(db).id
-        spent = db.get(AiTailorUse, (user_id, job.id)) is not None
-        if not spent and ai_uses(db, user_id) >= ai_tailoring.LIMIT:
-            raise HTTPException(402, detail={"code": "AI_LIMIT_REACHED", "message": f"You have used all {ai_tailoring.LIMIT} AI tailorings"})
+        user = current_user(db)
+        user_id = user.id
+        if not allowance.can_spend(db, user_id, job.id, user.plan):
+            raise HTTPException(402, detail={"code": "AI_LIMIT_REACHED", "message": f"You have used all {allowance.limit_for(user.plan)} AI uses for this month"})
         try:
             content, changed = ai_tailoring.rewrite_content(content, job_out(job), model)
             ai = {"status": "applied" if changed else "unchanged", "changed": changed, "reason": None}
-            if changed and not spent:
-                db.add(AiTailorUse(user_id=user_id, job_id=job.id))
+            if changed:
+                allowance.spend(db, user_id, job.id)
         except ai_tailoring.AiUnavailable as exc:
             ai = {"status": "fallback", "changed": 0, "reason": str(exc)}
     copy = Document(user_id=item.user_id, title=(body.title or f"{item.title} — {job.title}")[:240], kind=item.kind,

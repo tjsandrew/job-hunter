@@ -5,8 +5,7 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from job_hunter.config import settings
-
-LIMIT = 5
+from job_hunter.preparation.allowance import LIMIT  # AI uses per user per month; fit analysis shares the same slots
 
 
 class AiUnavailable(Exception):

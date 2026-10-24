@@ -97,6 +97,23 @@ resource "aws_s3_bucket_lifecycle_configuration" "embed_flags" {
     filter { prefix = local.embed_flag_prefix }
     expiration { expired_object_delete_marker = true }
   }
+  # Fit request and result files hold profile text and are only needed while an analysis runs (design brief 12).
+  dynamic "rule" {
+    for_each = toset(local.fit_prefixes)
+    content {
+      id     = "expire-${trimsuffix(rule.value, "/")}"
+      status = "Enabled"
+      filter { prefix = rule.value }
+      expiration { days = 1 }
+      noncurrent_version_expiration { noncurrent_days = 1 }
+    }
+  }
+  rule {
+    id     = "remove-expired-fit-markers"
+    status = "Enabled"
+    filter { prefix = "fit-" }
+    expiration { expired_object_delete_marker = true }
+  }
   depends_on = [aws_s3_bucket_versioning.documents]
 }
 
@@ -164,16 +181,28 @@ resource "aws_lambda_event_source_mapping" "embed" {
   maximum_batching_window_in_seconds = local.embed_batch_window
   scaling_config { maximum_concurrency = 2 }
 }
+# S3 allows ONE notification configuration per bucket, so the fit worker's trigger (fit_worker.tf) lives here too.
 resource "aws_s3_bucket_notification" "embed" {
-  count  = local.embed_enabled ? 1 : 0
+  count  = (local.embed_enabled || local.fit_enabled) ? 1 : 0
   bucket = aws_s3_bucket.documents.id
-  queue {
-    queue_arn     = aws_sqs_queue.embed.arn
-    events        = ["s3:ObjectCreated:*"]
-    filter_prefix = local.embed_flag_prefix
+  dynamic "queue" {
+    for_each = local.embed_enabled ? [1] : []
+    content {
+      queue_arn     = aws_sqs_queue.embed.arn
+      events        = ["s3:ObjectCreated:*"]
+      filter_prefix = local.embed_flag_prefix
+    }
   }
-  # Uploads and exports never trigger the worker: only the flag prefix does.
-  depends_on = [aws_sqs_queue_policy.embed]
+  dynamic "lambda_function" {
+    for_each = local.fit_enabled ? [1] : []
+    content {
+      lambda_function_arn = aws_lambda_function.fit[0].arn
+      events              = ["s3:ObjectCreated:*"]
+      filter_prefix       = local.fit_request_prefix
+    }
+  }
+  # Uploads and exports never trigger a worker: only the embed flag prefix and the fit request prefix do.
+  depends_on = [aws_sqs_queue_policy.embed, aws_lambda_permission.fit_from_s3]
 }
 
 # ---- alarms (notification only, through the existing activity topic) ----
