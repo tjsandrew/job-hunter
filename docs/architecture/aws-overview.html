@@ -56,7 +56,7 @@ ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 
   </header>
 
   <section class="card" aria-label="Architecture diagram">
-    <div class="legend"><span><i></i>deployed on staging</span><span><i class="dash"></i>planned, not built yet</span></div>
+    <div class="legend"><span><i></i>deployed on staging</span><span><i class="dash"></i>background path through S3 or a schedule (job discovery is not built yet)</span></div>
     <div class="diagram">
 <pre class="mermaid">
 flowchart LR
@@ -67,7 +67,7 @@ flowchart LR
     amp["Amplify Hosting: React app"]
     cog["Cognito: invite-only login"]
     apigw["API Gateway: JWT check"]
-    s3[("S3 documents bucket: resumes, PDFs, flags")]
+    s3[("S3 documents bucket: resumes, PDFs, flags, AI requests")]
     sqs["SQS embed queue + dead-letter queue"]
     subgraph VPC["VPC: private, no internet access"]
       api["API Lambda: FastAPI. Recommendations, tailoring, resume import, fit analysis API"]
@@ -117,6 +117,16 @@ flowchart LR
   </section>
 
   <section class="card">
+    <h2>AI resume rewrite flow</h2>
+    <ol style="margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px">
+      <li>On a resume page, "Tailor with AI" calls <code>POST /v1/documents/{id}/tailor</code> with <code>mode: ai</code>. The API makes the rule-based tailored copy first, then writes a <code>task: tailor</code> request to <code>llm-requests/</code> with the resume bullets and the job's title, skills and description.</li>
+      <li>The same LLM worker rewrites the bullets and writes the result file. This takes about 5 to 10 seconds, so the API waits for it inside the request, for at most 25 seconds.</li>
+      <li>The API keeps only the rewrites that add no new number or name, and spends the month's slot only if at least one bullet changed.</li>
+      <li>If the worker is slow, fails or has no key, the user gets the rule-based copy and a message. Nothing is charged.</li>
+    </ol>
+  </section>
+
+  <section class="card">
     <h2>What can reach the internet</h2>
     <div class="scroll-x"><table>
       <thead><tr><th>Piece</th><th>Where</th><th>Internet</th><th>Database</th></tr></thead>
@@ -136,9 +146,9 @@ flowchart LR
         <tr><td>Login, hosting, API</td><td>cloud, resume upload</td><td>Amplify, Cognito, API Gateway, API Lambda</td><td><span class="pill live">live</span></td></tr>
         <tr><td>Resume upload and profile</td><td>resume upload</td><td>API Lambda, S3 presigned URLs, Aurora</td><td><span class="pill live">live</span> rule-based parsing</td></tr>
         <tr><td>Embeddings and "For you"</td><td>recommendations</td><td>S3 flag, SQS, Embed Lambda, Aurora</td><td><span class="pill live">live</span></td></tr>
-        <tr><td>Resume tailoring</td><td>tailoring</td><td>API Lambda (keyword rules)</td><td><span class="pill live">live</span> AI rewrite through the LLM worker (task <code>tailor</code>, waits up to 25 s)</td></tr>
+        <tr><td>Resume tailoring</td><td>tailoring</td><td>API Lambda (keyword rules)</td><td><span class="pill live">live</span> rule-based copy and AI rewrite through the LLM worker (task <code>tailor</code>, waits up to 25 s)</td></tr>
         <tr><td>Job discovery</td><td>ingestion</td><td>local command today; EventBridge and a Lambda outside the VPC next</td><td><span class="pill plan">planned</span> Discover is empty on staging</td></tr>
-        <tr><td>Fit analysis</td><td>fit analysis</td><td>API Lambda, S3, and the LLM worker Lambda (outside the VPC) calling SoCLaaS</td><td><span class="pill plan">planned</span> code and tests written locally</td></tr>
+        <tr><td>Fit analysis</td><td>fit analysis</td><td>API Lambda, S3, and the LLM worker Lambda (outside the VPC) calling SoCLaaS</td><td><span class="pill live">live</span> on the shared worker; not yet tried through the web app because staging has no jobs</td></tr>
       </tbody></table></div>
   </section>
 
@@ -148,8 +158,8 @@ flowchart LR
       <li><b>No internet inside the VPC.</b> A NAT gateway or interface endpoints cost money, so anything that needs the internet sits outside, and anything that only needs the database sits inside.</li>
       <li><b>Background work starts with a small file in S3.</b> The S3 gateway endpoint is free, and an S3 event then wakes the worker. The embedding worker already works this way.</li>
       <li><b>The embedding model is baked into its container image.</b> It is small, so the embed Lambda needs no network to run it.</li>
-      <li><b>The language model is hosted by the school.</b> Fit analysis calls the SoCLaaS gateway, so no model is stored on AWS. A small worker outside the VPC makes the call and has no database access; the API Lambda checks its answer before saving it.</li>
-      <li><b>Slow work is asynchronous.</b> API Gateway waits at most 29 seconds and an analysis takes 28 to 39 seconds, so the API returns at once and the web app polls for the result.</li>
+      <li><b>The language model is hosted by the school.</b> The AI features call the SoCLaaS gateway, so no model is stored on AWS. One shared worker outside the VPC makes the calls for every AI feature and has no database access; the API Lambda checks its answer before saving or using it. A new AI feature adds a task to the worker, not a new Lambda.</li>
+      <li><b>Slow work is asynchronous.</b> API Gateway waits at most 29 seconds and an analysis takes 28 to 39 seconds, so the API returns at once and the web app polls for the result. The resume rewrite takes 5 to 10 seconds, so the API waits for it inside the request, for at most 25 seconds.</li>
       <li><b>Amazon Bedrock is not used.</b> The group's AWS account has a service control policy that denies model invocation.</li>
     </ul>
   </section>
