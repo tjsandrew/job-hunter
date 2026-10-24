@@ -1,4 +1,4 @@
-import type { Application, FitAnalysis, FitSummary, Me, ProfileDraft, Recommendation, Resume, ProfileResponse, ProfileBank, ProfileItem, ItemKind, ItemData, ItemChanges, PointWrite, PointUpdate, UserSettings, UploadedResume, ProfileExport, ProfileImport, ImportSource, ImportDecision, ImportResult } from './types';
+import type { Application, FitAnalysis, FitSummary, Job, Me, ProfileDraft, Recommendation, Resume, ProfileResponse, ProfileBank, ProfileItem, ItemKind, ItemData, ItemChanges, PointWrite, PointUpdate, UserSettings, UploadedResume, ProfileExport, ProfileImport, ImportSource, ImportDecision, ImportResult } from './types';
 import { accessToken, cloudAuth } from './auth';
 
 const base = (import.meta.env.VITE_API_BASE_URL || '/v1').replace(/\/$/, '');
@@ -66,6 +66,7 @@ const json = (method: string, body?: unknown): RequestInit => ({ method, body: b
 
 export const api = {
   me: (signal?: AbortSignal) => request<Me>('/me', {signal}),
+  job: (jobId: string) => request<Job>(`/jobs/${encodeURIComponent(jobId)}`),
   startFit: (jobId: string) => request<FitAnalysis>(`/jobs/${encodeURIComponent(jobId)}/fit-analysis`, json('POST')),
   jobFit: (jobId: string) => request<FitAnalysis>(`/jobs/${encodeURIComponent(jobId)}/fit-analysis`),
   fit: (id: string) => request<FitAnalysis>(`/fit-analyses/${encodeURIComponent(id)}`),

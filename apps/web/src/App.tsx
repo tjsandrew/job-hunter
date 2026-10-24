@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, getDevUser, setDevUser, HttpError } from './api';
 import { cloudAuth, signOut, signedInEmail } from './auth';
 import { blankContent } from './editor';
+import { parseRoute, routePath, type Page } from './routes';
 import type { Application, DiscoverMode, FitSummary, Job, Me, Recommendation, Resume, ResumeContent } from './types';
 
 import { FitPanel } from './FitPanel';
@@ -12,7 +13,6 @@ import { ProfileView } from './profile/ProfileView';
 import { Studio } from './studio/Studio';
 import { applyDefaults } from './studio/build/defaults';
 
-type Page = 'discover' | 'profile' | 'tracker' | 'studio';
 const pageNames: Record<Page, string> = { discover: 'Discover', profile: 'Profile', tracker: 'Application tracker', studio: 'My resumes' };
 const statusOptions = ['saved', 'preparing', 'applied', 'interviewing', 'offer', 'rejected', 'withdrawn'];
 
@@ -26,7 +26,8 @@ function otherSources(job: Job) { return Array.from(new Set((job.also_seen_on ||
 function safeHttpUrl(value?: string) { if (!value) return null; try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) ? url.href : null; } catch { return null; } }
 
 export default function App() {
-  const [page, setPage] = useState<Page>('discover');
+  const [initialRoute] = useState(() => parseRoute(location.pathname));   // the address this page was opened at (see routes.ts)
+  const [page, setPage] = useState<Page>(initialRoute.page);
   const [user, setUser] = useState<'alice' | 'casey'>(getDevUser());
   const [me, setMe] = useState<Me | null>(null);
   const [busy, setBusy] = useState(false);
@@ -40,7 +41,7 @@ export default function App() {
   const [recordsLoading, setRecordsLoading] = useState(true);
   const [recommendationsDegraded, setRecommendationsDegraded] = useState(false);
   const [rankingStatus, setRankingStatus] = useState('');
-  const [discoverMode, setDiscoverMode] = useState<DiscoverMode>('for-you');
+  const [discoverMode, setDiscoverMode] = useState<DiscoverMode>(initialRoute.mode);
   const [forYouNote, setForYouNote] = useState('');
   const [forYouPending, setForYouPending] = useState(false);   // the profile's vector is still being prepared: offer "Check again"
   const [forYouRecheck, setForYouRecheck] = useState(0);
@@ -81,6 +82,9 @@ export default function App() {
   const [trackerSaving, setTrackerSaving] = useState(false);
   const [resumeAttachTarget, setResumeAttachTarget] = useState<{ job_id: string; title: string; revision: number } | null>(null);
   const [jobDetail, setJobDetail] = useState<Job | null>(null);
+  // A listing or resume named by the address that is still being fetched or found (a refresh, a pasted link, the back button).
+  const [wantedJob, setWantedJob] = useState<string | null>(initialRoute.jobId);
+  const [wantedResume, setWantedResume] = useState<string | null>(initialRoute.resumeId);
   const [signInEmail, setSignInEmail] = useState('');
   useEffect(() => { if (cloudAuth) void signedInEmail().then(setSignInEmail); }, []);
 
@@ -386,6 +390,68 @@ export default function App() {
   const shownName = cloudAuth ? (profile.name.trim() || emailName || 'Your account') : (me?.display_name || user);
   const shownSub = cloudAuth ? (signInEmail || 'Signed in') : `${user}@local.dev`;
   const aiReady = !!(me?.ai_available || me?.fit_available);
+
+  // ---- addresses: every page, list and opened listing has its own link (routes.ts) ----
+  const currentPath = routePath({ page, mode: discoverMode, jobId: jobDetail?.id ?? null, resumeId: page === 'studio' ? activeResume?.id ?? null : null });
+  const address = useRef({ path: currentPath, unsaved: false, synced: false, resumeId: null as string | null, openResume });
+  address.current.path = currentPath;
+  address.current.unsaved = !!activeResume && saveLabel !== 'Saved';
+  address.current.resumeId = activeResume?.id ?? null;
+  address.current.openResume = openResume;
+
+  // The address follows the screen. The first time it only tidies the address (/ becomes /discover); afterwards each change is a
+  // history entry, except closing a listing we opened from a list, which steps back so the Back button is not left on the listing.
+  useEffect(() => {
+    if (wantedJob || wantedResume) return;   // still opening the linked listing or resume: do not overwrite its link
+    if (location.pathname === currentPath) { address.current.synced = true; return; }
+    if (!address.current.synced) { window.history.replaceState({ app: true }, '', currentPath); address.current.synced = true; return; }
+    const state = window.history.state as { app?: boolean; from?: string } | null;
+    if (!jobDetail && state?.app && state.from === currentPath && location.pathname.startsWith('/jobs/')) { window.history.back(); return; }
+    window.history.pushState({ app: true, from: location.pathname }, '', currentPath);
+  }, [currentPath, wantedJob, wantedResume, jobDetail]);
+
+  // The screen follows the address when it changes from outside: the Back and Forward buttons.
+  useEffect(() => {
+    const onPop = () => {
+      const target = parseRoute(location.pathname);
+      if (address.current.unsaved && location.pathname !== address.current.path) {   // never walk away from unsaved resume changes
+        window.history.pushState({ app: true, from: location.pathname }, '', address.current.path);
+        announce('Wait for your resume changes to save before leaving this resume.');
+        return;
+      }
+      if (target.jobId) setWantedJob(target.jobId);
+      else { setJobDetail(null); setPage(target.page); setDiscoverMode(target.mode); }
+      if (target.resumeId) setWantedResume(target.resumeId);
+      else if (target.page === 'studio' && !target.jobId) { setActiveResume(null); setResumeAttachTarget(null); }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  // Open the listing the address names (the list may not contain it, so ask the API).
+  useEffect(() => {
+    if (!wantedJob) return;
+    if (jobDetail?.id === wantedJob) { setWantedJob(null); return; }
+    let cancelled = false;
+    api.job(wantedJob).then((found) => { if (!cancelled) { setJobDetail(found); setWantedJob(null); } })
+      .catch(() => { if (!cancelled) { announce('That job is no longer listed.'); setWantedJob(null); } });
+    return () => { cancelled = true; };
+  }, [wantedJob]);
+
+  // Open the resume the address names, once the library has loaded.
+  useEffect(() => {
+    if (!wantedResume || recordsLoading) return;
+    if (address.current.resumeId !== wantedResume) {
+      const found = resumes.find((resume) => resume.id === wantedResume);
+      if (found) address.current.openResume(found); else announce('That resume was not found.');
+    }
+    setWantedResume(null);
+  }, [wantedResume, recordsLoading, resumes]);
+
+  useEffect(() => {
+    const here = jobDetail ? jobDetail.title : page === 'studio' && activeResume ? activeResume.title : pageNames[page];
+    document.title = `${here} · Job Hunter`;
+  }, [page, jobDetail, activeResume?.id, activeResume?.title]);
 
   return <div className="app-shell">
     <aside className="sidebar">

@@ -4,6 +4,7 @@ import WorkspaceGate from './WorkspaceGate';
 import { AuthScreen } from './AuthScreen';
 import { Icon } from './ui';
 import { authManager, cloudAuth, signOut } from './auth';
+import { safeReturnPath } from './routes';
 
 // Kept outside React effects so StrictMode cannot redeem a callback code twice.
 let initialization: Promise<string | null> | undefined;
@@ -12,7 +13,7 @@ function initialize() {
     const manager = authManager();
     if (location.pathname === '/auth/callback') {
       const user = await manager.signinRedirectCallback();
-      history.replaceState({}, '', '/');
+      history.replaceState({}, '', safeReturnPath((user.state as { returnTo?: string } | undefined)?.returnTo));   // back to the page you opened
       return user.profile.sub;
     }
     const user = await manager.getUser();
@@ -44,7 +45,7 @@ export default function AuthGate() {
   if (subject) return <WorkspaceGate key={subject} />;
   return <AuthScreen title="Welcome back" text="Sign in to pick up your search, your profile and your resumes.">
     {error ? <p className="auth-message error" role="alert">{error}</p> : subject === undefined ? <p className="auth-message" role="status">Checking your session…</p> : null}
-    <button className="auth-button" onClick={() => { setError(''); void authManager().signinRedirect().catch(e => setError(e.message)); }}>Sign in <Icon name="arrow" /></button>
+    <button className="auth-button" onClick={() => { setError(''); void authManager().signinRedirect({ state: { returnTo: location.pathname + location.search } }).catch(e => setError(e.message)); }}>Sign in <Icon name="arrow" /></button>
     <p className="auth-note">Access is by invitation. Ask the team if you need an account.</p>
   </AuthScreen>;
 }

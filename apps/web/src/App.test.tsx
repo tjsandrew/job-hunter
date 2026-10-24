@@ -9,7 +9,7 @@ vi.mock('./api', async (importOriginal) => {
   return { ...original, api: {
     getBank: vi.fn(), uploads: vi.fn(), imports: vi.fn(), me: vi.fn(), getProfile: vi.fn(), getPreferences: vi.fn(), getSeniorityOptions: vi.fn(), recommendations: vi.fn(), recommendationsForYou: vi.fn(), applications: vi.fn(), documents: vi.fn(),
     uploadResume: vi.fn(), reviewJob: vi.fn(), putProfile: vi.fn(), confirmProfile: vi.fn(), putPreferences: vi.fn(), putApplication: vi.fn(), createDocument: vi.fn(), patchDocument: vi.fn(),
-    startFit: vi.fn(), jobFit: vi.fn(), fit: vi.fn(), fitSummaries: vi.fn(), reviewedJobs: vi.fn(),
+    job: vi.fn(), startFit: vi.fn(), jobFit: vi.fn(), fit: vi.fn(), fitSummaries: vi.fn(), reviewedJobs: vi.fn(),
     duplicateDocument: vi.fn(), tailorDocument: vi.fn(), reviewDocument: vi.fn(), exportDocument: vi.fn(), previewDocument: vi.fn(), downloadExport: vi.fn(),
   } };
 });
@@ -17,6 +17,7 @@ const mockApi = vi.mocked(api);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  history.replaceState(null, '', '/');   // every test starts at the root address
   mockApi.jobFit.mockRejectedValue(new HttpError('Not found', 404));
   mockApi.me.mockResolvedValue({ user_id: '1', display_name: 'Alice Tan', plan: 'free', allowance: { limit: 5, used: 0, remaining: 5, period: '2026-10' }, ai_available: false });
   mockApi.getProfile.mockResolvedValue({ draft: { name: 'Alice Tan', email: 'alice@example.com', phone: '', location: 'Singapore', summary: '', skills: [] }, revision: 0, confirmed_revision: null });
@@ -78,6 +79,64 @@ describe('Job Hunter user journey', () => {
     expect(screen.getByText('MyCareersFuture')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Read full description' }));
     expect(within(screen.getByRole('dialog', { name: 'Data Platform Engineer' })).getByText('Source: MyCareersFuture')).toBeInTheDocument();
+  });
+
+  it('gives each page its own address, keeps it on refresh and follows the Back button', async () => {
+    const user = userEvent.setup();
+    history.replaceState(null, '', '/tracker');                       // opened (or refreshed) on the tracker
+    const first = render(<App />);
+    expect(await screen.findByText('Keep the momentum.')).toBeInTheDocument();
+    expect(location.pathname).toBe('/tracker');
+    expect(document.title).toBe('Application tracker · Job Hunter');
+    await user.click(screen.getByRole('button', { name: 'Profile' }));
+    expect(location.pathname).toBe('/profile');
+    await user.click(screen.getByRole('button', { name: 'Discover' }));
+    expect(location.pathname).toBe('/discover');
+    history.back();                                                   // Back goes to the profile
+    await waitFor(() => expect(location.pathname).toBe('/profile'));
+    expect(screen.getByRole('button', { name: 'Profile' })).toHaveClass('active');
+    first.unmount();
+    render(<App />);                                                  // a refresh on /profile stays on the profile
+    expect(await screen.findByRole('button', { name: 'Profile' })).toHaveClass('active');
+    expect(location.pathname).toBe('/profile');
+  });
+
+  it('opens the list named in the address and tidies the root address', async () => {
+    history.replaceState(null, '', '/discover/saved');
+    render(<App />);
+    await waitFor(() => expect(mockApi.reviewedJobs).toHaveBeenCalled());
+    expect(location.pathname).toBe('/discover/saved');
+    cleanup();
+    history.replaceState(null, '', '/');
+    render(<App />);
+    await screen.findByText('Product Designer');
+    expect(location.pathname).toBe('/discover');
+  });
+
+  it('gives an opened listing its own link, loads it from a pasted link, and closing it returns to the list', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText('Product Designer');
+    await user.click(screen.getByRole('button', { name: 'Read full description' }));
+    expect(location.pathname).toBe('/jobs/role-1');
+    await user.click(screen.getByRole('button', { name: 'Close job details' }));
+    await waitFor(() => expect(location.pathname).toBe('/discover'));    // closing steps back instead of stacking another entry
+    cleanup();
+    mockApi.job.mockResolvedValue({ id: 'role-9', title: 'Data Engineer', company: 'Acme', location: 'Singapore', description: 'Build pipelines.' });
+    history.replaceState(null, '', '/jobs/role-9');                   // a pasted or refreshed listing link
+    render(<App />);
+    expect(await screen.findByRole('dialog', { name: 'Data Engineer' })).toBeInTheDocument();
+    expect(mockApi.job).toHaveBeenCalledWith('role-9');
+    expect(location.pathname).toBe('/jobs/role-9');
+  });
+
+  it('says so and falls back to the list when a listing link no longer exists', async () => {
+    mockApi.job.mockRejectedValue(new HttpError('Not found', 404));
+    history.replaceState(null, '', '/jobs/gone-1');
+    render(<App />);
+    expect(await screen.findByText('That job is no longer listed.')).toBeInTheDocument();
+    await waitFor(() => expect(location.pathname).toBe('/discover'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('searches the backend and loads later recommendation pages', async () => {
