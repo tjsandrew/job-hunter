@@ -1,12 +1,12 @@
 import { downloadFile } from './download';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, getDevUser, setDevUser, HttpError } from './api';
-import { cloudAuth, signOut } from './auth';
+import { cloudAuth, signOut, signedInEmail } from './auth';
 import { blankContent } from './editor';
 import type { Application, DiscoverMode, FitSummary, Job, Me, Recommendation, Resume, ResumeContent } from './types';
 
 import { FitPanel } from './FitPanel';
-import { Field, Icon, Loading, Pill, SelectField, fmtDate } from './ui';
+import { BrandLogo, Field, Icon, Loading, Pill, SelectField, fmtDate } from './ui';
 import { emptyProfile, profileToForm } from './profile/form';
 import { ProfileView } from './profile/ProfileView';
 import { Studio } from './studio/Studio';
@@ -78,6 +78,8 @@ export default function App() {
   const [trackerSaving, setTrackerSaving] = useState(false);
   const [resumeAttachTarget, setResumeAttachTarget] = useState<{ job_id: string; title: string; revision: number } | null>(null);
   const [jobDetail, setJobDetail] = useState<Job | null>(null);
+  const [signInEmail, setSignInEmail] = useState('');
+  useEffect(() => { if (cloudAuth) void signedInEmail().then(setSignInEmail); }, []);
 
   useEffect(() => {
     let alive = true;
@@ -374,19 +376,27 @@ export default function App() {
     document.scrollingElement?.scrollTo?.({top: 0, left: 0});
   };
 
+  const confirmSignOut = () => { if (window.confirm("Sign out? Wait for any pending resume save before continuing.")) void signOut(); };
+  // The API names every cloud account "Job seeker" and has no email, so the sidebar uses the profile name,
+  // then the sign-in email. Local development keeps the seeded dev user.
+  const emailName = signInEmail.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+  const shownName = cloudAuth ? (profile.name.trim() || emailName || 'Your account') : (me?.display_name || user);
+  const shownSub = cloudAuth ? (signInEmail || 'Signed in') : `${user}@local.dev`;
+  const aiReady = !!(me?.ai_available || me?.fit_available);
+
   return <div className="app-shell">
     <aside className="sidebar">
-      <div className="brand"><div className="brand-mark">j</div><div><strong>job hunter</strong><span>CAREER WORKSPACE</span></div></div>
+      <div className="brand"><BrandLogo size={42} /><div><strong>job hunter</strong><span>CAREER WORKSPACE</span></div></div>
       <div className="workspace-label">WORKSPACE</div>
       <nav aria-label="Main navigation">{(['discover', 'profile', 'tracker', 'studio'] as Page[]).map((item) => <button key={item} aria-label={pageNames[item]} className={`nav-link ${page === item ? 'active' : ''}`} onClick={() => item === 'studio' ? openResumeLibrary() : setPage(item)}><Icon name={item} /><span>{pageNames[item]}</span>{item === 'tracker' && apps.length > 0 && <b className="nav-count">{apps.length}</b>}</button>)}</nav>
       <div className="sidebar-bottom">
-        <div className="ai-card"><span className="ai-icon">✳</span><div><strong>AI assistant</strong><p>Generation is unavailable in this local POC.</p><span className="status-dot" /> Offline</div></div>
-        <div className="account-row"><div className="avatar">{initials(me?.display_name || user)}</div><div className="account-name"><strong>{me?.display_name || user}</strong><span>{cloudAuth ? "Personal workspace" : `${user}@local.dev`}</span></div>{cloudAuth ? <button onClick={() => { if (window.confirm("Sign out? Wait for any pending resume save before continuing.")) void signOut(); }}>Sign out</button> : (<select aria-label="Development user" value={user} onChange={(e) => switchUser(e.target.value as 'alice' | 'casey')}><option value="alice">Alice</option><option value="casey">Casey</option></select>)}</div>
-        <p className="dev-note">LOCAL DEVELOPMENT · {user.toUpperCase()}</p>
+        {(aiReady || !cloudAuth) && <div className="ai-card"><span className="ai-icon">✳</span><div><strong>AI assistant</strong><p>{aiReady ? 'Fit checks and resume tailoring are available.' : 'No AI model is configured on this machine.'}</p><span className={`status-dot ${aiReady ? 'on' : ''}`} /> {aiReady ? 'Ready' : 'Offline'}</div></div>}
+        <div className="account-row"><div className="avatar">{initials(shownName)}</div><div className="account-name"><strong>{shownName}</strong><span title={shownSub}>{shownSub}</span></div>{cloudAuth ? <button className="signout-button icon-only" title="Sign out" aria-label="Sign out" onClick={confirmSignOut}><Icon name="signout" /></button> : (<select aria-label="Development user" value={user} onChange={(e) => switchUser(e.target.value as 'alice' | 'casey')}><option value="alice">Alice</option><option value="casey">Casey</option></select>)}</div>
+        {!cloudAuth && <p className="dev-note">LOCAL DEVELOPMENT · {user.toUpperCase()}</p>}
       </div>
     </aside>
     <main className="main-area">
-      <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span className="crumb-sep">/</span><strong>{activeResume && page === 'studio' ? activeResume.title : pageNames[page]}</strong></div><div className="topbar-right"><Pill color="green">{cloudAuth ? "Project preview" : "Local POC"}</Pill><button className="help-button" title="Refresh workspace" aria-label="Refresh workspace" disabled={busy || recordsLoading || recommendationLoading} aria-busy={recordsLoading || recommendationLoading} onClick={() => setRefresh((x) => x + 1)}>↻</button>{!busy && recordsLoading && <span role="status">Refreshing…</span>}{cloudAuth ? <button onClick={() => { if (window.confirm("Sign out? Wait for any pending resume save before continuing.")) void signOut(); }}>Sign out</button> : (<select className="top-user-switch" aria-label="Development user" value={user} onChange={(e) => switchUser(e.target.value as 'alice' | 'casey')}><option value="alice">Alice</option><option value="casey">Casey</option></select>)}<div className="avatar small">{initials(me?.display_name || user)}</div></div></header>
+      <header className="topbar"><div className="breadcrumbs"><span>Workspace</span><span className="crumb-sep">/</span><strong>{activeResume && page === 'studio' ? activeResume.title : pageNames[page]}</strong></div><div className="topbar-right">{!cloudAuth && <Pill color="green">Local POC</Pill>}<button className="help-button" title="Refresh workspace" aria-label="Refresh workspace" disabled={busy || recordsLoading || recommendationLoading} aria-busy={recordsLoading || recommendationLoading} onClick={() => setRefresh((x) => x + 1)}>↻</button>{!busy && recordsLoading && <span role="status">Refreshing…</span>}{cloudAuth ? <button className="signout-button" onClick={confirmSignOut}><Icon name="signout" /> Sign out</button> : (<select className="top-user-switch" aria-label="Development user" value={user} onChange={(e) => switchUser(e.target.value as 'alice' | 'casey')}><option value="alice">Alice</option><option value="casey">Casey</option></select>)}<div className="avatar small" title={shownName}>{initials(shownName)}</div></div></header>
       <div className="content-area">
         {fatal && <div className="fatal"><div className="fatal-icon">!</div><div><strong>Could not load your workspace</strong><p>{fatal}</p><button className="button secondary small-button" onClick={() => { setFatal(''); setBootstrapAttempt((x) => x + 1); setRefresh((x) => x + 1); }}>Try again</button></div></div>}
         {!fatal && busy && <Loading label="Connecting to your workspace…" />}

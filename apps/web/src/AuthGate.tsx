@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import App from './App';
 import WorkspaceGate from './WorkspaceGate';
+import { AuthScreen } from './AuthScreen';
+import { Icon } from './ui';
 import { authManager, cloudAuth, signOut } from './auth';
 
 // Kept outside React effects so StrictMode cannot redeem a callback code twice.
@@ -36,15 +38,13 @@ export default function AuthGate() {
     return () => { alive = false; authManager().events.removeAccessTokenExpired(expired); authManager().events.removeSilentRenewError(expired); };
   }, []);
   if (!cloudAuth) return <App />;
-  if (subject && !import.meta.env.VITE_API_BASE_URL) return <main style={{ maxWidth: 480, margin: '15vh auto', padding: 24 }}>
-    <h1>You're signed in</h1><p>Your resume workspace is being prepared. Please check back soon.</p>
-    <button onClick={() => void signOut()}>Sign out</button>
-  </main>;
+  if (subject && !import.meta.env.VITE_API_BASE_URL) return <AuthScreen title="You're signed in" text="Your workspace is being prepared. Please check back soon.">
+    <button className="signout-button wide" onClick={() => void signOut()}><Icon name="signout" /> Sign out</button>
+  </AuthScreen>;
   if (subject) return <WorkspaceGate key={subject} />;
-  return <main style={{ maxWidth: 480, margin: '15vh auto', padding: 24 }}>
-    <h1>Job Hunter</h1><p>Build your profile and prepare your next resume.</p>
-    {error ? <p role="alert">{error}</p> : subject === undefined ? <p>Checking your session…</p> : null}
-    <button onClick={() => { setError(''); void authManager().signinRedirect().catch(e => setError(e.message)); }}>Sign in</button>
-    <p>Project access is by invitation. Ask the team for an account.</p>
-  </main>;
+  return <AuthScreen title="Welcome back" text="Sign in to pick up your search, your profile and your resumes.">
+    {error ? <p className="auth-message error" role="alert">{error}</p> : subject === undefined ? <p className="auth-message" role="status">Checking your session…</p> : null}
+    <button className="auth-button" onClick={() => { setError(''); void authManager().signinRedirect().catch(e => setError(e.message)); }}>Sign in <Icon name="arrow" /></button>
+    <p className="auth-note">Access is by invitation. Ask the team if you need an account.</p>
+  </AuthScreen>;
 }

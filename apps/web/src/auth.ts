@@ -39,6 +39,14 @@ export async function accessToken() {
   return user.access_token;
 }
 
+/** The sign-in email from the ID token. The API only receives an access token, so the browser is the one place that knows it. */
+export async function signedInEmail(): Promise<string> {
+  try {
+    const email = (await authManager().getUser())?.profile.email;
+    return typeof email === 'string' ? email : '';
+  } catch { return ''; }
+}
+
 export async function signOut() {
   await authManager().removeUser();
   sessionStorage.clear();
