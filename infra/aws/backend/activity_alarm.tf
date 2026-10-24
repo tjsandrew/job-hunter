@@ -18,7 +18,7 @@ resource "aws_sns_topic_policy" "activity" {
     Effect = "Allow", Principal = { Service = "cloudwatch.amazonaws.com" }, Action = "sns:Publish", Resource = aws_sns_topic.activity.arn
     Condition = {
       StringEquals = { "aws:SourceAccount" = var.account_id }
-      ArnEquals    = { "aws:SourceArn" = concat([local.activity_alarm_arn], local.embed_alarm_arns) }
+      ArnEquals    = { "aws:SourceArn" = concat([local.activity_alarm_arn], local.embed_alarm_arns, local.fit_alarm_arns) }
     }
   }] })
 }

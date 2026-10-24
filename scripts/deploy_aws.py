@@ -92,6 +92,31 @@ def embed(image: str):
     print("Embedding worker updated")
 
 
+def fit(image: str):
+    """Update the fit-analysis worker (design brief 12) to the API image and give it the model key.
+
+    The key is the GitHub Actions secret LLM_API_KEY, passed in the environment of this step (never argv, never printed).
+    Skipped when FIT_FUNCTION is not configured, so a release before the worker exists is unchanged."""
+    function = os.environ.get("FIT_FUNCTION")
+    if not function:
+        print("FIT_FUNCTION is not set; the fit worker is not deployed.")
+        return
+    client = boto3.client("lambda", config=Config(read_timeout=120, connect_timeout=10, retries={"total_max_attempts": 1}))
+    current = client.get_function(FunctionName=function)
+    client.update_function_code(FunctionName=function, ImageUri=image, RevisionId=current["Configuration"]["RevisionId"])
+    client.get_waiter("function_updated_v2").wait(FunctionName=function)
+    key = os.environ.get("LLM_API_KEY", "")
+    if key:
+        current = client.get_function_configuration(FunctionName=function)
+        variables = dict(current.get("Environment", {}).get("Variables", {}))
+        variables["LLM_API_KEY"] = key
+        client.update_function_configuration(FunctionName=function, RevisionId=current["RevisionId"], Environment={"Variables": variables})
+        client.get_waiter("function_updated_v2").wait(FunctionName=function)
+        print("Fit worker updated; model key set from the LLM_API_KEY secret")
+    else:
+        print("Fit worker updated; LLM_API_KEY secret is not set, so its model key is unchanged")
+
+
 def verify_api():
     base = os.environ["VITE_API_BASE_URL"].rstrip("/")
     with urlopen(base + "/health", timeout=30) as response:
@@ -135,6 +160,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--image")
     parser.add_argument("--embed-image", help="immutable digest of the embedding worker image (design brief 11)")
+    parser.add_argument("--fit-image", help="immutable digest of the API image, reused for the fit worker (design brief 12)")
     parser.add_argument("--web", type=Path)
     args = parser.parse_args()
     if args.image:
@@ -145,5 +171,9 @@ if __name__ == "__main__":
         if "@sha256:" not in args.embed_image:
             parser.error("Use an immutable image digest")
         embed(args.embed_image)
+    if args.fit_image:
+        if "@sha256:" not in args.fit_image:
+            parser.error("Use an immutable image digest")
+        fit(args.fit_image)
     if args.web:
         frontend(args.web)

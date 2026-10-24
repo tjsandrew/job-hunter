@@ -7,6 +7,9 @@ resource "aws_iam_role_policy" "api" {
     { Effect = "Allow", Action = local.runtime_actions.versions, Resource = aws_s3_bucket.documents.arn,
     Condition = { StringLike = { "s3:prefix" = ["uploads/*", "exports/*"] } } },
     # The embed flag is write-only for the API: it can create flags but not read, list or delete anything under the prefix.
-    { Effect = "Allow", Action = ["s3:PutObject"], Resource = "${aws_s3_bucket.documents.arn}/${local.embed_flag_prefix}*" }
+    { Effect = "Allow", Action = ["s3:PutObject"], Resource = "${aws_s3_bucket.documents.arn}/${local.embed_flag_prefix}*" },
+    # Fit analysis: the API writes a request file for the worker and reads back its result. It cannot list or delete either.
+    { Effect = "Allow", Action = ["s3:PutObject"], Resource = "${aws_s3_bucket.documents.arn}/${local.fit_request_prefix}*" },
+    { Effect = "Allow", Action = ["s3:GetObject"], Resource = "${aws_s3_bucket.documents.arn}/${local.fit_result_prefix}*" }
   ] })
 }

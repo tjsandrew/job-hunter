@@ -30,6 +30,10 @@ services:
       EMBEDDER_URL: ${EMBEDDER_URL:-http://embedder:8100}
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_REASONING_EFFORT: ${LLM_REASONING_EFFORT:-}
     command: >-
       sh -c 'alembic upgrade head &&
       python -m job_hunter.embedding.db_role &&

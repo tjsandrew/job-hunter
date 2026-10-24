@@ -9,6 +9,7 @@ vi.mock('./api', async (importOriginal) => {
   return { ...original, api: {
     getBank: vi.fn(), uploads: vi.fn(), imports: vi.fn(), me: vi.fn(), getProfile: vi.fn(), getPreferences: vi.fn(), getSeniorityOptions: vi.fn(), recommendations: vi.fn(), recommendationsForYou: vi.fn(), applications: vi.fn(), documents: vi.fn(),
     uploadResume: vi.fn(), reviewJob: vi.fn(), putProfile: vi.fn(), confirmProfile: vi.fn(), putPreferences: vi.fn(), putApplication: vi.fn(), createDocument: vi.fn(), patchDocument: vi.fn(),
+    startFit: vi.fn(), jobFit: vi.fn(), fit: vi.fn(),
     duplicateDocument: vi.fn(), tailorDocument: vi.fn(), reviewDocument: vi.fn(), exportDocument: vi.fn(), previewDocument: vi.fn(), downloadExport: vi.fn(),
   } };
 });
@@ -16,6 +17,7 @@ const mockApi = vi.mocked(api);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockApi.jobFit.mockRejectedValue(new HttpError('Not found', 404));
   mockApi.me.mockResolvedValue({ user_id: '1', display_name: 'Alice Tan', plan: 'free', allowance: { limit: 5, used: 0, remaining: 5, period: '2026-10' }, ai_available: false });
   mockApi.getProfile.mockResolvedValue({ draft: { name: 'Alice Tan', email: 'alice@example.com', phone: '', location: 'Singapore', summary: '', skills: [] }, revision: 0, confirmed_revision: null });
   mockApi.getBank.mockResolvedValue({ basics: { name: 'Alice Tan' }, items: [], grouped: { experience: [], education: [], project: [], skill: [], certification: [], award: [], volunteering: [], custom: [] }, bank_revision: 7, confirmed_revision: null, profile_epoch: 0 });
@@ -50,6 +52,8 @@ describe('Job Hunter user journey', () => {
     expect(dialog.querySelector('.job-detail-description')?.textContent).toBe(description);
     expect(within(dialog).getByText('Source: Greenhouse')).toBeInTheDocument();
     expect(within(dialog).getByRole('link', { name: /original listing/i })).toHaveAttribute('href', 'https://jobs.example/full');
+    expect(within(dialog).getByRole('region', { name: 'Fit analysis' })).toBeInTheDocument();   // AI is off in this test, so the button is disabled
+    expect(await within(dialog).findByRole('button', { name: 'Check my fit' })).toBeDisabled();
   });
 
   it('searches the backend and loads later recommendation pages', async () => {
