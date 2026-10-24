@@ -61,6 +61,7 @@ class DiscoveryConfig:
     singapore_only: bool = False
     mycareersfuture_delay_seconds: float = 1.0     # pause between MyCareersFuture pages
     adzuna_delay_seconds: float = 1.0              # pause between Adzuna pages
+    adzuna_max_pages: int = 1                      # Adzuna's free plan allows very few calls: one call is up to 50 jobs
 
     def __post_init__(self) -> None:
         if not 0 < self.timeout_seconds <= 60:
@@ -69,6 +70,8 @@ class DiscoveryConfig:
             raise ValueError("mycareersfuture_delay_seconds must be between 0 and 10")
         if not 0 <= self.adzuna_delay_seconds <= 10:
             raise ValueError("adzuna_delay_seconds must be between 0 and 10")
+        if not 1 <= self.adzuna_max_pages <= 3:
+            raise ValueError("adzuna_max_pages must be between 1 and 3")
         if not 1 <= self.page_size <= 100:
             raise ValueError("page_size must be between 1 and 100")
         if not 1 <= self.max_pages_per_board <= 10:
@@ -559,7 +562,7 @@ def _discover_adzuna(keyword: str, config: DiscoveryConfig) -> tuple[list[dict[s
     truncated = False
     per_page = min(config.page_size, ADZUNA_MAX_PER_PAGE, config.max_records_per_board)
     total: int | None = None
-    for page in range(1, config.max_pages_per_board + 1):      # Adzuna pages start at 1
+    for page in range(1, config.adzuna_max_pages + 1):      # Adzuna pages start at 1
         remaining = config.max_records_per_board - len(result)
         if remaining <= 0:
             truncated = True
@@ -589,7 +592,7 @@ def _discover_adzuna(keyword: str, config: DiscoveryConfig) -> tuple[list[dict[s
             break
         if len(raw_jobs) < per_page or (total is not None and page * per_page >= total):
             break
-        if page == config.max_pages_per_board:
+        if page == config.adzuna_max_pages:
             truncated = True
     if config.singapore_only:
         result = [job for job in result if _is_singapore(job)]

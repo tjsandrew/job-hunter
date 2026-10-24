@@ -54,7 +54,7 @@ def test_pages_start_at_one_and_stop_when_the_results_run_out(monkeypatch):
         page = int(urlparse(url).path.rsplit("/", 1)[1])
         return {"count": 3, "results": [adzuna_job(str(i)) for i in range((page - 1) * 2, min(page * 2, 3))]}
     monkeypatch.setattr(discovery, "_fetch_json", fake_fetch)
-    report = discover_report(DiscoveryConfig(adzuna_searches=["data engineer"], page_size=2, max_pages_per_board=5, singapore_only=True))
+    report = discover_report(DiscoveryConfig(adzuna_searches=["data engineer"], page_size=2, adzuna_max_pages=5 - 2, singapore_only=True))
     assert [job["external_id"] for job in report.jobs] == ["0", "1", "2"]
     assert [urlparse(url).path.rsplit("/", 1)[1] for url in calls] == ["1", "2"]
     query = parse_qs(urlparse(calls[0]).query)
@@ -104,3 +104,14 @@ def test_a_rejected_request_never_puts_the_keys_in_the_failure_report(monkeypatc
 def test_the_delay_between_pages_is_bounded():
     with pytest.raises(ValueError):
         DiscoveryConfig(adzuna_delay_seconds=11)
+
+
+def test_one_request_per_keyword_is_the_default_because_the_free_plan_allows_very_few(monkeypatch):
+    calls = []
+    monkeypatch.setattr(discovery, "_fetch_json", lambda url, timeout, provider: calls.append(url) or {
+        "count": 500, "results": [adzuna_job(str(i)) for i in range(50)]})
+    report = discover_report(DiscoveryConfig(adzuna_searches=["data engineer", "analyst"], page_size=100))
+    assert len(calls) == 2 and len(report.jobs) > 0               # one call per keyword
+    assert report.truncated_boards == ["adzuna:data engineer", "adzuna:analyst"]
+    with pytest.raises(ValueError):
+        DiscoveryConfig(adzuna_max_pages=4)
