@@ -1,4 +1,4 @@
-import type { Application, FitAnalysis, Me, ProfileDraft, Recommendation, Resume, ProfileResponse, ProfileBank, ProfileItem, ItemKind, ItemData, ItemChanges, PointWrite, PointUpdate, UserSettings, UploadedResume, ProfileExport, ProfileImport, ImportSource, ImportDecision, ImportResult } from './types';
+import type { Application, FitAnalysis, FitSummary, Me, ProfileDraft, Recommendation, Resume, ProfileResponse, ProfileBank, ProfileItem, ItemKind, ItemData, ItemChanges, PointWrite, PointUpdate, UserSettings, UploadedResume, ProfileExport, ProfileImport, ImportSource, ImportDecision, ImportResult } from './types';
 import { accessToken, cloudAuth } from './auth';
 
 const base = (import.meta.env.VITE_API_BASE_URL || '/v1').replace(/\/$/, '');
@@ -122,6 +122,12 @@ export const api = {
     if (q.trim()) params.set('q', q.trim());
     return request<{ items: Recommendation[]; total: number; next_offset: number | null; degraded_mode?: boolean; ranking_status?: string; ranking_mode?: 'semantic' | 'keyword_fallback'; fallback_reason?: string | null; fallback_code?: 'no_profile' | 'profile_embedding_pending' | null; blocked_by_checks?: number }>(`/recommendations/for-you?${params}`);
   },
+  reviewedJobs: (decision: 'saved' | 'dismissed', q = '', offset = 0, limit = 20) => {
+    const params = new URLSearchParams({ decision, offset: String(offset), limit: String(limit) });
+    if (q.trim()) params.set('q', q.trim());
+    return request<{ items: Recommendation[]; total: number; next_offset: number | null }>(`/jobs/reviewed?${params}`);
+  },
+  fitSummaries: () => request<{ items: FitSummary[] }>('/fit-analyses'),
   reviewJob: (id: string, decision: 'saved' | 'dismissed' | 'none') => request(`/jobs/${encodeURIComponent(id)}/review`, json('PUT', { decision })),
   applications: () => request<{ items: Application[] }>('/applications'),
   putApplication: (jobId: string, values: Partial<Application> & { expected_revision?: number; resume_document_id?: string; expected_resume_revision?: number; resume_export_id?: string | null; cover_letter_text?: string | null }) => request<Application>(`/applications/${encodeURIComponent(jobId)}`, json('PUT', values)),

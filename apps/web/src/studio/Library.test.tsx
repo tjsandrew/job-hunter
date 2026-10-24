@@ -14,6 +14,7 @@ const first = resume({ id: 'r1', title: 'Backend Engineer – Stripe' }), second
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mockApi.fitSummaries.mockResolvedValue({ items: [] });
   mockApi.me.mockResolvedValue({ user_id: '1', display_name: 'Alice Tan', plan: 'free', allowance: { limit: 5, used: 0, remaining: 5, period: '2026-10' }, ai_available: false });
   mockApi.getProfile.mockResolvedValue({ draft: { name: 'Alice Tan', email: '', phone: '', location: '', summary: 'Backend engineer who likes data.', skills: [] }, revision: 0, confirmed_revision: null });
   mockApi.getBank.mockResolvedValue({ basics: {}, items: [], grouped: { experience: [], education: [], project: [], skill: [], certification: [], award: [], volunteering: [], custom: [] }, bank_revision: 1, confirmed_revision: null, profile_epoch: 0 });

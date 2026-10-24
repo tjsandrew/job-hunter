@@ -9,7 +9,7 @@ vi.mock('./api', async (importOriginal) => {
   return { ...original, api: {
     getBank: vi.fn(), uploads: vi.fn(), imports: vi.fn(), me: vi.fn(), getProfile: vi.fn(), getPreferences: vi.fn(), getSeniorityOptions: vi.fn(), recommendations: vi.fn(), recommendationsForYou: vi.fn(), applications: vi.fn(), documents: vi.fn(),
     uploadResume: vi.fn(), reviewJob: vi.fn(), putProfile: vi.fn(), confirmProfile: vi.fn(), putPreferences: vi.fn(), putApplication: vi.fn(), createDocument: vi.fn(), patchDocument: vi.fn(),
-    startFit: vi.fn(), jobFit: vi.fn(), fit: vi.fn(),
+    startFit: vi.fn(), jobFit: vi.fn(), fit: vi.fn(), fitSummaries: vi.fn(), reviewedJobs: vi.fn(),
     duplicateDocument: vi.fn(), tailorDocument: vi.fn(), reviewDocument: vi.fn(), exportDocument: vi.fn(), previewDocument: vi.fn(), downloadExport: vi.fn(),
   } };
 });
@@ -29,6 +29,7 @@ beforeEach(() => {
   mockApi.recommendations.mockResolvedValue({ items: [{ job: { id: 'role-1', title: 'Product Designer', company: 'Northstar', location: 'Singapore', description: 'Design clear tools for people.' }, score: 0.91, reasons: ['Product design experience'] }], total: 1, next_offset: null, degraded_mode: true });
   mockApi.recommendationsForYou.mockRejectedValue(new Error('for you unavailable in this test'));   // default: exercise the fallback
   mockApi.applications.mockResolvedValue({ items: [] }); mockApi.documents.mockResolvedValue({ items: [] });
+  mockApi.fitSummaries.mockResolvedValue({ items: [] });
 });
 afterEach(() => cleanup());
 
@@ -334,12 +335,50 @@ describe('Discover: For you and All jobs', () => {
     render(<App />);
     expect(await screen.findByText('Product Designer')).toBeInTheDocument();
     expect(screen.queryByText(/is unavailable right now/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'For you' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'All jobs' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'For you' })).not.toBeInTheDocument();      // the plain list stays, with Saved and Passed beside it
+    expect(screen.getByRole('button', { name: 'All jobs' })).toBeInTheDocument();
     expect(mockApi.recommendationsForYou).toHaveBeenCalledTimes(1);
     await user.type(screen.getByLabelText('Search jobs'), 'design');
     await waitFor(() => expect(mockApi.recommendations).toHaveBeenLastCalledWith('design', 0), { timeout: 1500 });
     expect(mockApi.recommendationsForYou).toHaveBeenCalledTimes(1);          // never asked again this session
+  });
+
+  it('marks jobs the user already ran a fit check on, with the score', async () => {
+    mockApi.fitSummaries.mockResolvedValue({ items: [{ job_id: 'role-1', percent: 75, stale: false }] });
+    render(<App />);
+    expect(await screen.findByText('Product Designer')).toBeInTheDocument();
+    expect(await screen.findByText(/Fit checked · 75%/)).toBeInTheDocument();
+  });
+
+  it('says a fit check is out of date when the profile changed after it', async () => {
+    mockApi.fitSummaries.mockResolvedValue({ items: [{ job_id: 'role-1', percent: 40, stale: true }] });
+    render(<App />);
+    expect(await screen.findByText(/Fit checked · 40% · out of date/)).toBeInTheDocument();
+  });
+
+  it('lists saved jobs on the Saved tab', async () => {
+    const user = userEvent.setup();
+    mockApi.reviewedJobs.mockResolvedValue({ items: [{ job: { id: 's1', title: 'Saved Analyst', company: 'Acme', location: 'Singapore', description: 'Analyse things carefully.' }, reasons: [], review: 'saved' }], total: 1, next_offset: null });
+    render(<App />);
+    expect(await screen.findByText('Product Designer')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Saved' }));
+    expect(await screen.findByText('Saved Analyst')).toBeInTheDocument();
+    expect(mockApi.reviewedJobs).toHaveBeenLastCalledWith('saved', '', 0);
+    expect(screen.getAllByRole('button', { name: 'Saved' }).filter((button) => button.hasAttribute('disabled'))).toHaveLength(1);   // the card's own button; nothing more to do
+    expect(screen.queryByRole('button', { name: 'Pass' })).not.toBeInTheDocument();
+  });
+
+  it('lists passed jobs on the Passed tab and lets the user restore one', async () => {
+    const user = userEvent.setup();
+    mockApi.reviewedJobs.mockResolvedValue({ items: [{ job: { id: 'p1', title: 'Passed Analyst', company: 'Acme', location: 'Singapore', description: 'Analyse things carefully.' }, reasons: [], review: 'dismissed' }], total: 1, next_offset: null });
+    mockApi.reviewJob.mockResolvedValue({});
+    render(<App />);
+    expect(await screen.findByText('Product Designer')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Passed' }));
+    expect(await screen.findByText('Passed Analyst')).toBeInTheDocument();
+    expect(mockApi.reviewedJobs).toHaveBeenLastCalledWith('dismissed', '', 0);
+    await user.click(screen.getByRole('button', { name: /Restore/ }));
+    await waitFor(() => expect(mockApi.reviewJob).toHaveBeenCalledWith('p1', 'none'));
   });
 
   it('keeps the toggle and the plain note for any other For you failure', async () => {

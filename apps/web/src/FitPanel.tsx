@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, HttpError } from './api';
 import type { FitAnalysis, FitResult, FitVerdict } from './types';
-import { Icon, Loading } from './ui';
+import { Loading } from './ui';
 import './fit.css';
 
 const POLL_MS = 2500;
@@ -14,26 +14,47 @@ const ERRORS: Record<string, string> = {
 
 type Group = { key: string; title: string; icon: string; verdicts: FitVerdict[] };
 const GROUPS: Group[] = [
-  { key: 'met', title: 'Your profile shows', icon: 'check', verdicts: ['met', 'partly'] },
-  { key: 'gap', title: 'Not evidenced in your profile', icon: 'close', verdicts: ['not_evidenced'] },
-  { key: 'judge', title: 'Needs your judgement', icon: 'help', verdicts: ['needs_judgement'] },
+  { key: 'met', title: 'Your profile shows', icon: 'ok', verdicts: ['met', 'partly'] },
+  { key: 'gap', title: 'Not evidenced in your profile', icon: 'no', verdicts: ['not_evidenced'] },
+  { key: 'judge', title: 'Needs your judgement', icon: 'ask', verdicts: ['needs_judgement'] },
 ];
+
+/** Small round icons in the same style as the walkthrough; local to this panel so the shared icon set stays as it is. */
+const FIT_ICONS: Record<string, ReactNode> = {
+  spark: <><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" /><path d="M18.5 16.5v3M17 18h3" /></>,
+  ok: <><circle cx="12" cy="12" r="9" /><path d="M8 12.5l2.7 2.7L16 9.5" /></>,
+  no: <><circle cx="12" cy="12" r="9" /><path d="M9 9l6 6M15 9l-6 6" /></>,
+  ask: <><circle cx="12" cy="12" r="9" /><path d="M9.7 9.6a2.4 2.4 0 1 1 3.5 2.1c-.8.4-1.2 1-1.2 1.7" /><path d="M12 16.9h.01" /></>,
+  bulb: <><path d="M9 18h6M10 21h4" /><path d="M12 3a6 6 0 0 0-3.6 10.8c.4.4.6.9.6 1.4V16h6v-.8c0-.5.2-1 .6-1.4A6 6 0 0 0 12 3z" /></>,
+};
+function FitIcon({ name }: { name: string }) {
+  return <svg className="fit-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{FIT_ICONS[name]}</svg>;
+}
 
 function Result({ result, stale }: { result: FitResult; stale: boolean }) {
   const { coverage } = result;
+  const gaps = result.verdicts.filter((verdict) => verdict?.verdict === 'not_evidenced').length;
+  const tone = coverage.percent === null ? 'none' : coverage.percent >= 70 ? 'high' : coverage.percent >= 40 ? 'mid' : 'low';
   return <div className="fit-result">
     {stale && <p className="fit-note" role="status">Your profile changed after this analysis. Run it again to include the changes.</p>}
-    <div className="fit-score">
+    <div className={`fit-score ${tone}`}>
       {coverage.percent === null
-        ? <div><strong>No score</strong><span>Too few requirements could be checked to give a fair percentage.</span></div>
-        : <div><strong>{coverage.percent}%</strong><span>of this job's must-have requirements are evidenced in your profile</span></div>}
+        ? <div className="fit-score-main"><strong>No score</strong><span>Too few requirements could be checked to give a fair percentage.</span></div>
+        : <div className="fit-score-main"><strong>{coverage.percent}%</strong><span>of this job's must-have requirements are evidenced in your profile</span></div>}
+      {coverage.percent !== null && <div className="fit-meter" aria-hidden="true"><i style={{ width: `${coverage.percent}%` }} /></div>}
+      <div className="fit-pills">
+        <span className="fit-pill met"><FitIcon name="ok" />{coverage.met} met</span>
+        {coverage.partly > 0 && <span className="fit-pill partly"><FitIcon name="ok" />{coverage.partly} partly</span>}
+        {gaps > 0 && <span className="fit-pill gap"><FitIcon name="no" />{gaps} not evidenced</span>}
+        {coverage.needs_judgement > 0 && <span className="fit-pill judge"><FitIcon name="ask" />{coverage.needs_judgement} needs your judgement</span>}
+      </div>
       <small>{coverage.met} met, {coverage.partly} partly, out of {coverage.considered} checked. This is not a chance of being hired.</small>
     </div>
     {GROUPS.map((group) => {
       const rows = result.requirements.map((requirement, index) => ({ requirement, verdict: result.verdicts[index] })).filter(({ verdict }) => verdict && group.verdicts.includes(verdict.verdict));
       if (!rows.length) return null;
       return <section key={group.key} className={`fit-group ${group.key}`} aria-label={group.title}>
-        <h4><Icon name={group.icon} /> {group.title}</h4>
+        <h4><FitIcon name={group.icon} /> {group.title} <span className="fit-count">{rows.length}</span></h4>
         <ul>{rows.map(({ requirement, verdict }) => <li key={requirement.text}>
           <span>{requirement.text}{requirement.importance === 'nice' && <em> (nice to have)</em>}{verdict.verdict === 'partly' && <em> (partly)</em>}</span>
           {verdict.note && <small>{verdict.note}</small>}
@@ -42,7 +63,7 @@ function Result({ result, stale }: { result: FitResult; stale: boolean }) {
       </section>;
     })}
     {result.suggestions.length > 0 && <section className="fit-suggestions" aria-label="Suggestions">
-      <h4>Suggestions</h4>
+      <h4><FitIcon name="bulb" /> Suggestions</h4>
       <ul>{result.suggestions.map((suggestion) => <li key={suggestion.text}>{suggestion.text}</li>)}</ul>
       <small>Only add something if it is true for you.</small>
     </section>}
@@ -90,7 +111,7 @@ export function FitPanel({ jobId, available, remaining, onUsed }: { jobId: strin
   const hasSlot = remaining > 0 || analysis?.status === 'ready';
   return <section className="fit-panel" aria-label="Fit analysis">
     <div className="fit-head">
-      <div><div className="eyebrow">FIT WITH YOUR PROFILE</div><h3>How well does your profile cover this job?</h3></div>
+      <div className="fit-title"><span className="fit-badge"><FitIcon name="spark" /></span><div><div className="eyebrow">FIT WITH YOUR PROFILE</div><h3>How well does your profile cover this job?</h3></div></div>
       <button type="button" className="button secondary" disabled={!available || busy || pending || loading || !hasSlot} onClick={start}>
         {analysis?.status === 'ready' ? 'Run again' : 'Check my fit'}
       </button>
