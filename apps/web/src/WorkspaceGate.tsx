@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import App from './App';
 import { waitForWorkspace } from './workspaceWake';
 import { signOut } from './auth';
+import { AuthScreen } from './AuthScreen';
+import { Icon } from './ui';
 
 export default function WorkspaceGate() {
   const [ready, setReady] = useState(false);
@@ -21,10 +23,9 @@ export default function WorkspaceGate() {
     return () => { clearTimeout(timer); controller.abort(); };
   }, [attempt]);
   if (ready) return <App />;
-  return <main style={{maxWidth: 480, margin: '15vh auto', padding: 24}}>
-    <h1>Job Hunter</h1>
-    {error ? <><p role="alert">{error}</p><button onClick={() => setAttempt(value => value + 1)}>Try again</button></>
-      : <p role="status">Connecting to your workspace…</p>}
-    <button onClick={() => void signOut()}>Sign out</button>
-  </main>;
+  return <AuthScreen title="Opening your workspace" text="The first visit after a quiet spell can take a few seconds.">
+    {error ? <><p className="auth-message error" role="alert">{error}</p><button className="auth-button" onClick={() => setAttempt(value => value + 1)}>Try again</button></>
+      : <p className="auth-message" role="status"><span className="spinner" /> Connecting to your workspace…</p>}
+    <button className="signout-button wide" onClick={() => void signOut()}><Icon name="signout" /> Sign out</button>
+  </AuthScreen>;
 }
