@@ -43,6 +43,12 @@ class PullJobs(unittest.TestCase):
         self.assertIn("Source problem", text)
         self.assertIn("embedding worker", text)
 
+    def test_the_summary_says_why_a_record_was_not_imported(self):
+        result = {**RESULT, "import": {**RESULT["import"], "errors": 1, "record_errors": [
+            {"source": "mycareersfuture", "external_id": "abc", "error": "title exceeds the 240 character database limit"}]}}
+        text = pull_jobs.summary(result)
+        self.assertIn("Record not imported: `mycareersfuture` id `abc`: title exceeds the 240 character database limit", text)
+
     def test_the_summary_says_when_nothing_was_loaded(self):
         text = pull_jobs.summary({"fetched": 0, "failures": [], "import": None})
         self.assertIn("Nothing was loaded", text)
