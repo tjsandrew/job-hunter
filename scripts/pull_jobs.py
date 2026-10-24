@@ -41,6 +41,8 @@ def summary(result: dict) -> str:
             f"- Records that could not be imported: {imported.get('errors', 0)}",
             f"- Embedding requested for the new jobs: {'yes' if imported.get('embed_flag_written') else 'no'}",
         ]
+    for problem in (imported or {}).get("record_errors") or []:
+        lines.append(f"- Record not imported: `{problem.get('source')}` id `{problem.get('external_id')}`: {problem.get('error')}")
     for failure in result.get("failures") or []:
         lines.append(f"- Source problem: `{json.dumps(failure)}`")
     for board in result.get("truncated_boards") or []:

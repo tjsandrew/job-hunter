@@ -105,6 +105,56 @@ def test_a_task_that_crashes_reports_a_generic_failure():
     assert run_task(FakeLlm(respond), {"request_id": "x", "task": "fit"}) == ({"error": "ANALYSIS_FAILED"}, "ANALYSIS_FAILED")
 
 
+class DeniedS3(FakeS3):
+    """S3 as the API role sees it: it may read objects but not list the bucket, so a missing key is AccessDenied, not NoSuchKey."""
+    def __init__(self, code="AccessDenied"):
+        super().__init__()
+        self.code = code
+
+    def get_object(self, Bucket, Key):
+        if (Bucket, Key) not in self.objects:
+            error = Exception("An error occurred (%s) when calling the GetObject operation" % self.code)
+            error.response = {"Error": {"Code": self.code}}
+            raise error
+        return super().get_object(Bucket, Key)
+
+
+def test_a_result_that_is_not_there_yet_is_not_an_error_even_when_s3_says_access_denied():
+    s3 = DeniedS3()
+    assert llm_transport.get_result(s3, "bucket", "early") is None                 # the first poll, before the worker has written
+    s3.objects[("bucket", llm_transport.result_key("early"))] = b'{"error": "NO_REQUIREMENTS"}'
+    assert llm_transport.get_result(s3, "bucket", "early") == {"error": "NO_REQUIREMENTS"}
+
+
+@pytest.mark.parametrize("code", ["404", "NotFound", "403"])
+def test_other_spellings_of_not_found_also_wait(code):
+    assert llm_transport.get_result(DeniedS3(code), "bucket", "x") is None
+
+
+def test_a_real_storage_failure_is_still_raised():
+    with pytest.raises(Exception, match="InternalError"):
+        llm_transport.get_result(DeniedS3("InternalError"), "bucket", "x")
+
+
+def test_ask_waits_for_a_result_that_s3_reports_as_access_denied_until_it_exists():
+    s3, clock, ticks = DeniedS3(), iter(range(100)), []
+
+    def sleep(seconds):
+        ticks.append(seconds)
+        if len(ticks) == 3:                      # the worker finishes during the third wait
+            s3.objects[("bucket", llm_transport.result_key(sent["id"]))] = b'{"entries": []}'
+
+    sent = {}
+    original = s3.put_object
+
+    def put_object(Bucket, Key, Body, **kw):
+        original(Bucket, Key, Body, **kw)
+        sent["id"] = Key.removeprefix(llm_transport.REQUEST_PREFIX).removesuffix(".json")
+    s3.put_object = put_object
+    result = llm_transport.ask(s3, "bucket", "tailor", {"x": 1}, wait_seconds=20, sleep=sleep, clock=lambda: next(clock))
+    assert result == {"entries": []} and len(ticks) == 3
+
+
 def test_the_worker_writes_a_result_next_to_the_request():
     s3 = FakeS3()
     llm_transport.put_request(s3, "bucket", fit_request("a1"))

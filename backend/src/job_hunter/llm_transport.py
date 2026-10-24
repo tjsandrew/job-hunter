@@ -40,12 +40,22 @@ def put_request(s3, bucket: str, request: Mapping[str, Any]) -> None:
                   ContentType="application/json")
 
 
+# What S3 answers for a result file that is not there yet. A caller that may read objects but may not LIST the bucket (the API
+# role, deliberately) gets AccessDenied instead of NoSuchKey for a missing key: S3 hides whether the key exists. Treating that
+# as "not yet" is what lets the first poll, a second after the request, wait instead of failing. If the role really lost its
+# read permission the answer never arrives and the request ends as a timeout.
+NOT_THERE_YET = {"NoSuchKey", "404", "NotFound", "AccessDenied", "403"}
+
+
 def get_result(s3, bucket: str, request_id) -> dict[str, Any] | None:
     """The worker's result file, or ``None`` while it does not exist yet."""
     try:
         body = s3.get_object(Bucket=bucket, Key=result_key(request_id))["Body"].read(MAX_FILE + 1)
-    except s3.exceptions.NoSuchKey:
-        return None
+    except Exception as exc:
+        code = ((getattr(exc, "response", None) or {}).get("Error") or {}).get("Code")
+        if isinstance(exc, s3.exceptions.NoSuchKey) or code in NOT_THERE_YET:
+            return None
+        raise
     if len(body) > MAX_FILE:
         raise ValueError("result file too large")
     return json.loads(body)

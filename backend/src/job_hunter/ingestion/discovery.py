@@ -228,13 +228,20 @@ def _now_utc() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+# Most feeds are small. A Greenhouse board is one response that holds every posting WITH its full text (the API has no paging),
+# so a big employer (Cloudflare) is well over 8 MB. Still bounded, so a runaway response cannot fill the function's memory.
+RESPONSE_LIMITS = {"greenhouse": 32_000_000}
+DEFAULT_RESPONSE_LIMIT = 8_000_000
+
+
 def _fetch_json(url: str, timeout: float, provider: str) -> Any:
     request = Request(url, headers={"Accept": "application/json", "User-Agent": USER_AGENT})
     try:
         with urlopen(request, timeout=timeout) as response:
-            payload = response.read(8_000_000)
+            limit = RESPONSE_LIMITS.get(provider, DEFAULT_RESPONSE_LIMIT)
+            payload = response.read(limit)
             if response.read(1):
-                raise ProviderRequestError(provider, "response_too_large", "response exceeded 8 MB")
+                raise ProviderRequestError(provider, "response_too_large", f"response exceeded {limit // 1_000_000} MB")
     except HTTPError as exc:
         raise ProviderHTTPError(provider, exc.code, url) from exc
     except (TimeoutError, URLError, OSError) as exc:
