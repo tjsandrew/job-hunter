@@ -62,14 +62,17 @@ def load_job_candidates(session: Session, *, model: str, text_version: str = JOB
     it never blocks a job."""
     rows = session.execute(
         select(Job.id, Job.title, Job.company, Job.location, Job.work_mode, Job.status, Job.category,
-               Job.seniority, job_embeddings.c.embedding)
+               Job.seniority, Job.salary_min, Job.salary_max, Job.salary_currency, Job.salary_period,
+               job_embeddings.c.embedding)
         .join(job_embeddings, job_embeddings.c.job_id == Job.id)
         .where(job_embeddings.c.text_version == text_version, job_embeddings.c.status == STATUS_READY,
                job_embeddings.c.model == model)).all()
     loaded = []
-    for job_id, title, company, location, work_mode, status, category, seniority, embedding in rows:
+    for (job_id, title, company, location, work_mode, status, category, seniority, salary_min, salary_max,
+         salary_currency, salary_period, embedding) in rows:
         job = {"id": str(job_id), "title": title, "company": company, "location": location,
-               "work_mode": work_mode, "status": status, "category": category}
+               "work_mode": work_mode, "status": status, "category": category, "salary_min": salary_min,
+               "salary_max": salary_max, "salary_currency": salary_currency, "salary_period": salary_period}
         loaded.append((job, RetrievalCandidate(job_id=str(job_id), vector=_floats(embedding),
                                                role_family=job_role_family(category),
                                                seniority_levels=job_seniority_levels(seniority),

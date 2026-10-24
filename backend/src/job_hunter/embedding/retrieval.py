@@ -3,7 +3,7 @@
 Order matters. Hard filters and the checks run *before* ranking, so the top results are never
 "the nearest jobs minus the ones we then had to throw away":
 
-  1. **Eligibility** (open status, location, work mode, optional exclusions): the same rules the
+  1. **Eligibility** (open status, location, work mode, minimum salary, optional exclusions): the same rules the
      existing ranker applies, reusing its own helpers.
   2. **Checks**: a job whose role family is clearly different from the profile's, or whose level is
      two or more steps away, is blocked. Unknown values never block. Blocked jobs are returned in a
@@ -24,7 +24,7 @@ from .features import check_engineering_subrole, check_role_family, check_senior
 
 # The ranker's own eligibility helpers (private there). A test pins ``is_eligible`` to the exact set of
 # jobs ``rank_jobs`` returns, so any drift is caught.
-from job_hunter.recommendations import _as_locations, _location_matches, _work_mode_matches
+from job_hunter.recommendations import _as_locations, _location_matches, _salary_matches, _work_mode_matches
 
 
 @dataclass(frozen=True)
@@ -71,13 +71,13 @@ class RetrievalResult:
 
 
 def is_eligible(job: Mapping[str, Any], preferences: Mapping[str, Any] | None) -> bool:
-    """Same eligibility the existing ranker applies: open, wanted location, wanted work mode."""
+    """Same eligibility the existing ranker applies: open, wanted location, wanted work mode, minimum salary."""
     preferences = preferences or {}
     if str(job.get("status", "open")).casefold() != "open":
         return False
     if not _location_matches(job.get("location"), _as_locations(preferences)):
         return False
-    return _work_mode_matches(job, preferences)
+    return _work_mode_matches(job, preferences) and _salary_matches(job, preferences)
 
 
 def eligible_jobs(jobs: Iterable[Mapping[str, Any]], preferences: Mapping[str, Any] | None,

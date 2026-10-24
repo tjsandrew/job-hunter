@@ -133,3 +133,34 @@ def test_reasons_include_exact_evidence_and_scores_are_deterministic():
     ]
     assert any(evidence.get("matched_text") == "SQL" for evidence in first[0]["evidence"])
     assert 0 <= first[0]["score"] <= 1
+
+
+def test_minimum_salary_filters_comparable_salaries_across_periods():
+    jobs = [
+        {"id": "monthly-high", "title": "Analyst", "salary_min": 6000, "salary_max": 8000,
+         "salary_currency": "SGD", "salary_period": "Monthly"},
+        {"id": "monthly-low", "title": "Analyst", "salary_min": 3000, "salary_max": 4000,
+         "salary_currency": "SGD", "salary_period": "Monthly"},
+        {"id": "yearly-range-reaches", "title": "Analyst", "salary_min": 50000, "salary_max": 90000,
+         "salary_currency": "SGD", "salary_period": "year"},
+        {"id": "min-only-low", "title": "Analyst", "salary_min": 40000, "salary_currency": "SGD",
+         "salary_period": "annual"},
+    ]
+    preferences = {"salary_min": 80000, "salary_currency": "SGD", "salary_period": "year"}
+    assert sorted(by_id(rank_jobs(jobs, {}, preferences))) == ["monthly-high", "yearly-range-reaches"]
+    monthly = {"salary_min": 5000, "salary_currency": "SGD", "salary_period": "month"}
+    assert sorted(by_id(rank_jobs(jobs, {}, monthly))) == ["monthly-high", "yearly-range-reaches"]
+
+
+def test_minimum_salary_never_hides_jobs_it_cannot_compare():
+    jobs = [
+        {"id": "no-salary", "title": "Analyst"},
+        {"id": "other-currency", "title": "Analyst", "salary_max": 1000, "salary_currency": "USD",
+         "salary_period": "year"},
+        {"id": "unknown-period", "title": "Analyst", "salary_max": 1000, "salary_currency": "SGD",
+         "salary_period": "per project"},
+    ]
+    preferences = {"salary_min": 80000, "salary_currency": "SGD", "salary_period": "year"}
+    assert sorted(by_id(rank_jobs(jobs, {}, preferences))) == ["no-salary", "other-currency", "unknown-period"]
+    for unset in (None, "", 0):
+        assert len(rank_jobs(jobs, {}, {"salary_min": unset})) == 3

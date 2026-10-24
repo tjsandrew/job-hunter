@@ -1,6 +1,6 @@
-"""Bounded adapters for public employer job-board APIs.
+"""Bounded adapters for public employer job-board APIs and the MyCareersFuture search API.
 
-Only employer-published public listings are read. This package does not crawl
+Only publicly listed postings are read. This package does not crawl
 HTML pages, submit applications, or bypass access controls.
 """
 

@@ -96,14 +96,15 @@ JOBS = [
     {"id": "3", "title": "Support Engineer", "status": "open", "location": "London", "work_mode": "onsite"},
     {"id": "4", "title": "Platform Engineer", "status": "open", "location": None, "work_mode": None},
     {"id": "5", "title": "Frontend Engineer", "status": "open", "location": "Singapore (Remote)", "work_mode": "remote"},
-    {"id": "6", "title": "Accountant", "status": "OPEN", "location": "singapore", "work_mode": "onsite"},
+    {"id": "6", "title": "Accountant", "status": "OPEN", "location": "singapore", "work_mode": "onsite",
+     "salary_min": 3000, "salary_max": 4000, "salary_currency": "SGD", "salary_period": "Monthly"},
 ]
 
 
 @pytest.mark.parametrize("preferences", [
     {}, {"locations": ["Singapore"]}, {"locations": ["London"], "work_modes": ["onsite"]},
     {"work_modes": ["remote"]}, {"locations": ["Singapore"], "work_modes": ["hybrid", "remote"]},
-    {"locations": ["Mars"]},
+    {"locations": ["Mars"]}, {"salary_min": 60000, "salary_currency": "SGD", "salary_period": "year"},
 ])
 def test_eligibility_matches_the_existing_rankers_filter_exactly(preferences):
     profile = {"headline": "Engineer", "skills": ["Python"], "target_roles": ["Engineer"]}
