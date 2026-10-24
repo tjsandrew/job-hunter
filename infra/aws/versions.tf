@@ -59,6 +59,46 @@ variable "llm_worker_enabled" {
   type        = bool
   default     = false
 }
+variable "discovery_enabled" {
+  description = "Create the job-pull functions (docs/design/04-JOB-INGESTION.md): discovery outside the VPC and import inside it. Start a pull with the Pull jobs GitHub workflow."
+  type        = bool
+  default     = false
+}
+variable "discovery_greenhouse_boards" {
+  description = "Greenhouse board tokens the job pull reads."
+  type        = list(string)
+  default     = ["stripe", "cloudflare", "coinbase"]
+}
+variable "discovery_lever_boards" {
+  description = "Lever site tokens the job pull reads."
+  type        = list(string)
+  default     = ["lalamove"]
+}
+variable "discovery_mycareersfuture_searches" {
+  description = "MyCareersFuture search keywords the job pull reads."
+  type        = list(string)
+  default     = ["data engineer", "software engineer", "data analyst"]
+}
+variable "discovery_adzuna_searches" {
+  description = "Adzuna search keywords. Empty (the default) leaves Adzuna off; add keywords only after the GitHub secrets ADZUNA_APP_ID and ADZUNA_APP_KEY exist."
+  type        = list(string)
+  default     = []
+}
+variable "discovery_max_new" {
+  description = "New jobs one pull may add."
+  type        = number
+  default     = 10
+}
+variable "discovery_schedule_enabled" {
+  description = "Also start a job pull on a schedule. Each run wakes Aurora (cost and activity alarm), so it is off by default."
+  type        = bool
+  default     = false
+}
+variable "discovery_schedule_expression" {
+  description = "EventBridge schedule used when discovery_schedule_enabled is true."
+  type        = string
+  default     = "rate(1 day)"
+}
 variable "embed_on_save" {
   description = "0 (off) or queue (the API writes the S3 flag after a profile save). Set queue only once the embed worker is live."
   type        = string

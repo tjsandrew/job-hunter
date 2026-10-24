@@ -316,10 +316,10 @@ def update_preferences(body: PreferencesWrite, db: Session = Depends(db_for, sco
 def recommendations(db: Session = Depends(db_for, scope="function"), limit: int = Query(20, ge=1, le=100),
                      offset: int = Query(0, ge=0, le=1000000),
                      q: str | None = Query(None, max_length=200)):
-    jobs = db.scalars(select(Job).where(Job.status == "open")).all()
-    reviews = {r.job_id: r.decision for r in db.scalars(select(JobReview)).all()}
+    jobs = db.scalars(select(Job).where(Job.status == "open", Job.canonical_job_id.is_(None))).all()
+    skipped = skipped_job_ids(db)
     prefs = db.get(Preference, current_user(db).id)
-    candidates = [job_out(job) for job in jobs if reviews.get(job.id) not in {"saved", "dismissed"}]
+    candidates = [job_out(job) for job in jobs if str(job.id) not in skipped]
     ranked = rank_jobs(candidates, bank_services.build_profile_snapshot(db), prefs.data if prefs else {})
     query = q.strip().casefold() if q else ""
     if query:
@@ -347,7 +347,7 @@ def recommendations_for_you(db: Session = Depends(db_for, scope="function"), lim
         raise HTTPException(404, detail={"code": "FOR_YOU_DISABLED", "message": "Semantic recommendations are not enabled"})
     user_id = current_user(db).id
     prefs = db.get(Preference, user_id)
-    skipped = [str(r.job_id) for r in db.scalars(select(JobReview)).all() if r.decision in {"saved", "dismissed"}]
+    skipped = sorted(skipped_job_ids(db))
     confirmed = bank_services.get_confirmed_snapshot(db)
     result, reason = semantic.semantic_for_you(db, confirmed, prefs.data if prefs else {}, skipped)
     if result is None:
@@ -357,7 +357,7 @@ def recommendations_for_you(db: Session = Depends(db_for, scope="function"), lim
     ordered, fused = result.ranked, False
     if embedding_settings.for_you_fusion_enabled():
         try:   # merge the keyword ranking in; if it cannot be computed, keep the semantic order rather than fail the page
-            open_jobs = db.scalars(select(Job).where(Job.status == "open")).all()
+            open_jobs = db.scalars(select(Job).where(Job.status == "open", Job.canonical_job_id.is_(None))).all()
             keyword_ranked = rank_jobs([job_out(job) for job in open_jobs if str(job.id) not in set(skipped)],
                                        bank_services.build_profile_snapshot(db), prefs.data if prefs else {})
             ordered, fused = semantic.fuse_with_keyword(result.ranked, keyword_ranked), True
@@ -373,6 +373,17 @@ def recommendations_for_you(db: Session = Depends(db_for, scope="function"), lim
             "fallback_reason": None, "fallback_code": None, "blocked_by_checks": len(result.blocked),
             "ranking_status": semantic.FUSED_STATUS if fused else semantic.SEMANTIC_STATUS}
 
+def skipped_job_ids(db: Session) -> set[str]:
+    """Jobs this user saved or passed on, plus the canonical row of any of them that has since become a duplicate.
+
+    Discover lists show only canonical rows, so a posting the user already reviewed under another source stays hidden."""
+    reviewed = [r.job_id for r in db.scalars(select(JobReview)).all() if r.decision in {"saved", "dismissed"}]
+    hidden = {str(job_id) for job_id in reviewed}
+    if reviewed:
+        hidden.update(str(job_id) for job_id in db.scalars(
+            select(Job.canonical_job_id).where(Job.id.in_(reviewed), Job.canonical_job_id.is_not(None))))
+    return hidden
+
 def job_out(job: Job) -> dict:
     return {"id": str(job.id), "title": job.title, "company": job.company,
             "employer": job.company, "location": job.location, "work_mode": job.work_mode,
@@ -385,7 +396,9 @@ def job_out(job: Job) -> dict:
             "category_evidence": job.category_evidence,
             "skills": job.skills, "status": job.status, "salary_min": job.salary_min,
             "salary_max": job.salary_max, "salary_currency": job.salary_currency,
-            "salary_period": job.salary_period}
+            "salary_period": job.salary_period,
+            # The other sources that list the same posting (cross-source de-duplication); empty when there are none.
+            "also_seen_on": job.also_seen_on or []}
 
 @app.get("/v1/jobs/reviewed")   # declared before /v1/jobs/{job_id} so "reviewed" is not read as a job id
 def reviewed_jobs(decision: str = Query(pattern="^(saved|dismissed)$"), limit: int = Query(20, ge=1, le=100),

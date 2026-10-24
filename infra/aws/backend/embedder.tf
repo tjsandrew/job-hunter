@@ -109,6 +109,20 @@ resource "aws_s3_bucket_lifecycle_configuration" "embed_flags" {
       noncurrent_version_expiration { noncurrent_days = 1 }
     }
   }
+  # Job snapshots (job pull, discovery.tf) are only needed while the import step reads them; keep a week for troubleshooting.
+  rule {
+    id     = "expire-imports"
+    status = "Enabled"
+    filter { prefix = local.import_prefix }
+    expiration { days = 7 }
+    noncurrent_version_expiration { noncurrent_days = 1 }
+  }
+  rule {
+    id     = "remove-expired-imports-markers"
+    status = "Enabled"
+    filter { prefix = local.import_prefix }
+    expiration { expired_object_delete_marker = true }
+  }
   dynamic "rule" {
     for_each = toset(["llm-", "fit-"])
     content {

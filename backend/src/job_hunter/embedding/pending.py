@@ -46,7 +46,7 @@ def pending_job_ids(session: Session, *, text_version: str, model: str | None, l
     query = (select(Job.id)
              .select_from(Job.__table__.outerjoin(
                  job_embeddings, and_(e.job_id == Job.id, e.text_version == text_version)))
-             .where(Job.status == "open"))
+             .where(Job.status == "open", Job.canonical_job_id.is_(None)))   # a duplicate needs no vector of its own
     if not everything:
         newer = Job.updated_at > e.updated_at
         ready_stale = and_(e.status == "ready", newer if model is None else or_(e.model.is_distinct_from(model), newer))

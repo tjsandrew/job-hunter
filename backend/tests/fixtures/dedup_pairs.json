@@ -1,0 +1,370 @@
+[
+ {
+  "name": "employer board and MCF, same text",
+  "same": true,
+  "note": "legal suffix and district differ only",
+  "a": {
+   "source": "greenhouse",
+   "source_board": "greenhouse",
+   "company": "Stripe",
+   "title": "Data Engineer",
+   "location": "Singapore",
+   "description": "We are looking for a Data Engineer to join our data platform team in Singapore. You will design and maintain batch and streaming pipelines using Python, SQL, Airflow and Kafka, model warehouse tables in Snowflake, and work with analysts to make reliable datasets available. You will monitor data quality, improve pipeline performance and document your work. Requirements: three years of experience building data pipelines, strong SQL, experience with cloud data warehouses, and good communication skills. We offer flexible working, learning budget and health insurance.",
+   "source_url": "https://boards.greenhouse.io/stripe/jobs/1"
+  },
+  "b": {
+   "source": "mycareersfuture",
+   "source_board": "mycareersfuture",
+   "company": "Stripe Singapore Pte. Ltd.",
+   "title": "Data Engineer",
+   "location": "Tanjong Pagar, Singapore",
+   "description": "We are looking for a Data Engineer to join our data platform team in Singapore. You will design and maintain batch and streaming pipelines using Python, SQL, Airflow and Kafka, model warehouse tables in Snowflake, and work with analysts to make reliable datasets available. You will monitor data quality, improve pipeline performance and document your work. Requirements: three years of experience building data pipelines, strong SQL, experience with cloud data warehouses, and good communication skills. We offer flexible working, learning budget and health insurance.",
+   "source_url": "https://www.mycareersfuture.gov.sg/job/data-engineer-aaa"
+  }
+ },
+ {
+  "name": "employer board and MCF, small edit",
+  "same": true,
+  "note": "one sentence trimmed",
+  "a": {
+   "source": "lever",
+   "source_board": "lever",
+   "company": "Lalamove",
+   "title": "Backend Engineer",
+   "location": "Singapore",
+   "description": "The payments team is hiring a Backend Engineer to build the services that move money for millions of businesses. You will write Java and Go services, design APIs, review code, and take part in the on call rotation. You will work on ledger accuracy, idempotent payment flows, fraud signals and reconciliation tooling. Requirements: solid computer science fundamentals, experience with distributed systems, comfort with relational databases and a habit of writing tests. Benefits include equity, a relocation package and generous parental leave.",
+   "source_url": "https://jobs.lever.co/lalamove/2"
+  },
+  "b": {
+   "source": "mycareersfuture",
+   "source_board": "mycareersfuture",
+   "company": "Lalamove Singapore Pte Ltd",
+   "title": "Backend Engineer",
+   "location": "Singapore",
+   "description": "The payments team is hiring a Backend Engineer to build the services that move money for millions of businesses. You will write Java and Go services, design APIs, review code, and take part in the on call rotation. You will work on ledger accuracy, idempotent payment flows, fraud signals and reconciliation tooling. Requirements: solid computer science fundamentals, experience with distributed systems, comfort with relational databases and a habit of writing tests. Benefits include equity and a relocation package.",
+   "source_url": "https://www.mycareersfuture.gov.sg/job/backend-engineer-bbb"
+  }
+ },
+ {
+  "name": "employer board and Adzuna snippet",
+  "same": true,
+  "note": "aggregator keeps only the start of the text",
+  "a": {
+   "source": "greenhouse",
+   "source_board": "greenhouse",
+   "company": "Cloudflare",
+   "title": "Frontend Engineer",
+   "location": "Singapore",
+   "description": "Join the web experience team as a Frontend Engineer and shape the dashboards our customers use every day. You will build accessible interfaces with React and TypeScript, partner with designers on component libraries, measure performance with real user monitoring and write unit and end to end tests. Requirements: two years of professional React experience, knowledge of browser performance, an eye for detail and the ability to explain trade offs clearly. We value mentoring, inclusive teams and sustainable delivery.",
+   "source_url": "https://boards.greenhouse.io/cloudflare/jobs/3"
+  },
+  "b": {
+   "source": "adzuna",
+   "source_board": "adzuna",
+   "company": "Cloudflare, Inc.",
+   "title": "Frontend Engineer",
+   "location": "Singapore",
+   "description": "Join the web experience team as a Frontend Engineer and shape the dashboards our customers use every day. You will build accessible interfaces with React and TypeScript, partner with designers on component libraries, measure performance with real user monitoring and write unit and end to end tests. Requirements:...",
+   "source_url": "https://www.adzuna.sg/land/ad/111"
+  }
+ },
+ {
+  "name": "MCF and Adzuna snippet",
+  "same": true,
+  "note": "",
+  "a": {
+   "source": "mycareersfuture",
+   "source_board": "mycareersfuture",
+   "company": "Grab Holdings",
+   "title": "Machine Learning Engineer",
+   "location": "Singapore",
+   "description": "We are hiring a Machine Learning Engineer to train and deploy ranking models for our search product. You will prepare training data, run experiments with PyTorch, evaluate offline metrics, run online experiments, and ship models behind low latency services. You will collaborate with product managers and data scientists, write design documents and mentor junior engineers. Requirements: a degree in a quantitative field, hands on experience with deep learning frameworks, production Python and curiosity about retrieval and recommendation systems.",
+   "source_url": "https://www.mycareersfuture.gov.sg/job/ml-ccc"
+  },
+  "b": {
+   "source": "adzuna",
+   "source_board": "adzuna",
+   "company": "Grab Holdings",
+   "title": "Machine Learning Engineer",
+   "location": "Singapore",
+   "description": "We are hiring a Machine Learning Engineer to train and deploy ranking models for our search product. You will prepare training data, run experiments with PyTorch, evaluate offline metrics, run online experiments, and ship models behind low latency services. You will collaborate with product managers and data scientists, write design documents and mentor junior engineers.",
+   "source_url": "https://www.adzuna.sg/land/ad/222"
+  }
+ },
+ {
+  "name": "capital letters and punctuation",
+  "same": true,
+  "note": "case is ignored",
+  "a": {
+   "source": "greenhouse",
+   "source_board": "greenhouse",
+   "company": "Coinbase",
+   "title": "Application Security Engineer",
+   "location": "Singapore",
+   "description": "The security engineering team is looking for an Application Security Engineer to review designs, threat model new features, run penetration tests and help developers fix vulnerabilities early. You will automate static analysis in the build pipeline, manage the vulnerability backlog, respond to incidents and teach secure coding practices. Requirements: experience with web application security, knowledge of OWASP risks, scripting skills in Python or Bash, and clear writing for audit reports and developer guidance.",
+   "source_url": "https://boards.greenhouse.io/coinbase/jobs/4"
+  },
+  "b": {
+   "source": "mycareersfuture",
+   "source_board": "mycareersfuture",
+   "company": "COINBASE",
+   "title": "Application Security Engineer!",
+   "location": "Singapore",
+   "description": "THE SECURITY ENGINEERING TEAM IS LOOKING FOR AN APPLICATION SECURITY ENGINEER TO REVIEW DESIGNS, THREAT MODEL NEW FEATURES, RUN PENETRATION TESTS AND HELP DEVELOPERS FIX VULNERABILITIES EARLY. YOU WILL AUTOMATE STATIC ANALYSIS IN THE BUILD PIPELINE, MANAGE THE VULNERABILITY BACKLOG, RESPOND TO INCIDENTS AND TEACH SECURE CODING PRACTICES. REQUIREMENTS: EXPERIENCE WITH WEB APPLICATION SECURITY, KNOWLEDGE OF OWASP RISKS, SCRIPTING SKILLS IN PYTHON OR BASH, AND CLEAR WRITING FOR AUDIT REPORTS AND DEVELOPER GUIDANCE.",
+   "source_url": "https://www.mycareersfuture.gov.sg/job/appsec-ddd"
+  }
+ },
+ {
+  "name": "same listing URL on two sources",
+  "same": true,
+  "note": "the same URL is the same listing",
+  "a": {
+   "source": "lever",
+   "source_board": "lever",
+   "company": "Acme",
+   "title": "Analyst",
+   "location": "Singapore",
+   "description": "Our finance team needs a Financial Analyst to prepare monthly management accounts, forecast revenue and costs, analyse variances against budget and support the annual planning cycle. You will build Excel and SQL models, reconcile ledgers, work with regional controllers and present findings to senior leaders. Requirements: a degree in accounting or finance, strong spreadsheet skills, attention to detail and the ability to explain numbers to non finance colleagues. Progress towards a professional qualification is welcome.",
+   "source_url": "https://acme.example/careers/42"
+  },
+  "b": {
+   "source": "adzuna",
+   "source_board": "adzuna",
+   "company": "Acme",
+   "title": "Analyst II",
+   "location": "Singapore",
+   "description": "Short note.",
+   "source_url": "https://acme.example/careers/42"
+  }
+ },
+ {
+  "name": "title with a bracket",
+  "same": true,
+  "note": "",
+  "a": {
+   "source": "greenhouse",
+   "source_board": "greenhouse",
+   "company": "Stripe",
+   "title": "Product Designer (Onboarding)",
+   "location": "Singapore",
+   "description": "We are looking for a Product Designer to own the experience of our onboarding flow from first visit to first success. You will run user interviews, sketch flows, build prototypes in Figma, test them with customers and work with engineers to ship polished interfaces. You will keep our design system consistent and measure the impact of your work with product analytics. Requirements: a portfolio showing end to end product work, strong interaction design skills and comfortable collaboration with engineers and researchers.",
+   "source_url": "https://boards.greenhouse.io/stripe/jobs/5"
+  },
+  "b": {
+   "source": "mycareersfuture",
+   "source_board": "mycareersfuture",
+   "company": "Stripe Singapore Pte Ltd",
+   "title": "Product Designer - Onboarding",
+   "location": "Singapore",
+   "description": "We are looking for a Product Designer to own the experience of our onboarding flow from first visit to first success. You will run user interviews, sketch flows, build prototypes in Figma, test them with customers and work with engineers to ship polished interfaces. You will keep our design system consistent and measure the impact of your work with product analytics. Requirements: a portfolio showing end to end product work, strong interaction design skills and comfortable collaboration with engineers and researchers.",
+   "source_url": "https://www.mycareersfuture.gov.sg/job/pd-eee"
+  }
+ },
+ {
+  "name": "employer board and Adzuna, finance",
+  "same": true,
+  "note": "",
+  "a": {
+   "source": "greenhouse",
+   "source_board": "greenhouse",
+   "company": "Stripe",
+   "title": "Financial Analyst",
+   "location": "Singapore",
+   "description": "Our finance team needs a Financial Analyst to prepare monthly management accounts, forecast revenue and costs, analyse variances against budget and support the annual planning cycle. You will build Excel and SQL models, reconcile ledgers, work with regional controllers and present findings to senior leaders. Requirements: a degree in accounting or finance, strong spreadsheet skills, attention to detail and the ability to explain numbers to non finance colleagues. Progress towards a professional qualification is welcome.",
+   "source_url": "https://boards.greenhouse.io/stripe/jobs/6"
+  },
+  "b": {
+   "source": "adzuna",
+   "source_board": "adzuna",
+   "company": "Stripe",
+   "title": "Financial Analyst",
+   "location": "Singapore",
+   "description": "Our finance team needs a Financial Analyst to prepare monthly management accounts, forecast revenue and costs, analyse variances against budget and support the annual planning cycle. You will build Excel and SQL models, reconcile ledgers, work with regional controllers and present findings to senior leaders. Requirements: a degree in accounting or finance, strong spreadsheet skills, attention to detail and the",
+   "source_url": "https://www.adzuna.sg/land/ad/333"
+  }
+ },
+ {
+  "name": "same company, title and place but another team",
+  "same": false,
+  "note": "different descriptions: not proven",
+  "a": {
+   "source": "greenhouse",
+   "source_board": "greenhouse",
+   "company": "Stripe",
+   "title": "Software Engineer",
+   "location": "Singapore",
+   "description": "The payments team is hiring a Backend Engineer to build the services that move money for millions of businesses. You will write Java and Go services, design APIs, review code, and take part in the on call rotation. You will work on ledger accuracy, idempotent payment flows, fraud signals and reconciliation tooling. Requirements: solid computer science fundamentals, experience with distributed systems, comfort with relational databases and a habit of writing tests. Benefits include equity, a relocation package and generous parental leave.",
+   "source_url": "https://boards.greenhouse.io/stripe/jobs/7"
+  },
+  "b": {
+   "source": "mycareersfuture",
+   "source_board": "mycareersfuture",
+   "company": "Stripe Singapore Pte Ltd",
+   "title": "Software Engineer",
+   "location": "Singapore",
+   "description": "Join the web experience team as a Frontend Engineer and shape the dashboards our customers use every day. You will build accessible interfaces with React and TypeScript, partner with designers on component libraries, measure performance with real user monitoring and write unit and end to end tests. Requirements: two years of professional React experience, knowledge of browser performance, an eye for detail and the ability to explain trade offs clearly. We value mentoring, inclusive teams and sustainable delivery.",
+   "source_url": "https://www.mycareersfuture.gov.sg/job/swe-fff"
+  }
+ },
+ {
+  "name": "same title at another company",
+  "same": false,
+  "note": "an employer is part of the key",
+  "a": {
+   "source": "greenhouse",
+   "source_board": "greenhouse",
+   "company": "Stripe",
+   "title": "Data Engineer",
+   "location": "Singapore",
+   "description": "We are looking for a Data Engineer to join our data platform team in Singapore. You will design and maintain batch and streaming pipelines using Python, SQL, Airflow and Kafka, model warehouse tables in Snowflake, and work with analysts to make reliable datasets available. You will monitor data quality, improve pipeline performance and document your work. Requirements: three years of experience building data pipelines, strong SQL, experience with cloud data warehouses, and good communication skills. We offer flexible working, learning budget and health insurance.",
+   "source_url": "https://boards.greenhouse.io/stripe/jobs/8"
+  },
+  "b": {
+   "source": "mycareersfuture",
+   "source_board": "mycareersfuture",
+   "company": "Grab Holdings",
+   "title": "Data Engineer",
+   "location": "Singapore",
+   "description": "We are looking for a Data Engineer to join our data platform team in Singapore. You will design and maintain batch and streaming pipelines using Python, SQL, Airflow and Kafka, model warehouse tables in Snowflake, and work with analysts to make reliable datasets available. You will monitor data quality, improve pipeline performance and document your work. Requirements: three years of experience building data pipelines, strong SQL, experience with cloud data warehouses, and good communication skills. We offer flexible working, learning budget and health insurance.",
+   "source_url": "https://www.mycareersfuture.gov.sg/job/de-ggg"
+  }
+ },
+ {
+  "name": "senior and junior versions",
+  "same": false,
+  "note": "a level word changes the title",
+  "a": {
+   "source": "greenhouse",
+   "source_board": "greenhouse",
+   "company": "Stripe",
+   "title": "Senior Data Engineer",
+   "location": "Singapore",
+   "description": "We are looking for a Data Engineer to join our data platform team in Singapore. You will design and maintain batch and streaming pipelines using Python, SQL, Airflow and Kafka, model warehouse tables in Snowflake, and work with analysts to make reliable datasets available. You will monitor data quality, improve pipeline performance and document your work. Requirements: three years of experience building data pipelines, strong SQL, experience with cloud data warehouses, and good communication skills. We offer flexible working, learning budget and health insurance.",
+   "source_url": "https://boards.greenhouse.io/stripe/jobs/9"
+  },
+  "b": {
+   "source": "mycareersfuture",
+   "source_board": "mycareersfuture",
+   "company": "Stripe",
+   "title": "Data Engineer",
+   "location": "Singapore",
+   "description": "We are looking for a Data Engineer to join our data platform team in Singapore. You will design and maintain batch and streaming pipelines using Python, SQL, Airflow and Kafka, model warehouse tables in Snowflake, and work with analysts to make reliable datasets available. You will monitor data quality, improve pipeline performance and document your work. Requirements: three years of experience building data pipelines, strong SQL, experience with cloud data warehouses, and good communication skills. We offer flexible working, learning budget and health insurance.",
+   "source_url": "https://www.mycareersfuture.gov.sg/job/de-hhh"
+  }
+ },
+ {
+  "name": "same job in another city",
+  "same": false,
+  "note": "location is part of the key",
+  "a": {
+   "source": "greenhouse",
+   "source_board": "greenhouse",
+   "company": "Cloudflare",
+   "title": "Frontend Engineer",
+   "location": "Singapore",
+   "description": "Join the web experience team as a Frontend Engineer and shape the dashboards our customers use every day. You will build accessible interfaces with React and TypeScript, partner with designers on component libraries, measure performance with real user monitoring and write unit and end to end tests. Requirements: two years of professional React experience, knowledge of browser performance, an eye for detail and the ability to explain trade offs clearly. We value mentoring, inclusive teams and sustainable delivery.",
+   "source_url": "https://boards.greenhouse.io/cloudflare/jobs/10"
+  },
+  "b": {
+   "source": "adzuna",
+   "source_board": "adzuna",
+   "company": "Cloudflare",
+   "title": "Frontend Engineer",
+   "location": "London",
+   "description": "Join the web experience team as a Frontend Engineer and shape the dashboards our customers use every day. You will build accessible interfaces with React and TypeScript, partner with designers on component libraries, measure performance with real user monitoring and write unit and end to end tests. Requirements: two years of professional React experience, knowledge of browser performance, an eye for detail and the ability to explain trade offs clearly. We value mentoring, inclusive teams and sustainable delivery.",
+   "source_url": "https://www.adzuna.sg/land/ad/444"
+  }
+ },
+ {
+  "name": "similar titles, same text",
+  "same": false,
+  "note": "similar titles alone never merge",
+  "a": {
+   "source": "greenhouse",
+   "source_board": "greenhouse",
+   "company": "Coinbase",
+   "title": "Machine Learning Engineer",
+   "location": "Singapore",
+   "description": "We are hiring a Machine Learning Engineer to train and deploy ranking models for our search product. You will prepare training data, run experiments with PyTorch, evaluate offline metrics, run online experiments, and ship models behind low latency services. You will collaborate with product managers and data scientists, write design documents and mentor junior engineers. Requirements: a degree in a quantitative field, hands on experience with deep learning frameworks, production Python and curiosity about retrieval and recommendation systems.",
+   "source_url": "https://boards.greenhouse.io/coinbase/jobs/11"
+  },
+  "b": {
+   "source": "mycareersfuture",
+   "source_board": "mycareersfuture",
+   "company": "Coinbase",
+   "title": "Machine Learning Scientist",
+   "location": "Singapore",
+   "description": "We are hiring a Machine Learning Engineer to train and deploy ranking models for our search product. You will prepare training data, run experiments with PyTorch, evaluate offline metrics, run online experiments, and ship models behind low latency services. You will collaborate with product managers and data scientists, write design documents and mentor junior engineers. Requirements: a degree in a quantitative field, hands on experience with deep learning frameworks, production Python and curiosity about retrieval and recommendation systems.",
+   "source_url": "https://www.mycareersfuture.gov.sg/job/mls-iii"
+  }
+ },
+ {
+  "name": "same source twice",
+  "same": false,
+  "note": "two rows of one source are never merged",
+  "a": {
+   "source": "greenhouse",
+   "source_board": "greenhouse",
+   "company": "Stripe",
+   "title": "Customer Operations Associate",
+   "location": "Singapore",
+   "description": "Customer Operations Associate wanted for our Singapore support hub. You will answer customer emails and chat messages, investigate account issues with the billing team, update the help centre articles and escalate bugs with clear reproduction steps. You will track response times and customer satisfaction scores and suggest process improvements each month. Requirements: excellent written English, patience, familiarity with ticketing tools and willingness to work a rotating shift including some weekends.",
+   "source_url": "https://boards.greenhouse.io/stripe/jobs/12"
+  },
+  "b": {
+   "source": "greenhouse",
+   "source_board": "greenhouse",
+   "company": "Stripe",
+   "title": "Customer Operations Associate",
+   "location": "Singapore",
+   "description": "Customer Operations Associate wanted for our Singapore support hub. You will answer customer emails and chat messages, investigate account issues with the billing team, update the help centre articles and escalate bugs with clear reproduction steps. You will track response times and customer satisfaction scores and suggest process improvements each month. Requirements: excellent written English, patience, familiarity with ticketing tools and willingness to work a rotating shift including some weekends.",
+   "source_url": "https://boards.greenhouse.io/stripe/jobs/13"
+  }
+ },
+ {
+  "name": "descriptions too short to prove anything",
+  "same": false,
+  "note": "",
+  "a": {
+   "source": "lever",
+   "source_board": "lever",
+   "company": "Acme",
+   "title": "Analyst",
+   "location": "Singapore",
+   "description": "See careers page.",
+   "source_url": "https://acme.example/careers/a"
+  },
+  "b": {
+   "source": "adzuna",
+   "source_board": "adzuna",
+   "company": "Acme",
+   "title": "Analyst",
+   "location": "Singapore",
+   "description": "See careers page.",
+   "source_url": "https://www.adzuna.sg/land/ad/555"
+  }
+ },
+ {
+  "name": "missing employer",
+  "same": false,
+  "note": "no employer, no key",
+  "a": {
+   "source": "greenhouse",
+   "source_board": "greenhouse",
+   "company": null,
+   "title": "Data Engineer",
+   "location": "Singapore",
+   "description": "We are looking for a Data Engineer to join our data platform team in Singapore. You will design and maintain batch and streaming pipelines using Python, SQL, Airflow and Kafka, model warehouse tables in Snowflake, and work with analysts to make reliable datasets available. You will monitor data quality, improve pipeline performance and document your work. Requirements: three years of experience building data pipelines, strong SQL, experience with cloud data warehouses, and good communication skills. We offer flexible working, learning budget and health insurance.",
+   "source_url": "https://boards.greenhouse.io/x/jobs/14"
+  },
+  "b": {
+   "source": "adzuna",
+   "source_board": "adzuna",
+   "company": null,
+   "title": "Data Engineer",
+   "location": "Singapore",
+   "description": "We are looking for a Data Engineer to join our data platform team in Singapore. You will design and maintain batch and streaming pipelines using Python, SQL, Airflow and Kafka, model warehouse tables in Snowflake, and work with analysts to make reliable datasets available. You will monitor data quality, improve pipeline performance and document your work. Requirements: three years of experience building data pipelines, strong SQL, experience with cloud data warehouses, and good communication skills. We offer flexible working, learning budget and health insurance.",
+   "source_url": "https://www.adzuna.sg/land/ad/666"
+  }
+ }
+]

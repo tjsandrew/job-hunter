@@ -20,3 +20,12 @@ for_you_enabled = "1"
 # Shared LLM worker for fit analysis and the AI resume rewrite (docs/design/12-FIT-ANALYSIS.md). The key comes from the GitHub
 # secret LLM_API_KEY at release time. Never apply without this line: the worker would be removed.
 llm_worker_enabled = true
+
+# Job pull (docs/design/04-JOB-INGESTION.md): two Lambdas that load a few new public job postings into Aurora when the Pull jobs
+# GitHub workflow runs. No schedule (each run wakes Aurora). Never apply without this line: the functions would be removed.
+discovery_enabled = true
+
+# Adzuna (Singapore search verified on 24 October 2026). One request per keyword per pull; the free plan allows very few calls a
+# day, so keep this list short. The keys are the GitHub secrets ADZUNA_APP_ID and ADZUNA_APP_KEY; without them Adzuna fails cleanly
+# and the other sources still load.
+discovery_adzuna_searches = ["data engineer"]

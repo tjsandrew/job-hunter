@@ -21,7 +21,7 @@ FIELDS = (
     "description", "url", "status", "salary_min", "salary_max", "salary_currency",
     "salary_period", "posted_at", "expires_at", "source_board", "source_url", "fetched_at",
     "category", "category_source", "category_evidence", "seniority", "seniority_source", "seniority_evidence",
-    "updated_at",
+    "updated_at", "match_key", "canonical_job_id", "also_seen_on",
 )
 
 

@@ -118,6 +118,15 @@ module "backend" {
   embed_on_save         = var.embed_on_save
   for_you_enabled       = var.for_you_enabled
   llm_worker_enabled    = var.llm_worker_enabled
+
+  discovery_enabled                  = var.discovery_enabled
+  discovery_greenhouse_boards        = var.discovery_greenhouse_boards
+  discovery_lever_boards             = var.discovery_lever_boards
+  discovery_mycareersfuture_searches = var.discovery_mycareersfuture_searches
+  discovery_adzuna_searches          = var.discovery_adzuna_searches
+  discovery_max_new                  = var.discovery_max_new
+  discovery_schedule_enabled         = var.discovery_schedule_enabled
+  discovery_schedule_expression      = var.discovery_schedule_expression
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
@@ -158,6 +167,8 @@ output "deployment" {
     EMBED_ECR_REPOSITORY            = aws_ecr_repository.embed.repository_url
     EMBED_FUNCTION                  = try(module.backend[0].embed_function, "")
     LLM_FUNCTION                    = try(module.backend[0].llm_function, "")
+    DISCOVERY_FUNCTION              = try(module.backend[0].discovery_function, "")
+    IMPORT_FUNCTION                 = try(module.backend[0].import_function, "")
     VITE_AUTH_MODE                  = "cognito"
     VITE_COGNITO_ISSUER             = "https://${aws_cognito_user_pool.users.endpoint}"
     VITE_COGNITO_CLIENT_ID          = aws_cognito_user_pool_client.web.id

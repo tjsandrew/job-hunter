@@ -19,6 +19,7 @@ from typing import Any, Iterable, Mapping, Protocol, Sequence
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from job_hunter.ingestion import dedup
 from job_hunter.ingestion.discovery import DiscoveryConfig, DiscoveryReport, discover_report
 from job_hunter.job_classification import classify_job
 from job_hunter.role_family import CLASSIFIER_VERSION, classify_role_family
@@ -32,6 +33,8 @@ class ImportStats:
     new: int = 0
     updated: int = 0
     unchanged: int = 0
+    deferred: int = 0       # new records left for a later run because max_new was reached
+    linked: int = 0         # rows whose duplicate links changed (cross-source de-duplication)
     errors: int = 0
     source_failures: list[dict[str, str]] = field(default_factory=list)
     truncated_boards: list[str] = field(default_factory=list)
@@ -60,6 +63,10 @@ class SQLAlchemyJobRepository:
 
     def add(self, job: Any) -> None:
         self.session.add(job)
+
+    def find_by_match_key(self, key: str) -> list[Any]:
+        # The query flushes a job added in this transaction first, so the group includes it.
+        return list(self.session.scalars(select(self.job_model).where(self.job_model.match_key == key)))
 
 
 CONTENT_FIELDS = (
@@ -172,6 +179,7 @@ def _job_values(record: Mapping[str, Any], job_model: type) -> dict[str, Any]:
         "expires_at": _parse_datetime(record.get("expires_at")),
     }
     values.update(classify_job(values["title"], stated_seniority=record.get("stated_seniority")))
+    values["match_key"] = dedup.match_key(values["company"], values["title"], values["location"])
     available = set(job_model.__mapper__.attrs.keys())
     values["source_board"] = record.get("source_board")
     values["source_url"] = record["source_url"]
@@ -207,10 +215,22 @@ def upsert_records(
     records: Sequence[Mapping[str, Any]],
     *,
         job_model: type | None = None,
+        max_new: int | None = None,
 ) -> ImportStats:
-    """Apply normalized records inside the caller's transaction."""
+    """Apply normalized records inside the caller's transaction.
+
+    ``max_new`` caps how many NEW jobs one run inserts (the cloud "pull" adds a small batch at a time); records
+    that are already stored are still refreshed, and the records left over are counted as ``deferred``."""
     stats = ImportStats()
     job_model = job_model or _load_job_model()
+    find_group = getattr(repository, "find_by_match_key", None)   # optional: a repository without it skips de-duplication
+
+    def relink(*keys: str | None) -> None:
+        if find_group is not None:
+            for key in dict.fromkeys(keys):
+                if key:
+                    stats.linked += dedup.relink(find_group(key))
+
     for record in records:
         try:
             values = _job_values(record, job_model)
@@ -218,10 +238,15 @@ def upsert_records(
                 values["source"], values.get("source_board"), values["external_id"]
             )
             if existing is None:
+                if max_new is not None and stats.new >= max_new:
+                    stats.deferred += 1
+                    continue
                 repository.add(job_model(**values))
                 stats.new += 1
+                relink(values["match_key"])
                 continue
 
+            old_key = getattr(existing, "match_key", None)
             changed = any(getattr(existing, key) != values[key] for key in CONTENT_FIELDS)
             if changed:
                 for key, value in values.items():
@@ -233,7 +258,11 @@ def upsert_records(
                 # Retrieval provenance advances even when listing content does not.
                 if "fetched_at" in values:
                     existing.fetched_at = values["fetched_at"]
+                # The link key is derived data: set it without touching updated_at, which would queue a re-embedding.
+                existing.match_key = values["match_key"]
                 stats.unchanged += 1
+            if changed or old_key != values["match_key"]:
+                relink(old_key, values["match_key"])
         except (ValueError, TypeError, OverflowError) as exc:
             stats.errors += 1
             stats.record_errors.append(_record_error(record, str(exc)))
@@ -246,6 +275,7 @@ def import_report(
     *,
     location: str | None = None,
     job_model: type | None = None,
+    max_new: int | None = None,
 ) -> ImportStats:
     records = report.jobs
     if location:
@@ -254,35 +284,35 @@ def import_report(
             record for record in records
             if wanted in str(record.get("location") or "").casefold()
         ]
-    stats = upsert_records(repository, records, job_model=job_model)
+    stats = upsert_records(repository, records, job_model=job_model, max_new=max_new)
     stats.source_failures = list(report.failures)
     stats.truncated_boards = list(report.truncated_boards)
     stats.errors += len(report.failures)
     return stats
 
 
-def save_snapshot(path: str | Path, report: DiscoveryReport) -> None:
-    """Atomically save normalized jobs for re-import without another source fetch."""
-    target = Path(path)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
+def snapshot_payload(report: DiscoveryReport) -> dict[str, Any]:
+    """The JSON document of a snapshot (also what the cloud discovery step stores in S3)."""
+    return {
         "snapshot_version": 1,
         "saved_at": _now_utc().isoformat().replace("+00:00", "Z"),
         "jobs": report.jobs,
         "failures": report.failures,
         "truncated_boards": report.truncated_boards,
     }
+
+
+def save_snapshot(path: str | Path, report: DiscoveryReport) -> None:
+    """Atomically save normalized jobs for re-import without another source fetch."""
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_name(f".{target.name}.tmp")
-    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.write_text(json.dumps(snapshot_payload(report), ensure_ascii=False, indent=2), encoding="utf-8")
     temporary.replace(target)
 
 
-def load_snapshot(path: str | Path) -> DiscoveryReport:
-    """Load a previously saved normalized discovery result without network access."""
-    source = Path(path)
-    if source.stat().st_size > 50_000_000:
-        raise ValueError("snapshot exceeds 50 MB")
-    payload = json.loads(source.read_text(encoding="utf-8"))
+def report_from_payload(payload: Any) -> DiscoveryReport:
+    """Validate a snapshot document and turn it back into a discovery report."""
     if not isinstance(payload, Mapping) or payload.get("snapshot_version") != 1:
         raise ValueError("unsupported job snapshot format")
     jobs = payload.get("jobs")
@@ -299,11 +329,23 @@ def load_snapshot(path: str | Path) -> DiscoveryReport:
     )
 
 
+def load_snapshot(path: str | Path) -> DiscoveryReport:
+    """Load a previously saved normalized discovery result without network access."""
+    source = Path(path)
+    if source.stat().st_size > 50_000_000:
+        raise ValueError("snapshot exceeds 50 MB")
+    return report_from_payload(json.loads(source.read_text(encoding="utf-8")))
+
+
 def _arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Discover and import public employer job postings")
     parser.add_argument("--greenhouse", action="append", default=[], help="Greenhouse board token (repeatable)")
     parser.add_argument("--lever", action="append", default=[], help="Lever site token (repeatable)")
     parser.add_argument("--smartrecruiters", action="append", default=[], help="SmartRecruiters public company identifier (repeatable)")
+    parser.add_argument("--mycareersfuture", action="append", default=[],
+                        help="MyCareersFuture search keyword (repeatable)")
+    parser.add_argument("--adzuna", action="append", default=[],
+                        help="Adzuna search keyword (repeatable; needs ADZUNA_APP_ID and ADZUNA_APP_KEY)")
     parser.add_argument("--location", help="keep records whose location contains this text")
     parser.add_argument("--snapshot-in", help="load normalized records without fetching providers")
     parser.add_argument(
@@ -316,15 +358,19 @@ def _arguments(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--max-pages", type=int, default=10)
     parser.add_argument("--max-records", type=int, default=1000)
     parser.add_argument("--singapore-only", action="store_true")
+    parser.add_argument("--relink", action="store_true",
+                        help="recompute the cross-source duplicate links of every job (no fetch, no import)")
     parser.add_argument("--reclassify", action="store_true",
                         help="recompute category and seniority for every job from its title (no fetch, no import)")
     args = parser.parse_args(argv)
     args.greenhouse = args.greenhouse or [v.strip() for v in os.getenv("GREENHOUSE_BOARDS", "").split(",") if v.strip()]
     args.lever = args.lever or [v.strip() for v in os.getenv("LEVER_BOARDS", "").split(",") if v.strip()]
     args.smartrecruiters = args.smartrecruiters or [v.strip() for v in os.getenv("SMARTRECRUITERS_BOARDS", "").split(",") if v.strip()]
-    if (not args.reclassify and not args.snapshot_in and not args.greenhouse and not args.lever
-            and not args.smartrecruiters):
-        parser.error("configure --greenhouse, --lever, or --smartrecruiters")
+    args.mycareersfuture = args.mycareersfuture or [v.strip() for v in os.getenv("MYCAREERSFUTURE_SEARCHES", "").split(",") if v.strip()]
+    args.adzuna = args.adzuna or [v.strip() for v in os.getenv("ADZUNA_SEARCHES", "").split(",") if v.strip()]
+    if (not args.reclassify and not args.relink and not args.snapshot_in and not args.greenhouse and not args.lever
+            and not args.smartrecruiters and not args.mycareersfuture and not args.adzuna):
+        parser.error("configure --greenhouse, --lever, --smartrecruiters, --mycareersfuture, or --adzuna")
     return args
 
 
@@ -352,6 +398,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps({"reclassified": counts}, ensure_ascii=False, indent=2))
         return 0
 
+    if args.relink:
+        engine = create_engine(owner_url, pool_pre_ping=True, pool_size=1, max_overflow=0)
+        try:
+            with Session(engine) as session:
+                with session.begin():
+                    job_model = _load_job_model()
+                    counts = dedup.relink_all(session.scalars(select(job_model).order_by(job_model.id)))
+        finally:
+            engine.dispose()
+        print(json.dumps({"relinked": counts}, ensure_ascii=False, indent=2))
+        return 0
+
     if args.snapshot_in:
         report = load_snapshot(args.snapshot_in)
     else:
@@ -359,6 +417,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             greenhouse_boards=args.greenhouse,
             lever_boards=args.lever,
             smartrecruiters_boards=args.smartrecruiters,
+            mycareersfuture_searches=args.mycareersfuture,
+            adzuna_searches=args.adzuna,
             timeout_seconds=args.timeout,
             page_size=args.page_size,
             max_pages_per_board=args.max_pages,
@@ -385,6 +445,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "new": stats.new,
         "updated": stats.updated,
         "unchanged": stats.unchanged,
+        "duplicate_links_changed": stats.linked,
         "errors": stats.errors,
         "source_failures": stats.source_failures,
         "truncated_boards": stats.truncated_boards,

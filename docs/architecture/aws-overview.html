@@ -56,12 +56,13 @@ ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 
   </header>
 
   <section class="card" aria-label="Architecture diagram">
-    <div class="legend"><span><i></i>deployed on staging</span><span><i class="dash"></i>background path through S3 or a schedule (job discovery is not built yet)</span></div>
+    <div class="legend"><span><i></i>deployed on staging</span><span><i class="dash"></i>background path through S3, a direct Lambda call or a trigger (the job pull is built and waits for the next Terraform apply; its schedule is built but off)</span></div>
     <div class="diagram">
 <pre class="mermaid">
 flowchart LR
   user(["Browser: jobseeker"])
-  src[("Job sources: Greenhouse, Lever, MCF, Adzuna")]
+  src[("Job sources: Greenhouse, Lever, MyCareersFuture, Adzuna")]
+  gha["GitHub Actions: Pull jobs button"]
   soc["NUS SoCLaaS gateway: gemma4:26b, data stays in NUS"]
   subgraph AWS["AWS ap-southeast-1"]
     amp["Amplify Hosting: React app"]
@@ -72,11 +73,11 @@ flowchart LR
     subgraph VPC["VPC: private, no internet access"]
       api["API Lambda: FastAPI. Recommendations, tailoring, resume import, fit analysis API"]
       emb["Embed Lambda: Jina embedding model baked in"]
-      imp["Import Lambda"]
+      imp["Import Lambda: next 10 new jobs, links duplicates"]
       db[("Aurora Serverless v2: Postgres, pgvector, row-level security")]
     end
-    eb["EventBridge schedule"]
-    disc["Discovery Lambda: outside VPC, needs internet"]
+    eb["EventBridge schedule: built, off"]
+    disc["Discovery Lambda: outside VPC, needs internet. Same image as the API"]
     fit["LLM worker Lambda: outside VPC, no database. Same image as the API. Tasks: fit, tailor"]
   end
   user --> amp
@@ -94,11 +95,14 @@ flowchart LR
   fit -.->|"3. extract, judge, suggest (HTTPS)"| soc
   fit -.->|"4. llm-results/id.json"| s3
   s3 -.->|"5. API reads, re-verifies, stores"| api
-  eb -.-> disc
-  src -.-> disc
-  disc -.->|"jobs file"| s3
-  s3 -.-> imp
-  imp -.-> db
+  gha -.->|"invoke, max_new 10"| disc
+  eb -.->|"optional daily"| disc
+  src -.->|"1. read feeds, Singapore only"| disc
+  disc -.->|"2. imports/id.json snapshot"| s3
+  disc -.->|"3. invoke and wait for counts"| imp
+  imp -.->|"4. read snapshot over the S3 gateway"| s3
+  imp -->|"5. insert jobs, set duplicate links"| db
+  imp -.->|"6. embed flag after commit"| s3
 </pre>
     </div>
     <p class="note">The embedding Lambda runs an embedding model that turns text into numbers. It cannot write or judge text, so fit analysis and the AI resume rewrite use a language model on the school's SoCLaaS gateway, called from one shared LLM worker outside the VPC.</p>
@@ -114,6 +118,19 @@ flowchart LR
       <li>The web app polls <code>GET /v1/fit-analyses/{id}</code>. The API Lambda reads the result and <b>checks it again</b>: it drops invented evidence ids and numbers and works out the coverage percentage in code. It then saves the result in Aurora (<code>fit_analyses</code>, per-user row-level security) and caches the job's requirements in <code>job_requirements</code>, shared by all users.</li>
     </ol>
     <p class="note">About 28 to 39 seconds and roughly USD 0.0008 per analysis in the benchmark. Embeddings still only rank jobs for "For you".</p>
+  </section>
+
+  <section class="card">
+    <h2>Job pull flow</h2>
+    <ol style="margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px">
+      <li>Someone runs the <b>Pull jobs</b> workflow in GitHub Actions (or, if switched on, the EventBridge schedule fires). It invokes the <b>Discovery Lambda</b> with the batch size (default 10 new jobs). The workflow refuses to run while staging is paused.</li>
+      <li>The Discovery Lambda runs outside the VPC, so it can reach the public job feeds: Greenhouse and Lever boards, MyCareersFuture searches and, once the two Adzuna keys exist, Adzuna. It keeps Singapore jobs only and writes them as one snapshot, <code>imports/&lt;pull_id&gt;.json</code>, in the documents bucket.</li>
+      <li>It then invokes the <b>Import Lambda</b> directly and waits. The Import Lambda runs inside the VPC and reads the snapshot over the free S3 gateway endpoint. The database cannot be reached from the internet side, and the internet cannot be reached from the database side.</li>
+      <li>The Import Lambda mixes the sources so a small batch is not all one employer, inserts the next N jobs that are not stored yet, and refreshes the ones that are. Each source keeps its own row, so running the pull again never creates repeats.</li>
+      <li><b>Duplicate detection:</b> a posting found on two sources is linked, not deleted. The employer's own board wins over MyCareersFuture, which wins over Adzuna. Discover shows the winner once, with "Also on MyCareersFuture". Two rows are linked only if the employer, title and place match and the descriptions are nearly the same text, or they share the same listing link. On the labelled test set of 16 pairs this gives no wrong links and finds all 8 true duplicates.</li>
+      <li>After the commit the Import Lambda writes an embed flag, and the existing embed worker gives the new jobs vectors a few minutes later. The counts come back to the workflow summary.</li>
+    </ol>
+    <p class="note">A pull wakes Aurora (it pauses when idle), so run it when jobs are needed. Adzuna only returns a short snippet of each description, so jobs found only there may be too short for fit analysis, which needs 120 characters.</p>
   </section>
 
   <section class="card">
@@ -133,7 +150,7 @@ flowchart LR
       <tbody>
         <tr><td>API Lambda, Embed Lambda, Import Lambda</td><td>inside the VPC</td><td>no</td><td>yes</td></tr>
         <tr><td>LLM worker Lambda</td><td>outside the VPC</td><td>yes, only to SoCLaaS</td><td>no</td></tr>
-        <tr><td>Discovery Lambda</td><td>outside the VPC</td><td>yes, to job sources</td><td>no</td></tr>
+        <tr><td>Discovery Lambda</td><td>outside the VPC</td><td>yes, to the job sources, and to the AWS Lambda API to start the import</td><td>no</td></tr>
       </tbody></table></div>
     <p class="note">Secrets and settings: <code>LLM_API_KEY</code> is a GitHub Actions secret. <code>scripts/deploy_aws.py</code> puts it into the LLM worker's environment during the deploy workflow, the same way as the database passwords. <code>MODEL_BACKEND=hosted</code>, <code>LLM_BASE_URL</code>, <code>LLM_MODEL</code> and <code>LLM_REASONING_EFFORT=none</code> are plain Terraform environment variables.</p>
   </section>
@@ -147,7 +164,8 @@ flowchart LR
         <tr><td>Resume upload and profile</td><td>resume upload</td><td>API Lambda, S3 presigned URLs, Aurora</td><td><span class="pill live">live</span> rule-based parsing</td></tr>
         <tr><td>Embeddings and "For you"</td><td>recommendations</td><td>S3 flag, SQS, Embed Lambda, Aurora</td><td><span class="pill live">live</span></td></tr>
         <tr><td>Resume tailoring</td><td>tailoring</td><td>API Lambda (keyword rules)</td><td><span class="pill live">live</span> rule-based copy and AI rewrite through the LLM worker (task <code>tailor</code>, waits up to 25 s)</td></tr>
-        <tr><td>Job discovery</td><td>ingestion</td><td>local command today; EventBridge and a Lambda outside the VPC next</td><td><span class="pill plan">planned</span> Discover is empty on staging</td></tr>
+        <tr><td>Job discovery</td><td>ingestion</td><td>GitHub Actions "Pull jobs", Discovery Lambda (outside the VPC), Import Lambda (inside), S3, Aurora; EventBridge schedule built but off</td><td><span class="pill plan">built</span> waits for the Terraform apply and a Deploy staging run; Discover is empty until then</td></tr>
+        <tr><td>Duplicate detection across sources</td><td>ingestion</td><td>Import Lambda, <code>jobs.canonical_job_id</code> and <code>also_seen_on</code> in Aurora</td><td><span class="pill plan">built</span> migration 0016 runs with the next deploy</td></tr>
         <tr><td>Fit analysis</td><td>fit analysis</td><td>API Lambda, S3, and the LLM worker Lambda (outside the VPC) calling SoCLaaS</td><td><span class="pill live">live</span> on the shared worker; not yet tried through the web app because staging has no jobs</td></tr>
       </tbody></table></div>
   </section>
@@ -157,6 +175,7 @@ flowchart LR
     <ul>
       <li><b>No internet inside the VPC.</b> A NAT gateway or interface endpoints cost money, so anything that needs the internet sits outside, and anything that only needs the database sits inside.</li>
       <li><b>Background work starts with a small file in S3.</b> The S3 gateway endpoint is free, and an S3 event then wakes the worker. The embedding worker already works this way.</li>
+      <li><b>Job discovery is split in two for the same reason.</b> One function can either reach the job feeds or reach the database, never both, so the one that reads the feeds sits outside the VPC and the one that writes the database sits inside. They are joined by a small file in S3 and a direct call, which leaves the bucket's single notification slot to the embed and LLM workers.</li>
       <li><b>The embedding model is baked into its container image.</b> It is small, so the embed Lambda needs no network to run it.</li>
       <li><b>The language model is hosted by the school.</b> The AI features call the SoCLaaS gateway, so no model is stored on AWS. One shared worker outside the VPC makes the calls for every AI feature and has no database access; the API Lambda checks its answer before saving or using it. A new AI feature adds a task to the worker, not a new Lambda.</li>
       <li><b>Slow work is asynchronous.</b> API Gateway waits at most 29 seconds and an analysis takes 28 to 39 seconds, so the API returns at once and the web app polls for the result. The resume rewrite takes 5 to 10 seconds, so the API waits for it inside the request, for at most 25 seconds.</li>
