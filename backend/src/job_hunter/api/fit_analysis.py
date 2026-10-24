@@ -185,6 +185,19 @@ def build_router(db_dependency, current_user):
         refresh(db, item)
         return _out(db, item)
 
+    @router.get("/fit-analyses")
+    def finished(db: Session = Depends(db_dependency, scope="function")):
+        """One small row per job this user has a finished analysis for, so job lists can mark the jobs already checked."""
+        user = current_user(db)
+        profile = db.get(Profile, user.id)
+        confirmed = profile.confirmed_revision if profile else None
+        rows = db.scalars(select(FitAnalysis).where(FitAnalysis.user_id == user.id, FitAnalysis.status == "ready")
+                          .order_by(FitAnalysis.completed_at.desc())).all()
+        return {"items": [{"job_id": str(row.job_id),
+                           "percent": ((row.result or {}).get("coverage") or {}).get("percent"),
+                           "stale": bool(confirmed and row.profile_revision and confirmed > row.profile_revision)}
+                          for row in rows]}
+
     @router.get("/jobs/{job_id}/fit-analysis")
     def latest(job_id: UUID, db: Session = Depends(db_dependency, scope="function")):
         item = db.scalar(select(FitAnalysis).where(FitAnalysis.user_id == current_user(db).id, FitAnalysis.job_id == job_id))

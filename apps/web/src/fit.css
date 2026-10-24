@@ -1,21 +1,74 @@
-.fit-panel { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 16px; }
+/* Fit panel. Colours follow the job fit walkthrough: green = evidenced, pink = not evidenced, purple = needs your judgement. */
+.fit-panel {
+  --fit-good: #1b9a66; --fit-good-soft: #dcf3e6;
+  --fit-part: #b7791f; --fit-part-soft: #fdf1d8;
+  --fit-gap: #d2406a; --fit-gap-soft: #fbe2ea;
+  --fit-ask: #6f52d0; --fit-ask-soft: #eae4fa;
+  border-top: 1px solid var(--line); margin-top: 16px; padding-top: 16px;
+}
+.fit-ic { width: 18px; height: 18px; flex: none; }
 .fit-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.fit-head h3 { margin: 4px 0 0; font-size: 15px; }
+.fit-title { display: flex; align-items: center; gap: 12px; }
+.fit-badge { width: 42px; height: 42px; border-radius: 13px; background: var(--pale); color: var(--green); display: grid; place-items: center; flex: none; }
+.fit-badge .fit-ic { width: 24px; height: 24px; }
+.fit-head h3 { margin: 4px 0 0; font-size: 16px; }
 .fit-note { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
-.fit-score { margin: 14px 0; padding: 12px 14px; background: var(--pale); border-radius: 8px; }
-.fit-score > div { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.fit-score strong { font-size: 26px; }
-.fit-score span { font-size: 12px; color: var(--muted); }
-.fit-score small { display: block; margin-top: 6px; font-size: 11px; color: var(--muted); }
-.fit-group { margin-top: 12px; }
-.fit-group h4, .fit-suggestions h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; font-size: 12px; }
-.fit-group.met h4 { color: #2c6647; }
-.fit-group.gap h4 { color: #9b4738; }
-.fit-group.judge h4 { color: var(--muted); }
-.fit-group ul, .fit-suggestions ul { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
-.fit-group li, .fit-suggestions li { font-size: 12px; line-height: 1.5; }
+
+.fit-result { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin-top: 14px; align-items: start; }
+.fit-result > .fit-note, .fit-score, .fit-suggestions { grid-column: 1 / -1; }
+.fit-result > .fit-note { margin: 0; padding: 10px 12px; background: var(--fit-part-soft); border-radius: 10px; color: #7a5212; }
+
+.fit-score { padding: 16px 18px; border-radius: 16px; background: var(--pale); display: grid; gap: 10px; }
+.fit-score.high { background: var(--fit-good-soft); }
+.fit-score.mid { background: var(--fit-part-soft); }
+.fit-score.low { background: var(--fit-gap-soft); }
+.fit-score-main { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.fit-score strong { font-size: 38px; line-height: 1; letter-spacing: -1px; }
+.fit-score.high strong { color: var(--fit-good); }
+.fit-score.mid strong { color: var(--fit-part); }
+.fit-score.low strong { color: var(--fit-gap); }
+.fit-score-main span { font-size: 13px; color: var(--ink); }
+.fit-meter { height: 8px; border-radius: 99px; background: #ffffffa8; overflow: hidden; }
+.fit-meter i { display: block; height: 100%; border-radius: 99px; background: var(--green); }
+.fit-score.high .fit-meter i { background: var(--fit-good); }
+.fit-score.mid .fit-meter i { background: var(--fit-part); }
+.fit-score.low .fit-meter i { background: var(--fit-gap); }
+.fit-score small { font-size: 11.5px; color: var(--muted); }
+.fit-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.fit-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; border-radius: 999px; padding: 6px 11px; background: #fff; }
+.fit-pill .fit-ic { width: 15px; height: 15px; stroke-width: 2.2; }
+.fit-pill.met { color: var(--fit-good); }
+.fit-pill.partly { color: var(--fit-part); }
+.fit-pill.gap { color: var(--fit-gap); }
+.fit-pill.judge { color: var(--fit-ask); }
+
+.fit-group { display: grid; gap: 10px; align-content: start; min-width: 0; }
+.fit-group h4, .fit-suggestions h4 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; }
+.fit-count { margin-left: auto; font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 99px; background: #fff; }
+.fit-group.met h4 { color: var(--fit-good); }
+.fit-group.gap h4 { color: var(--fit-gap); }
+.fit-group.judge h4 { color: var(--fit-ask); }
+.fit-group ul, .fit-suggestions ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.fit-group li { display: grid; gap: 4px; padding: 11px 12px; border-radius: 12px; font-size: 13px; line-height: 1.5; color: var(--ink); }
+.fit-group.met li { background: var(--fit-good-soft); }
+.fit-group.gap li { background: var(--fit-gap-soft); }
+.fit-group.judge li { background: var(--fit-ask-soft); }
 .fit-group li em { color: var(--muted); font-style: normal; }
-.fit-group li small { display: block; font-size: 11px; color: var(--muted); }
-.fit-suggestions { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; }
-.fit-suggestions small { display: block; margin-top: 8px; font-size: 11px; color: var(--muted); }
+.fit-group li small { display: block; font-size: 12px; color: var(--muted); }
+.fit-group li small.fit-evidence { color: var(--ink); background: #ffffffb3; border-radius: 8px; padding: 6px 8px; }
+
+.fit-suggestions { padding: 14px 16px; border-radius: 16px; background: var(--pale); display: grid; gap: 10px; }
+.fit-suggestions h4 { color: var(--green); }
+.fit-suggestions li { position: relative; padding: 9px 12px; background: #fff; border-radius: 10px; font-size: 13px; line-height: 1.5; }
+.fit-suggestions small { font-size: 11.5px; color: var(--muted); }
 @media (max-width: 560px) { .fit-head { flex-direction: column; } }
+
+/* the job-details window: wider, and it scrolls so the fit results below the description can be reached */
+.modal.job-detail-modal { width: min(1040px, 96vw); max-width: 1040px; overflow-y: auto; }
+
+/* "Fit checked" pill on a job card: the user already ran the check for this job. Same colours as the score box. */
+.fit-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 4px 10px; background: #edf2ff; color: #3157ce; }
+.fit-chip .icon { width: 13px; height: 13px; }
+.fit-chip.high { background: #dcf3e6; color: #1b9a66; }
+.fit-chip.mid { background: #fdf1d8; color: #b7791f; }
+.fit-chip.low { background: #fbe2ea; color: #d2406a; }

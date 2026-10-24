@@ -17,6 +17,7 @@ const built = resume({ id: 'built-1', job_id: 'job-1', title: 'Backend Engineer 
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mockApi.fitSummaries.mockResolvedValue({ items: [] });
   mockApi.me.mockResolvedValue({ user_id: '1', display_name: 'Alice Tan', plan: 'free', allowance: { limit: 5, used: 0, remaining: 5, period: '2026-10' }, ai_available: false });
   mockApi.getProfile.mockResolvedValue({ draft: { name: 'Alice Tan', email: 'alice@example.com', phone: '', location: 'Singapore', summary: '', skills: [] }, revision: 0, confirmed_revision: null });
   mockApi.getBank.mockImplementation(async () => bank());

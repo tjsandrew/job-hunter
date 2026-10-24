@@ -60,7 +60,7 @@ def world(monkeypatch):
     with Session(engine) as db, db.begin():
         for user_id in ids.values():
             db.execute(text("SELECT set_config('app.user_id', :uid, true)"), {"uid": str(user_id)})
-            for table in ("fit_analyses", "ai_tailor_uses", "profile_versions", "profiles"):
+            for table in ("fit_analyses", "ai_tailor_uses", "job_reviews", "applications", "profile_versions", "profiles"):
                 db.execute(text(f"DELETE FROM {table} WHERE user_id=:uid"), {"uid": user_id})
             db.execute(text("DELETE FROM users WHERE id=:uid"), {"uid": user_id})
         db.execute(text("DELETE FROM jobs WHERE id = ANY(CAST(:ids AS uuid[]))"), {"ids": job_ids})
@@ -192,3 +192,26 @@ def test_the_s3_path_writes_a_request_and_reads_the_workers_answer(world, monkey
     assert body["status"] == "ready" and body["result"]["coverage"]["percent"] == 50
     assert analyse(jobs[0]).status_code == 202            # the same job again is allowed and costs nothing more
     assert allowance.month_label() == client.get("/v1/me", headers=ALICE).json()["allowance"]["period"]
+
+
+def test_finished_analyses_are_listed_so_job_lists_can_mark_them(world):
+    _, jobs, _ = world
+    assert client.get("/v1/fit-analyses", headers=ALICE).json() == {"items": []}
+    analyse(jobs[0])
+    assert client.get("/v1/fit-analyses", headers=ALICE).json()["items"] == [{"job_id": jobs[0], "percent": 50, "stale": False}]
+    assert client.get("/v1/fit-analyses", headers=CASEY).json()["items"] == []     # one user's analyses never show for another
+
+
+def test_saved_and_passed_jobs_are_listed_for_the_user_who_chose_them(world):
+    _, jobs, _ = world
+    assert client.put(f"/v1/jobs/{jobs[0]}/review", json={"decision": "saved"}, headers=ALICE).status_code == 200
+    assert client.put(f"/v1/jobs/{jobs[1]}/review", json={"decision": "dismissed"}, headers=ALICE).status_code == 200
+    saved = client.get("/v1/jobs/reviewed?decision=saved", headers=ALICE).json()
+    assert [row["job"]["id"] for row in saved["items"]] == [jobs[0]] and saved["items"][0]["review"] == "saved" and saved["total"] == 1
+    passed = client.get("/v1/jobs/reviewed?decision=dismissed", headers=ALICE).json()
+    assert [row["job"]["id"] for row in passed["items"]] == [jobs[1]]
+    assert client.get("/v1/jobs/reviewed?decision=dismissed&q=nothing-matches-this", headers=ALICE).json()["items"] == []
+    assert client.get("/v1/jobs/reviewed?decision=saved", headers=CASEY).json()["items"] == []
+    assert client.get("/v1/jobs/reviewed?decision=bogus", headers=ALICE).status_code == 422
+    client.put(f"/v1/jobs/{jobs[1]}/review", json={"decision": "none"}, headers=ALICE)   # restoring a passed job removes it from the list
+    assert client.get("/v1/jobs/reviewed?decision=dismissed", headers=ALICE).json()["items"] == []

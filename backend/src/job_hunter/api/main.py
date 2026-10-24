@@ -387,6 +387,22 @@ def job_out(job: Job) -> dict:
             "salary_max": job.salary_max, "salary_currency": job.salary_currency,
             "salary_period": job.salary_period}
 
+@app.get("/v1/jobs/reviewed")   # declared before /v1/jobs/{job_id} so "reviewed" is not read as a job id
+def reviewed_jobs(decision: str = Query(pattern="^(saved|dismissed)$"), limit: int = Query(20, ge=1, le=100),
+                  offset: int = Query(0, ge=0, le=1000000), q: str | None = Query(None, max_length=200),
+                  db: Session = Depends(db_for, scope="function")):
+    """The jobs this user saved or passed on, newest decision first, in the same item shape as the Discover lists."""
+    rows = db.execute(select(JobReview, Job).join(Job, Job.id == JobReview.job_id)
+                      .where(JobReview.user_id == current_user(db).id, JobReview.decision == decision)
+                      .order_by(JobReview.updated_at.desc())).all()
+    items = [{"job": job_out(job), "score": None, "reasons": [], "review": review.decision} for review, job in rows]
+    query = q.strip().casefold() if q else ""
+    if query:
+        items = [row for row in items if query in " ".join(str(row["job"].get(field) or "")
+                 for field in ("title", "company", "description", "location", "category", "skills")).casefold()]
+    return {"items": items[offset:offset + limit], "total": len(items),
+            "next_offset": offset + limit if offset + limit < len(items) else None}
+
 @app.get("/v1/jobs/{job_id}")
 def get_job(job_id: UUID, db: Session = Depends(db_for, scope="function")):
     job = db.get(Job, job_id)

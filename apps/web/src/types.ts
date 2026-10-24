@@ -46,4 +46,6 @@ export type FitResult = {
   evidence: Record<string, string>;
   model: string;
 };
+export type FitSummary = { job_id: string; percent: number | null; stale: boolean };
+export type DiscoverMode = 'for-you' | 'all' | 'saved' | 'passed';
 export type FitAnalysis = { id: string; job_id: string; status: 'pending' | 'ready' | 'failed'; error_code: string | null; profile_revision: number | null; stale: boolean; result: FitResult | null; created_at: string; completed_at: string | null };
