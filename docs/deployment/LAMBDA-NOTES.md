@@ -1,5 +1,7 @@
 # Lambda notes and suggestions
 
+> **Historical proposal.** The deployed Lambdas are the API (`jobhunter_app`, behind API Gateway), a migration function, an SQS-triggered embedding worker and a fit-analysis worker outside the VPC; there is no discovery function yet and the API runs without Bedrock. See [README.md](README.md) for what is deployed.
+
 These are suggestions for whoever builds the Lambda side, not decisions. They follow the [design](../design/01-INFRASTRUCTURE.md) and [handoff](CLOUD-DEPLOYMENT-HANDOFF.md). Change them if measurements say otherwise.
 
 ## Functions

@@ -1,7 +1,7 @@
 # Embedding worker: rollout and operations
 
 Design and rationale: [design brief 11](../design/11-EMBEDDING-WORKER.md). This page is the checklist for putting it on AWS and running it.
-Status: **nothing here has been run on AWS yet.** Tested so far: unit and database tests, Terraform `validate` and mocked-plan tests,
+Status (24 October 2026): **the worker is deployed to staging** (S3 flag, SQS queue with a dead-letter queue, embedding Lambda; semantic "For you" is on). The checklist below is the original rollout plan, kept for operating and for a new environment. Tested before rollout: unit and database tests, Terraform `validate` and mocked-plan tests,
 the worker image (x86 and arm64 builds, handler through the Lambda runtime emulator). Dollar figures are estimates.
 
 Merging this change deploys nothing. Every AWS-facing step below is manual, and each one is small and reversible.
