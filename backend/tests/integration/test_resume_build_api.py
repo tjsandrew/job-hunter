@@ -613,3 +613,65 @@ def test_ai_tailoring_allows_five_jobs_in_total(tailor_jobs, monkeypatch):
     over = tailor(source, tailor_jobs[5], mode="ai")
     assert over.status_code == 402 and over.json()["error"]["code"] == "AI_LIMIT_REACHED"
     assert tailor(source, tailor_jobs[5]).status_code == 201
+
+
+class WorkerS3:
+    """S3 with the LLM worker attached: writing a request file runs the worker at once, like S3 waking the Lambda."""
+    def __init__(self, model):
+        import io
+        self.model, self.objects, self._io = model, {}, io
+        self.exceptions = type("Exceptions", (), {"NoSuchKey": KeyError})
+
+    def put_object(self, Bucket, Key, Body, **_):
+        from job_hunter import llm_worker
+        self.objects[(Bucket, Key)] = Body
+        if Key.startswith("llm-requests/"):
+            llm_worker.process(self, Bucket, Key, client=self.model)
+
+    def get_object(self, Bucket, Key):
+        return {"Body": self._io.BytesIO(self.objects[(Bucket, Key)])}
+
+
+@pytest.fixture
+def llm_worker_route(monkeypatch):
+    from job_hunter import llm_transport
+    from job_hunter.preparation import ai_tailoring
+    monkeypatch.setattr(settings, "model_backend", "heuristic")
+    monkeypatch.setattr(settings, "llm_worker", "s3")
+    monkeypatch.setattr(settings, "document_bucket", "docs")
+    real_ask = llm_transport.ask
+    monkeypatch.setattr(llm_transport, "ask", lambda *args, **kw: real_ask(*args, sleep=lambda _: None, **kw))
+
+    def attach(model):
+        s3 = WorkerS3(model)
+        monkeypatch.setattr(ai_tailoring.storage, "s3", lambda: s3)
+        return s3
+    return attach
+
+
+def test_ai_tailoring_in_aws_goes_through_the_llm_worker(tailor_jobs, llm_worker_route):
+    import json
+    from job_hunter.llm import FakeLlm
+    s3 = llm_worker_route(FakeLlm(lambda system, user: {"entries": [[b.replace("Ran", "Organised") for b in bullets]
+                                                                    for bullets in json.loads(user)["entries"]]}))
+    source = client.post("/v1/documents", headers=ALICE, json={"title": "Base", "content": CONTENT_FOR_TAILOR}).json()
+    response = tailor(source, tailor_jobs[0], mode="ai")
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["ai"]["status"] == "applied" and body["ai"]["changed"] == 1
+    assert body["document"]["content"]["sections"][0]["entries"][0]["bullets"] == ["Wrote Python pipelines", "Organised lunches"]
+    assert [key for _, key in s3.objects if key.startswith("llm-requests/")]
+    assert client.get("/v1/me", headers=ALICE).json()["allowance"]["used"] == 1
+
+
+def test_ai_tailoring_in_aws_falls_back_and_costs_nothing_when_the_worker_fails(tailor_jobs, llm_worker_route):
+    from job_hunter.llm import FakeLlm, LlmError
+
+    def down(system, user):
+        raise LlmError("model unavailable")
+    llm_worker_route(FakeLlm(down))
+    source = client.post("/v1/documents", headers=ALICE, json={"title": "Base", "content": CONTENT_FOR_TAILOR}).json()
+    response = tailor(source, tailor_jobs[0], mode="ai")
+    assert response.status_code == 201 and response.json()["ai"]["status"] == "fallback"
+    assert response.json()["document"]["content"]["sections"][0]["entries"][0]["bullets"] == ["Wrote Python pipelines", "Ran lunches"]
+    assert client.get("/v1/me", headers=ALICE).json()["allowance"]["used"] == 0

@@ -37,7 +37,7 @@ The initial tracker did not store a resume or cover letter. The current change a
 
 ## Cloud status
 
-Deployed in staging (Terraform, GitHub Actions release): Cognito, API Gateway and the API Lambda, Aurora Serverless v2 with row-level security, private S3 uploads and downloads, the S3 → SQS → Lambda embedding worker, the fit-analysis worker Lambda, IAM through GitHub OIDC, budget and activity alarms, and pause/resume of the backend. See [deployment/README.md](../deployment/README.md).
+Deployed in staging (Terraform, GitHub Actions release): Cognito, API Gateway and the API Lambda, Aurora Serverless v2 with row-level security, private S3 uploads and downloads, the S3 → SQS → Lambda embedding worker, the shared LLM worker Lambda (fit analysis, AI resume rewrite), IAM through GitHub OIDC, budget and activity alarms, and pause/resume of the backend. See [deployment/README.md](../deployment/README.md).
 
 Not built or not decided: scheduled job discovery (EventBridge and an ingestion Lambda; the VPC has no internet egress and no NAT gateway), loading jobs into staging, Bedrock (blocked by the university account policy), CloudFront/WAF, security headers such as CSP and HSTS, and measured latency, load and cost numbers. Local tests cannot establish AWS behaviour.
 

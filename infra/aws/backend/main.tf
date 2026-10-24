@@ -169,7 +169,7 @@ resource "aws_lambda_function" "api" {
       DOCUMENT_BUCKET = aws_s3_bucket.documents.id, CORS_ORIGINS = var.origin
       COGNITO_ISSUER  = var.cognito_issuer, COGNITO_CLIENT_ID = var.client_id
       API_SCOPE       = "jobhunter/use", MODEL_BACKEND = "heuristic", FOR_YOU_ENABLED = var.for_you_enabled, EMBED_ON_SAVE = var.embed_on_save
-      FIT_BACKEND     = var.fit_worker_enabled ? "s3" : "inline"
+      LLM_WORKER      = var.llm_worker_enabled ? "s3" : "inline"
     }
   }
   # Manual controls own concurrency after creation; infrastructure updates must

@@ -55,7 +55,7 @@ def world(monkeypatch):
         monkeypatch.setitem(DEV_USERS, key, (user_id, key))
     fake = FakeLlm(respond)
     monkeypatch.setattr(fit_analysis, "build_client", lambda _settings: fake)
-    monkeypatch.setattr(settings, "fit_backend", "inline")
+    monkeypatch.setattr(settings, "llm_worker", "inline")
     yield fake, job_ids, ids
     with Session(engine) as db, db.begin():
         for user_id in ids.values():
@@ -158,7 +158,7 @@ def test_a_model_failure_is_reported_and_costs_no_slot(world):
 
 def test_the_s3_path_writes_a_request_and_reads_the_workers_answer(world, monkeypatch):
     import io
-    from job_hunter import fit_transport, fit_worker
+    from job_hunter import llm_transport, llm_worker
 
     class NoSuchKey(Exception):
         pass
@@ -180,14 +180,14 @@ def test_the_s3_path_writes_a_request_and_reads_the_workers_answer(world, monkey
 
     fake, jobs, _ = world
     s3 = FakeS3()
-    monkeypatch.setattr(settings, "fit_backend", "s3")
+    monkeypatch.setattr(settings, "llm_worker", "s3")
     monkeypatch.setattr(settings, "document_bucket", "docs")
     monkeypatch.setattr(fit_analysis.storage, "s3", lambda: s3)
     started = analyse(jobs[0])
     assert started.status_code == 202 and started.json()["status"] == "pending"
     analysis_id = started.json()["id"]
     assert client.get(f"/v1/fit-analyses/{analysis_id}", headers=ALICE).json()["status"] == "pending"   # worker has not answered yet
-    assert fit_worker.process(s3, "docs", fit_transport.request_key(analysis_id), client=fake) == "ok"
+    assert llm_worker.process(s3, "docs", llm_transport.request_key(analysis_id), client=fake) == "ok"
     body = client.get(f"/v1/fit-analyses/{analysis_id}", headers=ALICE).json()
     assert body["status"] == "ready" and body["result"]["coverage"]["percent"] == 50
     assert analyse(jobs[0]).status_code == 202            # the same job again is allowed and costs nothing more

@@ -20,7 +20,7 @@ resource "aws_iam_role_policy" "release_backend" {
   role  = aws_iam_role.release.id
   policy = jsonencode({ Version = "2012-10-17", Statement = [
     { Effect = "Allow", Action = ["lambda:GetFunction", "lambda:GetFunctionConfiguration", "lambda:ListTags", "lambda:UpdateFunctionCode", "lambda:UpdateFunctionConfiguration"],
-    Resource = compact([module.backend[0].api_arn, module.backend[0].migration_arn, module.backend[0].embed_arn, module.backend[0].fit_arn]) },
+    Resource = compact([module.backend[0].api_arn, module.backend[0].migration_arn, module.backend[0].embed_arn, module.backend[0].llm_arn]) },
     { Effect = "Allow", Action = ["secretsmanager:GetSecretValue"], Resource = module.backend[0].database_credentials_arn },
     { Effect = "Allow", Action = ["lambda:InvokeFunction"], Resource = module.backend[0].migration_arn },
     { Effect = "Allow", Action = ["lambda:PutFunctionConcurrency"], Resource = compact([module.backend[0].api_arn, module.backend[0].embed_arn]) }

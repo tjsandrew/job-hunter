@@ -101,7 +101,7 @@ jobs:
       - name: Verify handlers, certificates and PDF fonts
         run: >-
           docker run --rm --entrypoint python jobhunter-lambda:check
-          -c 'from pathlib import Path; from job_hunter.adapters.aws_config import RDS_CA; from job_hunter.api.lambda_handler import handler; from job_hunter.migrate_aws import handler as migrate; from job_hunter.fit_worker import handler as fit_worker; from job_hunter.preparation import rendering; assert Path(RDS_CA).is_file(); assert list(Path(rendering.__file__).parent.glob("fonts/*.ttf"))'
+          -c 'from pathlib import Path; from job_hunter.adapters.aws_config import RDS_CA; from job_hunter.api.lambda_handler import handler; from job_hunter.migrate_aws import handler as migrate; from job_hunter.llm_worker import handler as llm_worker; from job_hunter.preparation import rendering; assert Path(RDS_CA).is_file(); assert list(Path(rendering.__file__).parent.glob("fonts/*.ttf"))'
   scripts:
     needs: changes
     if: needs.changes.outputs.scripts == 'true'

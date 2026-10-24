@@ -54,8 +54,8 @@ variable "embed_image_uri" {
     error_message = "Use an immutable ECR image digest, not a mutable tag."
   }
 }
-variable "fit_worker_enabled" {
-  description = "Create the fit-analysis worker (design brief 12) and switch the API to hand fit requests to it through S3. The SoCLaaS key comes from the GitHub secret LLM_API_KEY at release time. Needs the course staff's agreement that a deployed app may use one key."
+variable "llm_worker_enabled" {
+  description = "Create the shared LLM worker (design brief 12) and switch the API to hand fit analysis and resume rewrite requests to it through S3. The SoCLaaS key comes from the GitHub secret LLM_API_KEY at release time. Needs the course staff's agreement that a deployed app may use one key."
   type        = bool
   default     = false
 }
