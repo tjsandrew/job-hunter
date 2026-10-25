@@ -68,13 +68,14 @@ export function PlanPanel({ me, name, email, onClose, onProfile, onSignOut, onDe
   const [upgrading, setUpgrading] = useState(false);
   const panel = useRef<HTMLElement | null>(null);
   useEscape(() => { if (!upgrading) onClose(); });
-  useEffect(() => { panel.current?.focus(); }, []);
+  useEffect(() => { if (!upgrading) panel.current?.focus(); }, [upgrading]);
   const { used, remaining, limit, period } = me.allowance;
   const share = limit > 0 ? Math.max(0, Math.min(100, Math.round((used / limit) * 100))) : 0;
   const premium = me.plan === 'premium';
+  // While the upgrade dialog is open the panel steps aside (it floats above the dialog's backdrop otherwise) and comes back after.
   return <>
-    <div className="plan-backdrop" role="presentation" onMouseDown={onClose} />
-    <section ref={panel} tabIndex={-1} className="plan-panel" role="dialog" aria-label="Your plan">
+    {!upgrading && <div className="plan-backdrop" role="presentation" onMouseDown={onClose} />}
+    {!upgrading && <section ref={panel} tabIndex={-1} className="plan-panel" role="dialog" aria-label="Your plan">
       <div className="plan-panel-head">
         <div className="avatar" aria-hidden="true">{(name.match(/\b\w/g) || ['?']).slice(0, 2).join('').toUpperCase()}</div>
         <div className="plan-panel-who"><strong>{name}</strong><span>{email}</span></div>
@@ -94,7 +95,7 @@ export function PlanPanel({ me, name, email, onClose, onProfile, onSignOut, onDe
         <p className="plan-note">Demo only. No payment is taken.</p>
       </>}
       <div className="plan-links"><button type="button" className="link-button" onClick={onProfile}>Open my profile</button>{onSignOut && <button type="button" className="link-button" onClick={onSignOut}>Sign out</button>}<button type="button" className="link-button" onClick={onClose}>Close</button></div>
-    </section>
+    </section>}
     {upgrading && <UpgradeDialog onClose={() => setUpgrading(false)} onConfirm={() => { setUpgrading(false); onClose(); onDemoUpgrade(); }} />}
   </>;
 }
