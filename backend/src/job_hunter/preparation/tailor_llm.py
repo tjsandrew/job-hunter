@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from typing import Any, Mapping
 
-from job_hunter.llm import LlmClient, LlmError
+from job_hunter.llm import LlmClient, LlmError, complete_validated
 
 
 class AiUnavailable(Exception):
@@ -31,6 +31,20 @@ def job_payload(job: Mapping[str, Any]) -> dict[str, Any]:
     return {"title": job.get("title"), "skills": job.get("skills"), "description": (job.get("description") or "")[:4000]}
 
 
+def _same_shape(sent: list[list[str]]):
+    """Validator for ``complete_validated``: one list per entry sent, each with that entry's number of bullet strings."""
+    def validate(reply: Mapping[str, Any]) -> list[list[str]]:
+        entries = reply["entries"]
+        if not isinstance(entries, list) or len(entries) != len(sent):
+            got = len(entries) if isinstance(entries, list) else type(entries).__name__
+            raise ValueError(f"expected {len(sent)} entries, got {got}")
+        for number, (old, new) in enumerate(zip(sent, entries), start=1):
+            if not isinstance(new, list) or len(new) != len(old) or not all(isinstance(bullet, str) for bullet in new):
+                raise ValueError(f"entry {number} must be a list of {len(old)} bullet strings")
+        return entries
+    return validate
+
+
 class LlmRewriter:
     """A ``Rewriter`` (see ``ai_tailoring``) backed by any ``LlmClient``: hosted, local Ollama, or the fake in tests."""
 
@@ -38,10 +52,19 @@ class LlmRewriter:
         self.client = client
 
     def rewrite(self, entries: list[list[str]], job: Mapping[str, Any]) -> list[list[str]]:
-        user = json.dumps({"job": job_payload(job), "entries": entries})
+        # Entries without bullets (often education) are left out: gemma4:26b dropped or merged them in 5 of 15 staging
+        # runs (system evaluation B2), changing the entry count so the whole reply was rejected. A reply of the wrong
+        # shape is asked for again once, with the reason.
+        with_bullets = [index for index, bullets in enumerate(entries) if bullets]
+        sent = [entries[index] for index in with_bullets]
+        result: list[list[str]] = [[] for _ in entries]
+        if not sent:
+            return result
+        user = json.dumps({"job": job_payload(job), "entries": sent})
         try:
-            return self.client.complete_json(SYSTEM + SHAPE_RULES, user, max_tokens=MAX_TOKENS)["entries"]
+            reworded = complete_validated(self.client, SYSTEM + SHAPE_RULES, user, _same_shape(sent), max_tokens=MAX_TOKENS)
         except LlmError as exc:
             raise AiUnavailable("The AI model is not available") from exc
-        except (KeyError, TypeError) as exc:
-            raise AiUnavailable("The AI model returned an unexpected result") from exc
+        for index, bullets in zip(with_bullets, reworded):
+            result[index] = bullets
+        return result

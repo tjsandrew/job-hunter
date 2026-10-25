@@ -47,6 +47,36 @@ def test_the_whole_rewrite_keeps_only_reworded_bullets_that_add_no_new_facts():
     assert changed == 0 and result["sections"][0]["entries"][0]["bullets"] == ["Built APIs in Python for 3 teams"]
 
 
+
+def test_entries_without_bullets_are_not_sent_and_come_back_empty_in_place():
+    model = FakeLlm(lambda system, user: {"entries": [["A1 reworded", "A2 reworded"], ["C1 reworded"]]})
+    result = LlmRewriter(model).rewrite([["A1", "A2"], [], ["C1"]], JOB)
+    assert result == [["A1 reworded", "A2 reworded"], [], ["C1 reworded"]]
+    assert '"entries": [["A1", "A2"], ["C1"]]' in model.calls[0][1]
+
+
+@pytest.mark.parametrize("wrong", [
+    [["A1 reworded", "A2 reworded"]],                                   # an entry dropped (B2: 6 sent, 5 back)
+    [["A1 reworded"], ["A2 reworded"], ["C1 reworded"]],                # an entry added / bullets split
+    [["A1 reworded", "A2 reworded", "C1 reworded"], []],                # bullets merged
+])
+def test_a_reply_of_the_wrong_shape_is_asked_for_again_with_the_reason(wrong):
+    model = FakeLlm([{"entries": wrong}, {"entries": [["A1 reworded", "A2 reworded"], ["C1 reworded"]]}])
+    assert LlmRewriter(model).rewrite([["A1", "A2"], ["C1"]], JOB) == [["A1 reworded", "A2 reworded"], ["C1 reworded"]]
+    assert len(model.calls) == 2 and "previous reply was rejected" in model.calls[1][1]
+
+
+def test_a_wrong_shape_twice_is_unavailable():
+    model = FakeLlm([{"entries": [["only one"]]}])
+    with pytest.raises(AiUnavailable):
+        LlmRewriter(model).rewrite([["A1"], ["B1"]], JOB)
+    assert len(model.calls) == 2
+
+
+def test_nothing_to_reword_does_not_call_the_model():
+    model = FakeLlm([{"entries": []}])
+    assert LlmRewriter(model).rewrite([[], []], JOB) == [[], []] and model.calls == []
+
 class StubS3:
     pass
 
