@@ -15,6 +15,20 @@ variable "image_uri" {
     error_message = "Build and push the initial image before enabling the backend."
   }
 }
+# Raised only for an agreed load-test window, then restored the same day. API Lambda
+# concurrency is changed with put-function-concurrency (Terraform ignores it after creation).
+variable "aurora_max_acu" {
+  type    = number
+  default = 1
+}
+variable "gateway_rate_limit" {
+  type    = number
+  default = 20
+}
+variable "gateway_burst_limit" {
+  type    = number
+  default = 40
+}
 data "aws_availability_zones" "available" { state = "available" }
 resource "aws_vpc" "app" {
   cidr_block           = "10.52.0.0/16"
@@ -78,12 +92,16 @@ resource "aws_rds_cluster" "app" {
   db_subnet_group_name                = aws_db_subnet_group.app.name
   vpc_security_group_ids              = [aws_security_group.database.id]
   backup_retention_period             = 7
-  deletion_protection                 = true
-  skip_final_snapshot                 = false
-  final_snapshot_identifier           = "${var.name}-final"
+  # UTC: 02:00 daily backups and Monday 03:00 maintenance in Singapore, away
+  # from team testing and the demo.
+  preferred_backup_window      = "18:00-18:30"
+  preferred_maintenance_window = "sun:19:00-sun:20:00"
+  deletion_protection          = true
+  skip_final_snapshot          = false
+  final_snapshot_identifier    = "${var.name}-final"
   serverlessv2_scaling_configuration {
     min_capacity             = 0
-    max_capacity             = 1
+    max_capacity             = var.aurora_max_acu
     seconds_until_auto_pause = 1800
   }
   # Do not try to downgrade a minor version applied by AWS maintenance.
@@ -91,13 +109,14 @@ resource "aws_rds_cluster" "app" {
   lifecycle { ignore_changes = [engine_version] }
 }
 resource "aws_rds_cluster_instance" "writer" {
-  identifier                 = "${var.name}-writer"
-  cluster_identifier         = aws_rds_cluster.app.id
-  instance_class             = "db.serverless"
-  engine                     = aws_rds_cluster.app.engine
-  publicly_accessible        = false
-  auto_minor_version_upgrade = true
-  db_subnet_group_name       = aws_db_subnet_group.app.name
+  identifier                   = "${var.name}-writer"
+  cluster_identifier           = aws_rds_cluster.app.id
+  instance_class               = "db.serverless"
+  engine                       = aws_rds_cluster.app.engine
+  publicly_accessible          = false
+  auto_minor_version_upgrade   = true
+  preferred_maintenance_window = aws_rds_cluster.app.preferred_maintenance_window
+  db_subnet_group_name         = aws_db_subnet_group.app.name
 }
 resource "aws_s3_bucket" "documents" { bucket = "${var.name}-${var.account_id}-documents" }
 resource "aws_s3_bucket_public_access_block" "documents" {
@@ -106,6 +125,18 @@ resource "aws_s3_bucket_public_access_block" "documents" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+}
+resource "aws_s3_bucket_policy" "documents_tls" {
+  bucket = aws_s3_bucket.documents.id
+  policy = jsonencode({ Version = "2012-10-17", Statement = [{
+    Sid       = "DenyInsecureTransport"
+    Effect    = "Deny"
+    Principal = "*"
+    Action    = "s3:*"
+    Resource  = [aws_s3_bucket.documents.arn, "${aws_s3_bucket.documents.arn}/*"]
+    Condition = { Bool = { "aws:SecureTransport" = "false" } }
+  }] })
+  depends_on = [aws_s3_bucket_public_access_block.documents]
 }
 resource "aws_s3_bucket_versioning" "documents" {
   bucket = aws_s3_bucket.documents.id
@@ -248,14 +279,32 @@ resource "aws_apigatewayv2_stage" "app" {
   name        = "$default"
   auto_deploy = true
   default_route_settings {
-    throttling_burst_limit = 40
-    throttling_rate_limit  = 20
+    throttling_burst_limit = var.gateway_burst_limit
+    throttling_rate_limit  = var.gateway_rate_limit
   }
   route_settings {
     route_key              = aws_apigatewayv2_route.public["GET /v1/health"].route_key
     throttling_burst_limit = 2
     throttling_rate_limit  = 1
   }
+  # Gateway-rejected requests (401/429) never reach Lambda logs. No IPs or user agents.
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.gateway.arn
+    format = jsonencode({
+      time          = "$context.requestTime"
+      id            = "$context.requestId"
+      method        = "$context.httpMethod"
+      path          = "$context.path"
+      status        = "$context.status"
+      latencyMs     = "$context.responseLatency"
+      integrationMs = "$context.integrationLatency"
+      authError     = "$context.authorizer.error"
+    })
+  }
+}
+resource "aws_cloudwatch_log_group" "gateway" {
+  name              = "/aws/apigateway/${var.name}"
+  retention_in_days = 14
 }
 resource "aws_lambda_permission" "gateway" {
   action         = "lambda:InvokeFunction"

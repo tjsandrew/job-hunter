@@ -1,4 +1,10 @@
 locals {
+  security_headers = [
+    { key = "X-Content-Type-Options", value = "nosniff" },
+    { key = "Referrer-Policy", value = "strict-origin-when-cross-origin" },
+    { key = "X-Frame-Options", value = "DENY" },
+    { key = "Strict-Transport-Security", value = "max-age=31536000" },
+  ]
   name   = "jobhunter-staging"
   origin = "https://main.${aws_amplify_app.web.default_domain}"
 }
@@ -12,20 +18,10 @@ resource "aws_amplify_app" "web" {
     target = "/index.html"
     status = "200"
   }
-  custom_headers = <<-HEADERS
-    customHeaders:
-      - pattern: '**'
-        headers:
-          - key: X-Content-Type-Options
-            value: nosniff
-          - key: Referrer-Policy
-            value: strict-origin-when-cross-origin
-          - key: X-Frame-Options
-            value: DENY
-  HEADERS
-  # Amplify stores these headers as JSON, so the YAML above always shows a diff.
-  # To change headers, remove this ignore for that one apply.
-  lifecycle { ignore_changes = [custom_headers] }
+  # Written exactly as Amplify stores them (compact JSON, "pattern" before "headers"), so plans
+  # compare cleanly and header changes show up in review. jsonencode alone sorts the keys,
+  # which never matches the stored text.
+  custom_headers = "[{\"pattern\":\"**\",\"headers\":${jsonencode(local.security_headers)}}]"
 }
 resource "aws_amplify_branch" "main" {
   app_id            = aws_amplify_app.web.id
@@ -97,6 +93,16 @@ resource "aws_ecr_repository" "api" {
   image_tag_mutability = "IMMUTABLE"
   image_scanning_configuration { scan_on_push = true }
 }
+# Release recovery only rolls back to the previously deployed image, which is
+# always among the newest images kept here.
+resource "aws_ecr_lifecycle_policy" "api" {
+  repository = aws_ecr_repository.api.name
+  policy = jsonencode({ rules = [{
+    rulePriority = 1, description = "Keep the 15 newest images"
+    selection    = { tagStatus = "any", countType = "imageCountMoreThan", countNumber = 15 }
+    action       = { type = "expire" }
+  }] })
+}
 
 resource "aws_ecr_repository" "embed" {
   name                 = "${local.name}-embed"
@@ -127,6 +133,10 @@ module "backend" {
   discovery_max_new                  = var.discovery_max_new
   discovery_schedule_enabled         = var.discovery_schedule_enabled
   discovery_schedule_expression      = var.discovery_schedule_expression
+
+  aurora_max_acu      = var.aurora_max_acu
+  gateway_rate_limit  = var.gateway_rate_limit
+  gateway_burst_limit = var.gateway_burst_limit
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
