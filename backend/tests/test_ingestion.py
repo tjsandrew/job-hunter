@@ -271,6 +271,8 @@ def test_mycareersfuture_pages_by_keyword_and_dedupes_across_searches(monkeypatc
         singapore_only=True,
     ))
     assert [j["external_id"] for j in report.jobs] == ["0", "1", "2", "3"]
+    # The first search that found a listing is kept, so a pull can rotate between searches.
+    assert {j["discovered_by"] for j in report.jobs} == {"mycareersfuture:data analyst"}
     assert [parse_qs(urlparse(url).query)["page"][0] for url in calls[:2]] == ["0", "1"]
     assert all(url.startswith(discovery.MYCAREERSFUTURE_API) for url in calls)
     assert not report.truncated_boards and not report.failures
@@ -292,7 +294,7 @@ def test_rate_limit_and_partial_source_failure_are_reported(monkeypatch):
     monkeypatch.setattr(discovery, "_discover_greenhouse", lambda *a: (_ for _ in ()).throw(ProviderHTTPError("greenhouse", 429, "url")))
     monkeypatch.setattr(discovery, "_discover_lever", lambda *a: ([{"title": "ok"}], False))
     report = discover_report(DiscoveryConfig(greenhouse_boards=["bad"], lever_boards=["good"]))
-    assert report.jobs == [{"title": "ok"}]
+    assert report.jobs == [{"title": "ok", "discovered_by": "lever:good"}]
     assert report.failures[0]["kind"] == "rate_limited"
 
 
