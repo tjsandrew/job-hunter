@@ -1,4 +1,10 @@
 locals {
+  security_headers = [
+    { key = "X-Content-Type-Options", value = "nosniff" },
+    { key = "Referrer-Policy", value = "strict-origin-when-cross-origin" },
+    { key = "X-Frame-Options", value = "DENY" },
+    { key = "Strict-Transport-Security", value = "max-age=31536000" },
+  ]
   name   = "jobhunter-staging"
   origin = "https://main.${aws_amplify_app.web.default_domain}"
 }
@@ -12,23 +18,10 @@ resource "aws_amplify_app" "web" {
     target = "/index.html"
     status = "200"
   }
-  custom_headers = <<-HEADERS
-    customHeaders:
-      - pattern: '**'
-        headers:
-          - key: X-Content-Type-Options
-            value: nosniff
-          - key: Referrer-Policy
-            value: strict-origin-when-cross-origin
-          - key: X-Frame-Options
-            value: DENY
-          - key: Strict-Transport-Security
-            value: max-age=31536000
-  HEADERS
-  # Amplify stores these headers as JSON, so the YAML above always shows a diff.
-  # To change headers, remove this ignore for that one apply.
-  # TEMPORARY: removed to apply the HSTS header. Restore after that apply:
-  # lifecycle { ignore_changes = [custom_headers] }
+  # Written exactly as Amplify stores them (compact JSON, "pattern" before "headers"), so plans
+  # compare cleanly and header changes show up in review. jsonencode alone sorts the keys,
+  # which never matches the stored text.
+  custom_headers = "[{\"pattern\":\"**\",\"headers\":${jsonencode(local.security_headers)}}]"
 }
 resource "aws_amplify_branch" "main" {
   app_id            = aws_amplify_app.web.id
