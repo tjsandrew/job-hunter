@@ -1,0 +1,3 @@
+# Evaluation tooling (system evaluation, docs/status/SYSTEM-EVALUATION-PLAN.md)
+locust==2.47.0
+boto3>=1.40,<2

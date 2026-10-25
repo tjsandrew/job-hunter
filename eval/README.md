@@ -44,3 +44,25 @@ done
 
 - `login(email, password)` returns access, ID and refresh tokens.
 - `refresh(refresh_token)` returns a new access token. Access tokens last 60 minutes and refresh tokens 1 day.
+
+## Load tests (A4, B1, B3)
+
+`locustfile.py` uses the evaluation accounts, refreshing tokens before they expire. It never calls the AI endpoints.
+
+| User class | Used for | Behaviour |
+|---|---|---|
+| `BaselineUser` | B1 responsiveness | One user cycling evenly through `/me`, All jobs, For you, job detail, saved jobs, tracker, profile, profile bank and documents |
+| `BrowsingUser` | B3 scalability | A weighted session: All jobs and For you ×3, job detail ×3, and `/me`, saved jobs, tracker, profile bank and Save/Pass ×1 each, with 1–3 s pauses |
+
+Failures are labelled `429 throttled` (the deliberate gateway and Lambda caps), `5xx server error`, `401 auth` or `HTTP <code>`.
+
+```sh
+python -m venv .venv-eval && .venv-eval/bin/pip install -r eval/requirements.txt
+# B1: per-endpoint baseline, one warm user.
+.venv-eval/bin/locust -f eval/locustfile.py BaselineUser --headless -u 1 -r 1 -t 10m --csv eval/results/b1-baseline
+# B3: step load 1 -> 10 -> 50 -> 100 users, 5 minutes each. Announce in the team chat first.
+EVAL_STEPS=1,10,50,100 EVAL_STEP_SECONDS=300 .venv-eval/bin/locust -f eval/locustfile.py BrowsingUser \
+  --headless --csv eval/results/b3-run1 --csv-full-history
+```
+
+A smoke test on 25 October 2026 (1 baseline user for 45 s, then 2 browsing users for 30 s) passed every endpoint, including the Save/Pass write, with no failures. From those few samples, All jobs and For you took about 1.3–1.5 s at the median and the other reads about 80–120 ms. That is indicative only, not a B1 result.
