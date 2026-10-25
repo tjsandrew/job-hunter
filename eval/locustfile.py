@@ -168,7 +168,8 @@ class BrowsingUser(ApiUser):
 class BaselineUser(ApiUser):
     """B1: cycle the browse endpoints evenly so each gets the same number of samples."""
 
-    wait_time = constant(0.5)
+    # One request at a time; EVAL_WAIT is the pause between them (B1 used 0.1 s).
+    wait_time = constant(float(os.environ.get("EVAL_WAIT", "0.5")))
     _cycle = ("me", "all_jobs", "for_you", "job_detail", "reviewed", "applications", "profile", "profile_bank", "documents")
 
     def on_start(self):
