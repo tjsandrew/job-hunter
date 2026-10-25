@@ -31,12 +31,16 @@ def clamp_max_new(value: Any, default: int = DEFAULT_MAX_NEW) -> int:
 
 
 def interleave(records: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
-    """Round-robin the records over their (source, board), keeping each board's own order.
+    """Round-robin the records over the board or search that found them, keeping each one's own order.
 
-    A small batch therefore mixes employers and sources instead of being filled by the first board in the list."""
+    A small batch therefore mixes employers, sources and keyword searches instead of being filled by the first
+    board in the list. Keyword searches share one board (all MyCareersFuture results are board "sg"), so the
+    group is ``discovered_by`` when discovery set it, and (source, board) for records from older snapshots."""
     groups: dict[tuple[str, str], deque] = defaultdict(deque)
     for record in records:
-        groups[(str(record.get("source") or ""), str(record.get("source_board") or ""))].append(record)
+        found_by = record.get("discovered_by")
+        key = ("search", str(found_by)) if found_by else (str(record.get("source") or ""), str(record.get("source_board") or ""))
+        groups[key].append(record)
     ordered: list[Mapping[str, Any]] = []
     queues = list(groups.values())
     while queues:

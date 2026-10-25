@@ -51,6 +51,21 @@ def test_interleave_mixes_boards_and_keeps_each_boards_order():
         ("greenhouse", "0"), ("lever", "0"), ("greenhouse", "1"), ("lever", "1"), ("greenhouse", "2")]
 
 
+def test_interleave_rotates_between_keyword_searches_that_share_a_board():
+    # All MyCareersFuture results have board "sg"; without discovered_by one search filled every batch.
+    data = [{**job, "discovered_by": "mycareersfuture:data engineer"} for job in jobs(3, "mycareersfuture", "sg")]
+    frontend = [{**job, "external_id": f"f{job['external_id']}", "discovered_by": "mycareersfuture:frontend developer"}
+                for job in jobs(2, "mycareersfuture", "sg")]
+    mixed = job_pull.interleave(data + frontend)
+    assert [item["external_id"] for item in mixed] == ["0", "f0", "1", "f1", "2"]
+
+
+def test_interleave_falls_back_to_board_for_older_snapshots():
+    mixed = job_pull.interleave(jobs(2, "mycareersfuture", "sg") + jobs(1, "lever", "z"))
+    assert [(item["source"], item["external_id"]) for item in mixed] == [
+        ("mycareersfuture", "0"), ("lever", "0"), ("mycareersfuture", "1")]
+
+
 # --- the cap on new jobs ---------------------------------------------------------------------------------------
 
 def test_max_new_inserts_only_that_many_and_defers_the_rest():

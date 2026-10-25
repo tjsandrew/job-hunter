@@ -628,6 +628,9 @@ def discover_report(config: DiscoveryConfig) -> DiscoveryReport:
                         continue
                     if key is not None:
                         seen.add(key)
+                    # Which board or search found the job, so a pull can rotate fairly between keyword searches
+                    # that share one source board (MyCareersFuture, Adzuna). Not part of the job's identity.
+                    job["discovered_by"] = f"{source}:{board}"
                     report.jobs.append(job)
                 if truncated:
                     report.truncated_boards.append(f"{source}:{board}")
