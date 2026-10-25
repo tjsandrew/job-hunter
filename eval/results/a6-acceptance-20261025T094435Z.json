@@ -1,0 +1,172 @@
+{
+  "run_at": "20261025T094435Z",
+  "api": "https://izjy1rpw2d.execute-api.ap-southeast-1.amazonaws.com/v1",
+  "accounts": [
+    "jh-eval-01@example.com",
+    "jh-eval-02@example.com"
+  ],
+  "checks": [
+    {
+      "group": "setup",
+      "check": "accounts are distinct users",
+      "result": "PASS",
+      "detail": "two different internal user IDs"
+    },
+    {
+      "group": "setup",
+      "check": "B created a document, upload, Save and fit request",
+      "result": "PASS",
+      "detail": "document=True upload=True fit=202"
+    },
+    {
+      "group": "isolation",
+      "check": "A cannot read B's document",
+      "result": "PASS",
+      "detail": "GET /documents/c53b13a9-8ce6-4aa3-a68c-8acc6694042a -> 404 (expected [404])"
+    },
+    {
+      "group": "isolation",
+      "check": "A cannot preview B's document PDF",
+      "result": "PASS",
+      "detail": "GET /documents/c53b13a9-8ce6-4aa3-a68c-8acc6694042a/preview.pdf -> 404 (expected [404])"
+    },
+    {
+      "group": "isolation",
+      "check": "A cannot edit B's document",
+      "result": "PASS",
+      "detail": "PATCH /documents/c53b13a9-8ce6-4aa3-a68c-8acc6694042a -> 404 (expected [404])"
+    },
+    {
+      "group": "isolation",
+      "check": "A cannot duplicate B's document",
+      "result": "PASS",
+      "detail": "POST /documents/c53b13a9-8ce6-4aa3-a68c-8acc6694042a/duplicate -> 404 (expected [404])"
+    },
+    {
+      "group": "isolation",
+      "check": "A cannot review B's document",
+      "result": "PASS",
+      "detail": "POST /documents/c53b13a9-8ce6-4aa3-a68c-8acc6694042a/review -> 404 (expected [404])"
+    },
+    {
+      "group": "isolation",
+      "check": "A cannot delete B's document",
+      "result": "PASS",
+      "detail": "DELETE /documents/c53b13a9-8ce6-4aa3-a68c-8acc6694042a -> 404 (expected [404])"
+    },
+    {
+      "group": "isolation",
+      "check": "A cannot read B's profile item",
+      "result": "PASS",
+      "detail": "GET /profile/items/19fc0ecf-bc54-4dc0-9729-7780e082031f -> 404 (expected [404])"
+    },
+    {
+      "group": "isolation",
+      "check": "A cannot edit B's profile item",
+      "result": "PASS",
+      "detail": "PATCH /profile/items/19fc0ecf-bc54-4dc0-9729-7780e082031f -> 404 (expected [404])"
+    },
+    {
+      "group": "isolation",
+      "check": "A cannot delete B's profile item",
+      "result": "PASS",
+      "detail": "DELETE /profile/items/19fc0ecf-bc54-4dc0-9729-7780e082031f -> 404 (expected [404])"
+    },
+    {
+      "group": "isolation",
+      "check": "A cannot read B's upload",
+      "result": "PASS",
+      "detail": "GET /uploads/fdd1a91d-be1b-47e4-983e-c3a9cbf4a05d -> 404 (expected [404])"
+    },
+    {
+      "group": "isolation",
+      "check": "A cannot download B's upload",
+      "result": "PASS",
+      "detail": "GET /uploads/fdd1a91d-be1b-47e4-983e-c3a9cbf4a05d/download -> 404 (expected [404])"
+    },
+    {
+      "group": "isolation",
+      "check": "A cannot delete B's upload",
+      "result": "PASS",
+      "detail": "DELETE /uploads/fdd1a91d-be1b-47e4-983e-c3a9cbf4a05d -> 404 (expected [404])"
+    },
+    {
+      "group": "isolation",
+      "check": "A cannot read B's fit analysis",
+      "result": "PASS",
+      "detail": "GET /fit-analyses/95d0d63d-6b66-41c8-a420-5c8c007df608 -> 404 (expected [404])"
+    },
+    {
+      "group": "isolation",
+      "check": "A cannot attach B's resume to A's application",
+      "result": "PASS",
+      "detail": "PUT /applications/{job} with B's document -> 404"
+    },
+    {
+      "group": "isolation",
+      "check": "B's document is not in A's list",
+      "result": "PASS",
+      "detail": "GET /documents"
+    },
+    {
+      "group": "isolation",
+      "check": "B's Save is not in A's saved jobs",
+      "result": "PASS",
+      "detail": "GET /jobs/reviewed"
+    },
+    {
+      "group": "isolation",
+      "check": "B's fit analysis is not in A's list",
+      "result": "PASS",
+      "detail": "GET /fit-analyses"
+    },
+    {
+      "group": "isolation",
+      "check": "B's data is unchanged after A's attempts",
+      "result": "PASS",
+      "detail": "B can still read its document and item"
+    },
+    {
+      "group": "tokens",
+      "check": "no token is rejected",
+      "result": "PASS",
+      "detail": "GET /me -> 401 (expected [401])"
+    },
+    {
+      "group": "tokens",
+      "check": "tampered signature is rejected",
+      "result": "PASS",
+      "detail": "GET /me -> 401 (expected [401])"
+    },
+    {
+      "group": "tokens",
+      "check": "ID token is rejected (not an access token)",
+      "result": "PASS",
+      "detail": "GET /me -> 403 (expected [401, 403])"
+    },
+    {
+      "group": "tokens",
+      "check": "development header without a token is rejected",
+      "result": "PASS",
+      "detail": "GET /me -> 401 (expected [401])"
+    },
+    {
+      "group": "tokens",
+      "check": "development header cannot switch user",
+      "result": "PASS",
+      "detail": "A's token with X-Dev-User: casey still returns A"
+    },
+    {
+      "group": "tokens",
+      "check": "revoked refresh token cannot get new access tokens",
+      "result": "PASS",
+      "detail": "revoke -> 200; refresh -> rejected (400)"
+    },
+    {
+      "group": "tokens",
+      "check": "access token after its refresh token is revoked",
+      "result": "INFO",
+      "detail": "GET /me -> 200. API Gateway's JWT authorizer is stateless, so a revoked session's access token keeps working until it expires (60 minutes)."
+    }
+  ]
+}
