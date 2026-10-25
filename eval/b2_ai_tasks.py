@@ -14,6 +14,9 @@ Writes eval/results/b2-ai-tasks-<UTC time>/runs.json (no tokens, no generated te
 token counts are joined in afterwards from its log (see analyse_b2.py). Documents it creates are deleted at the end.
 
     python eval/b2_ai_tasks.py            # 5 accounts x 3 jobs = 15 runs of each task
+
+Re-running some tasks on the jobs of an earlier run (free: those jobs already hold this month's slot):
+    B2_TASKS=tailor B2_SAME_JOBS_AS=eval/results/b2-ai-tasks-<stamp>/runs.json python eval/b2_ai_tasks.py
 """
 from __future__ import annotations
 
@@ -31,6 +34,8 @@ import cognito_tokens as ct  # noqa: E402
 
 ACCOUNTS = [f"jh-eval-0{n}@example.com" for n in range(1, 6)]
 JOBS_PER_ACCOUNT = int(os.environ.get("B2_JOBS_PER_ACCOUNT", "3"))
+TASKS = os.environ.get("B2_TASKS", "fit,cover_letter,tailor").split(",")
+SAME_JOBS_AS = os.environ.get("B2_SAME_JOBS_AS")
 POLL_SECONDS, FIT_GIVE_UP_SECONDS = 1.0, 120
 RESULTS = Path(__file__).resolve().parent / "results"
 
@@ -135,23 +140,37 @@ def run_rewrite(token: str, job_id: str, created: list[str]) -> dict:
     return run
 
 
+def earlier_jobs(path: str) -> dict[str, list[dict]]:
+    """Each account's jobs from an earlier runs.json, in their original order."""
+    jobs: dict[str, list[dict]] = {}
+    for run in json.loads(Path(path).read_text())["runs"]:
+        mine = jobs.setdefault(run["account"], [])
+        if run["job_id"] not in [job["id"] for job in mine]:
+            mine.append({"id": run["job_id"], "title": run["job_title"], "description_chars": run["description_chars"]})
+    return jobs
+
+
 def main() -> int:
     accounts = ct.load_accounts()
+    reused = earlier_jobs(SAME_JOBS_AS) if SAME_JOBS_AS else None
     out_dir = RESULTS / f"b2-ai-tasks-{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}"
     out_dir.mkdir(parents=True)
     runs, taken = [], set()
-    record = {"started_at": utc_now(), "api": ct.API_BASE, "jobs_per_account": JOBS_PER_ACCOUNT, "runs": runs}
+    record = {"started_at": utc_now(), "api": ct.API_BASE, "jobs_per_account": JOBS_PER_ACCOUNT, "tasks": TASKS,
+              "same_jobs_as": SAME_JOBS_AS, "runs": runs}
     for email in ACCOUNTS:
         token = ct.login(email, accounts[email]["password"])["access_token"]
         _, me, _ = call(token, "GET", "/me")
         allowance = (me or {}).get("allowance") or {}
         print(f"{email}: {allowance.get('used')}/{allowance.get('limit')} AI uses spent this month", flush=True)
         created: list[str] = []
-        for job in pick_jobs(token, taken, JOBS_PER_ACCOUNT):
-            for task in (lambda: run_fit(token, job["id"]), lambda: run_letter(token, job["id"], created),
-                         lambda: run_rewrite(token, job["id"], created)):
+        jobs = reused.get(email, []) if reused is not None else pick_jobs(token, taken, JOBS_PER_ACCOUNT)
+        for job in jobs:
+            runners = {"fit": lambda: run_fit(token, job["id"]), "cover_letter": lambda: run_letter(token, job["id"], created),
+                       "tailor": lambda: run_rewrite(token, job["id"], created)}
+            for name in TASKS:
                 run = {"account": email, "job_id": job["id"], "job_title": job["title"],
-                       "description_chars": job["description_chars"], **task()}
+                       "description_chars": job["description_chars"], **runners[name]()}
                 runs.append(run)
                 (out_dir / "runs.json").write_text(json.dumps(record, indent=2))
                 print(f"  {run['task']:12} {run.get('outcome')!s:8} accept={run.get('accept_s')} "
