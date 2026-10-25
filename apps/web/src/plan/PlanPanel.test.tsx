@@ -62,6 +62,7 @@ describe('plan', () => {
     render(<PlanPanel me={me()} name="Alice" email="" onClose={onClose} onProfile={() => undefined} onDemoUpgrade={onDemoUpgrade} />);
     await user.click(screen.getByRole('button', { name: 'Upgrade to Premium' }));
     const dialog = screen.getByRole('dialog', { name: 'Upgrade to Premium' });
+    expect(screen.queryByRole('dialog', { name: 'Your plan' })).not.toBeInTheDocument();      // the panel steps aside instead of overlapping the dialog
     expect(dialog).toHaveTextContent('Demo only');
     await user.click(screen.getByRole('button', { name: /^Yearly/ }));
     expect(screen.getByRole('button', { name: /^Yearly/ })).toHaveAttribute('aria-pressed', 'true');
@@ -77,6 +78,7 @@ describe('plan', () => {
     await user.click(screen.getByRole('button', { name: 'Upgrade to Premium' }));
     await user.click(screen.getByRole('button', { name: 'Not now' }));
     expect(screen.queryByRole('dialog', { name: 'Upgrade to Premium' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Your plan' })).toBeInTheDocument();           // and the panel is back
     expect(onClose).not.toHaveBeenCalled();
     await user.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledTimes(1);
