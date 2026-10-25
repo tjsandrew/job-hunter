@@ -263,12 +263,14 @@ class UsageLlm(FakeLlm):
         return answer
 
 
-def test_the_worker_logs_one_line_with_the_tasks_model_calls_and_tokens(caplog):
+def test_the_worker_logs_one_line_with_the_tasks_model_calls_and_tokens(monkeypatch):
+    lines = []      # the worker's own logger, not caplog: other tests' logging setup can disable existing loggers
+    monkeypatch.setattr(llm_worker, "log", type("Log", (), {"info": staticmethod(lines.append),
+                                                            "exception": staticmethod(lambda *a, **k: None)}))
     s3, model = FakeS3(), UsageLlm(respond)
     llm_transport.put_request(s3, "bucket", fit_request("m1"))
-    with caplog.at_level("INFO", logger="job_hunter.llm_worker"):
-        assert llm_worker.process(s3, "bucket", llm_transport.request_key("m1"), client=model, waited_ms=850) == "ok"
-    [line] = [json.loads(r.message) for r in caplog.records if r.message.startswith('{"event": "llm_task"')]
+    assert llm_worker.process(s3, "bucket", llm_transport.request_key("m1"), client=model, waited_ms=850) == "ok"
+    [line] = [json.loads(message) for message in lines]
     calls = len(model.calls)
     assert calls >= 1
     assert line | {"task_ms": 0, "model_ms": 0} == {
