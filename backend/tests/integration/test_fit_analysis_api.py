@@ -215,3 +215,76 @@ def test_saved_and_passed_jobs_are_listed_for_the_user_who_chose_them(world):
     assert client.get("/v1/jobs/reviewed?decision=bogus", headers=ALICE).status_code == 422
     client.put(f"/v1/jobs/{jobs[1]}/review", json={"decision": "none"}, headers=ALICE)   # restoring a passed job removes it from the list
     assert client.get("/v1/jobs/reviewed?decision=dismissed", headers=ALICE).json()["items"] == []
+
+
+def review(job_id, decision, headers=ALICE):
+    assert client.put(f"/v1/jobs/{job_id}/review", json={"decision": decision}, headers=headers).status_code == 200
+
+
+def tracker(headers=ALICE):
+    return [row["job_id"] for row in client.get("/v1/applications", headers=headers).json()["items"]]
+
+
+def statements_during(call):
+    """The SQL statements the database ran while ``call`` ran."""
+    from sqlalchemy import event
+    from sqlalchemy.engine import Engine
+    seen = []
+
+    def hook(conn, cursor, statement, *args):
+        seen.append(statement)
+
+    event.listen(Engine, "before_cursor_execute", hook)
+    try:
+        call()
+    finally:
+        event.remove(Engine, "before_cursor_execute", hook)
+    return seen
+
+
+def test_unsaving_or_passing_a_job_removes_the_tracker_row_the_save_created(world):
+    _, jobs, _ = world
+    review(jobs[0], "saved")
+    review(jobs[1], "saved")
+    assert sorted(tracker()) == sorted(jobs[:2])
+    review(jobs[0], "none")
+    review(jobs[1], "dismissed")
+    assert tracker() == []
+    review(jobs[0], "saved")    # saving again brings it back
+    assert tracker() == [jobs[0]]
+
+
+@pytest.mark.parametrize("change", [{"notes": "Spoke to a recruiter"}, {"status": "preparing"}, {"status": "applied"},
+                                    {"cover_letter_text": "Dear hiring team"}])
+def test_a_tracker_row_the_user_worked_on_survives_unsave_and_pass(world, change):
+    _, jobs, _ = world
+    review(jobs[0], "saved")
+    revision = client.get("/v1/applications", headers=ALICE).json()["items"][0]["revision"]
+    assert client.put(f"/v1/applications/{jobs[0]}", json={"expected_revision": revision, **change}, headers=ALICE).status_code == 200
+    review(jobs[0], "none")
+    assert tracker() == [jobs[0]]
+    review(jobs[0], "dismissed")
+    assert tracker() == [jobs[0]]
+
+
+def test_unsaving_never_touches_another_users_tracker(world):
+    _, jobs, _ = world
+    review(jobs[0], "saved")
+    review(jobs[0], "saved", CASEY)
+    review(jobs[0], "none")
+    assert tracker() == [] and tracker(CASEY) == [jobs[0]]
+
+
+def test_listing_applications_does_not_query_once_per_application(world):
+    _, jobs, _ = world
+    review(jobs[0], "saved")
+    one = len(statements_during(lambda: client.get("/v1/applications", headers=ALICE)))
+    for job_id in jobs[1:6]:
+        review(job_id, "saved")
+    assert len(tracker()) == 6
+    assert len(statements_during(lambda: client.get("/v1/applications", headers=ALICE))) == one
+
+
+def test_reading_a_document_does_not_lock_its_row(world):
+    statements = statements_during(lambda: client.get(f"/v1/documents/{uuid4()}", headers=ALICE))
+    assert statements and not any("FOR UPDATE" in statement.upper() for statement in statements)

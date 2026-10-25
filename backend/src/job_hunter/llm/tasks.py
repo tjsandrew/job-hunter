@@ -42,7 +42,17 @@ def run_tailor(client: LlmClient, payload: Mapping[str, Any]) -> dict[str, Any]:
         raise TaskError("MODEL_UNAVAILABLE") from exc
 
 
-TASKS: dict[str, Callable[[LlmClient, Mapping[str, Any]], dict[str, Any]]] = {"fit": run_fit, "tailor": run_tailor}
+def run_cover_letter(client: LlmClient, payload: Mapping[str, Any]) -> dict[str, Any]:
+    """AI cover letter body (written from the profile, or an existing letter improved). The API checks it before use."""
+    from job_hunter.preparation.cover_letter import LetterUnusable, generate
+    try:
+        return generate(client, payload)
+    except LetterUnusable as exc:
+        raise TaskError("MODEL_UNAVAILABLE") from exc
+
+
+TASKS: dict[str, Callable[[LlmClient, Mapping[str, Any]], dict[str, Any]]] = {
+    "fit": run_fit, "tailor": run_tailor, "cover_letter": run_cover_letter}
 
 
 def run_task(client: LlmClient, request: Mapping[str, Any]) -> tuple[dict[str, Any], str]:

@@ -15,6 +15,18 @@
             ],
             "title": "Applied At"
           },
+          "cover_letter_document_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Letter Document Id"
+          },
           "cover_letter_text": {
             "anyOf": [
               {
@@ -26,6 +38,18 @@
               }
             ],
             "title": "Cover Letter Text"
+          },
+          "expected_cover_letter_revision": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Cover Letter Revision"
           },
           "expected_resume_revision": {
             "anyOf": [
@@ -769,6 +793,80 @@
           }
         },
         "title": "LayoutDefaults",
+        "type": "object"
+      },
+      "LetterWrite": {
+        "properties": {
+          "mode": {
+            "default": "write",
+            "enum": [
+              "blank",
+              "write",
+              "improve"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "points": {
+            "anyOf": [
+              {
+                "maxLength": 600,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Points"
+          },
+          "source_document_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Document Id"
+          },
+          "source_text": {
+            "anyOf": [
+              {
+                "maxLength": 8000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Text"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 240,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "tone": {
+            "default": "formal",
+            "enum": [
+              "formal",
+              "friendly",
+              "concise"
+            ],
+            "title": "Tone",
+            "type": "string"
+          }
+        },
+        "title": "LetterWrite",
         "type": "object"
       },
       "PlanItem": {
@@ -1659,7 +1757,7 @@
     },
     "/v1/documents/{document_id}": {
       "delete": {
-        "description": "Archive a resume: it leaves the library but its exports and application snapshots keep working.",
+        "description": "Archive a resume or cover letter: it leaves the library but its exports and application snapshots keep working.",
         "operationId": "archive_document_v1_documents__document_id__delete",
         "parameters": [
           {
@@ -2492,6 +2590,70 @@
           }
         },
         "summary": "Get Job"
+      }
+    },
+    "/v1/jobs/{job_id}/cover-letter": {
+      "post": {
+        "operationId": "create_v1_jobs__job_id__cover_letter_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-dev-user",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Dev-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LetterWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create"
       }
     },
     "/v1/jobs/{job_id}/fit-analysis": {

@@ -1,0 +1,52 @@
+/* Plan pill (sidebar), plan panel and the demo upgrade dialog. */
+.plan-pill { display: flex; flex-direction: column; gap: 6px; width: 100%; box-sizing: border-box; text-align: left; margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .22); background: rgba(255, 255, 255, .09); color: #fff; cursor: pointer; font: inherit; }
+.plan-pill:hover, .plan-pill[aria-expanded='true'] { background: rgba(255, 255, 255, .16); border-color: rgba(255, 255, 255, .4); }
+.plan-pill-plan { font-size: 12px; font-weight: 700; color: #bcd0ff; }
+.plan-pill-uses { font-size: 13px; font-weight: 700; }
+.plan-meter { display: block; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .22); overflow: hidden; }
+.plan-meter i { display: block; height: 100%; background: #9db8ff; }
+
+.account-button { display: flex; align-items: center; gap: 11px; flex: 1; min-width: 0; padding: 0; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.account-button:hover .account-name strong { text-decoration: underline; }
+
+.plan-backdrop { position: fixed; inset: 0; z-index: 70; background: transparent; }
+.plan-panel { position: fixed; z-index: 71; left: 16px; bottom: 84px; width: min(392px, calc(100vw - 32px)); max-height: calc(100vh - 110px); overflow: auto; box-sizing: border-box; display: flex; flex-direction: column; gap: 14px; padding: 18px; background: #fff; color: var(--ink); border: 1px solid #d5ddf5; border-radius: 16px; box-shadow: 0 16px 48px rgba(24, 37, 61, .26); }
+.plan-panel:focus { outline: none; }
+.plan-panel-head { display: flex; align-items: center; gap: 10px; }
+.plan-panel-who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.plan-panel-who strong { font-size: 14px; }
+.plan-panel-who span { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-chip { font-size: 12px; font-weight: 700; color: #2345b2; background: var(--pale); border-radius: 999px; padding: 5px 11px; white-space: nowrap; }
+.plan-chip.premium { color: #6b3f00; background: #ffe9bd; }
+.plan-usage { border: 1px solid var(--line); border-radius: 12px; padding: 13px; display: flex; flex-direction: column; gap: 8px; }
+.plan-usage-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; }
+.plan-usage-row span { color: var(--muted); }
+.plan-bar { height: 8px; border-radius: 4px; background: #e8ecf7; overflow: hidden; }
+.plan-bar i { display: block; height: 100%; background: #3157ce; }
+.plan-bar i.full { background: #9a5b00; }
+.plan-usage p, .plan-note { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.plan-note { text-align: center; }
+.plan-compare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.plan-compare > div { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+.plan-compare > div.current { border-color: #3157ce; background: #f3f6ff; }
+.plan-compare b { font-size: 12px; color: #2345b2; }
+.plan-compare strong { font-size: 18px; }
+.plan-compare strong small { font-size: 12px; font-weight: 500; color: var(--muted); }
+.plan-compare span { font-size: 12px; line-height: 1.5; color: #3d4766; }
+.plan-links { display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid var(--line); padding-top: 12px; font-size: 13px; }
+
+.modal.upgrade-dialog { overflow-y: auto; }      /* the size is the shared one in theme.css */
+.upgrade-prices { display: flex; gap: 10px; margin: 6px 0 14px; }
+.upgrade-price { flex: 1; display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: #fff; cursor: pointer; font: inherit; color: var(--ink); }
+.upgrade-price.selected { border: 2px solid #3157ce; background: #f3f6ff; padding: 12px; }
+.upgrade-price b { font-size: 12px; color: #2345b2; }
+.upgrade-price strong { font-size: 22px; }
+.upgrade-price span { font-size: 12px; color: var(--muted); }
+.upgrade-points { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.upgrade-points li { display: flex; gap: 8px; align-items: flex-start; }
+.upgrade-points .icon { color: #1c7c4d; flex-shrink: 0; margin-top: 2px; }
+.demo-note { margin: 0 0 14px; padding: 11px 13px; border: 1px dashed #c8a24a; background: #fff8e8; border-radius: 11px; font-size: 13px; line-height: 1.5; color: #5b3d00; }
+
+@media (max-width: 900px) {
+  .plan-panel { left: 16px; bottom: 16px; }
+}

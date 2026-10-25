@@ -1,0 +1,6 @@
+/* The "Prepare a resume" window (its size is the shared one in theme.css). */
+.modal.prepare-dialog { overflow-y: auto; }
+.prepare-dialog .prepare-help { margin: 4px 0 16px; padding-left: 18px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.prepare-dialog .prepare-help li + li { margin-top: 6px; }
+.prepare-dialog .prepare-choices { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 6px; }
+.prepare-dialog .prepare-busy { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 13px; color: #2345b2; }

@@ -31,6 +31,8 @@ Read this file and [shared contracts](CONTRACTS.md) before implementing a compon
 | [09 Resume editor](09-RESUME-EDITOR.md) | Resume-focused editing, templates, live preview and PDF export | 02, 06, 07; works without AI or AWS |
 | [11 Embedding worker (AWS)](11-EMBEDDING-WORKER.md) | How jobs and profiles are embedded in the deployed environment: S3 flag, SQS, dedicated Lambda, cost rationale and when to switch to a direct SQS send | 01, 02, 05; local Compose is unchanged |
 | [12 Fit analysis](12-FIT-ANALYSIS.md) | Per-job requirements coverage: extraction, grounded verdicts, coverage computed in code, SoCLaaS model, S3 worker outside the VPC, monthly allowance. |
+| [14 Cover letters](14-COVER-LETTERS.md) | AI cover letters: written from the profile, improved from an existing letter, or blank; stored as documents, reviewed, exported and attached like a resume; claims checked in code. |
+| [13 Pricing and plans](13-PRICING-AND-PLANS.md) | Proposed Free / Premium plans, AI and platform cost model, break-even, what is still unmeasured. A proposal; billing is not built. |
 
 ## 2. Product commitments and POC interpretation
 

@@ -44,6 +44,7 @@
 
 .fit-group { display: grid; gap: 10px; align-content: start; min-width: 0; }
 .fit-group h4, .fit-suggestions h4 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; }
+@media (min-width: 900px) { .fit-group h4 { white-space: nowrap; } }      /* "Not evidenced in your profile" stays on one line when the window is wide */
 .fit-count { margin-left: auto; font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 99px; background: #fff; }
 .fit-group.met h4 { color: var(--fit-good); }
 .fit-group.gap h4 { color: var(--fit-gap); }

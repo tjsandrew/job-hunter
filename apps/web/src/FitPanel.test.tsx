@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { HttpError } from './api';
 import { FitPanel } from './FitPanel';
@@ -28,6 +28,41 @@ const panel = (props: Partial<{ available: boolean; remaining: number }> = {}, o
   render(<FitPanel jobId="j1" available remaining={5} onUsed={onUsed} {...props} />);
 
 describe('FitPanel', () => {
+  it('shows the result from the last time this job was opened at once, then replaces it with the latest', async () => {
+    mockApi.jobFit.mockResolvedValue(ready());
+    const first = panel();
+    expect(await screen.findByText('50%')).toBeInTheDocument();
+    first.unmount();
+    let release!: (value: FitAnalysis) => void;
+    mockApi.jobFit.mockReturnValue(new Promise<FitAnalysis>((resolve) => { release = resolve; }));
+    panel();
+    expect(screen.getByText('50%')).toBeInTheDocument();
+    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Your profile changed after this analysis/)).not.toBeInTheDocument();
+    act(() => release(ready({ stale: true })));
+    expect(await screen.findByText(/Your profile changed after this analysis/)).toBeInTheDocument();
+  });
+
+  it('forgets a remembered result the server no longer has', async () => {
+    mockApi.jobFit.mockResolvedValue(ready());
+    const first = panel();
+    expect(await screen.findByText('50%')).toBeInTheDocument();
+    first.unmount();
+    mockApi.jobFit.mockRejectedValue(new HttpError('Not found', 404));
+    panel();
+    await waitFor(() => expect(screen.queryByText('50%')).not.toBeInTheDocument());
+  });
+
+  it('does not show one job\'s remembered result for another job', async () => {
+    mockApi.jobFit.mockResolvedValue(ready());
+    const first = panel();
+    expect(await screen.findByText('50%')).toBeInTheDocument();
+    first.unmount();
+    mockApi.jobFit.mockReturnValue(new Promise(() => undefined));
+    render(<FitPanel jobId="j2" available remaining={5} onUsed={vi.fn()} />);
+    expect(screen.queryByText('50%')).not.toBeInTheDocument();
+  });
+
   it('keeps showing the result when the page re-renders with a new onUsed callback (no flicker, no reload)', async () => {
     mockApi.jobFit.mockResolvedValue(ready());
     const first = vi.fn();

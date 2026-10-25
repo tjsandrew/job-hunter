@@ -35,7 +35,8 @@ from job_hunter.profile_bank.services import BankError
 from job_hunter.api.profile_bank import build_router
 from job_hunter.api.document_checks import check_bank_fields
 from job_hunter.api.resume_build import build_router as build_resume_router
-from job_hunter.api import fit_analysis
+from job_hunter.api import cover_letters, fit_analysis
+from job_hunter.preparation.cover_letter import plain_text as letter_plain_text
 from job_hunter.profile_bank.build import blank_document_parts
 from job_hunter.profile_bank.importing import ImportFailure
 from job_hunter.profile_bank.importing.docx import CONTENT_TYPES, declared_file_problem, detect_resume_file, extract_docx
@@ -136,6 +137,8 @@ class ApplicationWrite(BaseModel):
     expected_resume_revision: int | None = Field(default=None, ge=1)
     resume_export_id: UUID | None = None
     cover_letter_text: str | None = Field(default=None, max_length=20000)
+    cover_letter_document_id: UUID | None = None
+    expected_cover_letter_revision: int | None = Field(default=None, ge=1)
 
 class DocumentCreate(BaseModel):
     title: str = Field(min_length=1, max_length=240)
@@ -168,9 +171,28 @@ class UploadCreate(BaseModel):
     content_type: str
     size_bytes: int = Field(gt=0, le=10 * 1024 * 1024)
 
+WRITTEN_KINDS = ("resume", "cover_letter")          # documents the user edits, reviews, exports and attaches
+ARCHIVED_AS = {"resume": "archived", "cover_letter": "archived_letter"}
+RESTORED_AS = {archived: kind for kind, archived in ARCHIVED_AS.items()}
+
+LETTER_TEXT_FIELDS = {"name": 5000, "email": 5000, "phone": 5000, "location": 5000, "date": 200, "recipient": 1000,
+                      "greeting": 300, "closing": 300, "signature": 300}
+
+def validate_letter_content(content: dict) -> None:
+    """A cover letter's own fields: contact, date, recipient, greeting, paragraphs, closing and signature."""
+    for field, limit in LETTER_TEXT_FIELDS.items():
+        value = content.get(field)
+        if value is not None and (not isinstance(value, str) or len(value) > limit):
+            raise HTTPException(422, detail={"code": "INVALID_CONTENT", "message": f"{field} must be text up to {limit} characters"})
+    paragraphs = content.get("paragraphs", [])
+    if not isinstance(paragraphs, list) or len(paragraphs) > 12:
+        raise HTTPException(422, detail={"code": "INVALID_CONTENT", "message": "A letter has up to 12 paragraphs"})
+    if any(not isinstance(item, str) or len(item) > 4000 for item in paragraphs):
+        raise HTTPException(422, detail={"code": "INVALID_CONTENT", "message": "Paragraphs must be text up to 4000 characters"})
+
 def validate_document(template: str, content: dict, layout: dict, db: Session | None = None,
-                      existing_content: dict | None = None) -> None:
-    """Check a resume's shape and limits.
+                      existing_content: dict | None = None, kind: str = "resume") -> None:
+    """Check a resume's (or, with ``kind="cover_letter"``, a letter's) shape and limits.
 
     With ``db``, entry sources must point to the caller's own profile items; IDs
     already in ``existing_content`` (the stored resume being edited) are not checked again.
@@ -201,6 +223,9 @@ def validate_document(template: str, content: dict, layout: dict, db: Session | 
     page_size = layout.get("page_size", "A4")
     if not isinstance(page_size, str) or page_size not in {"A4", "letter"}:
         raise HTTPException(422, detail={"code": "INVALID_LAYOUT", "message": "page_size must be A4 or letter"})
+    if kind == "cover_letter":
+        validate_letter_content(content)
+        return
     if len(content.get("sections", [])) > 30:
         raise HTTPException(422, detail={"code": "INVALID_CONTENT", "message": "Too many resume sections"})
     for section in content.get("sections", []):
@@ -260,7 +285,7 @@ def me(db: Session = Depends(db_for, scope="function")):
     return {"user_id": str(user.id), "display_name": user.display_name, "plan": user.plan,
             "allowance": {"limit": limit, "used": used, "remaining": max(limit - used, 0),
                           "period": allowance.month_label(), "enabled": available},
-            "ai_available": available, "fit_available": fit_analysis.available(),
+            "ai_available": available, "fit_available": fit_analysis.available(), "letter_available": cover_letters.available(),
             "ai_status": "AI tailoring is ready" if available else "No AI model is configured"}
 
 @app.exception_handler(BankError)
@@ -284,6 +309,7 @@ def confirm_profile(body: ConfirmWrite, db: Session = Depends(db_for, scope="fun
 
 app.include_router(build_router(db_for))
 app.include_router(fit_analysis.build_router(db_for, current_user))
+app.include_router(cover_letters.build_router(db_for, current_user, doc_out))
 
 @app.get("/v1/preferences")
 def get_preferences(db: Session = Depends(db_for, scope="function")):
@@ -434,33 +460,57 @@ def review_job(job_id: UUID, body: ReviewWrite, db: Session = Depends(db_for, sc
         item.decision = body.decision
     else:
         db.add(JobReview(user_id=user_id, job_id=job_id, decision=body.decision))
-    if body.decision == "saved" and db.scalar(select(Application).where(Application.user_id == user_id, Application.job_id == job_id)) is None:
-        db.add(Application(user_id=user_id, job_id=job_id, status="saved", notes="", revision=1))
+    application = db.scalar(select(Application).where(Application.user_id == user_id, Application.job_id == job_id).with_for_update())
+    if body.decision == "saved":
+        if application is None:
+            db.add(Application(user_id=user_id, job_id=job_id, status="saved", notes="", revision=1))
+    elif application is not None and is_untouched_save(application):
+        db.delete(application)
     return {"job_id": str(job_id), "decision": None if body.decision == "none" else body.decision}
+
+def is_untouched_save(application: Application) -> bool:
+    """A tracker row that only exists because the job was saved: nothing the user wrote or attached would be lost."""
+    return (application.status == "saved" and not (application.notes or "").strip() and application.applied_at is None
+            and application.resume_export_id is None and not application.cover_letter_text
+            and application.cover_letter_export_id is None and application.packet_updated_at is None)
 
 @app.get("/v1/applications")
 def list_applications(db: Session = Depends(db_for, scope="function")):
-    rows = db.scalars(select(Application).where(Application.user_id == current_user(db).id)
+    user_id = current_user(db).id
+    rows = db.scalars(select(Application).where(Application.user_id == user_id)
                       .order_by(Application.updated_at.desc())).all()
-    return {"items": [application_out(x, db) for x in rows]}
+    # Two queries for the whole list, not one or two per application.
+    jobs = {job.id: job for job in db.scalars(select(Job).where(Job.id.in_({x.job_id for x in rows})))} if rows else {}
+    export_ids = {export_id for x in rows for export_id in (x.resume_export_id, x.cover_letter_export_id) if export_id}
+    exports = ({export.id: export for export in db.scalars(select(DocumentExport).where(
+        DocumentExport.id.in_(export_ids), DocumentExport.user_id == user_id))} if export_ids else {})
+    return {"items": [application_out(x, db, jobs=jobs, exports=exports) for x in rows]}
 
-def application_out(item: Application, db: Session) -> dict:
-    packet = None
-    if item.resume_export_id:
-        export = db.scalar(select(DocumentExport).where(
-            DocumentExport.id == item.resume_export_id,
-            DocumentExport.user_id == current_user(db).id,
-        ))
-        if export:
-            packet = {"export_id": str(export.id), "document_id": str(export.document_id),
-                      "title": item.resume_title, "revision": export.revision,
-                      "download_url": f"/v1/exports/{export.id}"}
-    job = db.get(Job, item.job_id)
+def application_out(item: Application, db: Session, *, jobs: dict | None = None, exports: dict | None = None) -> dict:
+    """``jobs`` and ``exports`` are optional id-keyed lookups loaded once for a whole list; alone, it queries per row."""
+    def packet_for(export_id: UUID | None, title: str | None) -> dict | None:
+        if not export_id:
+            return None
+        if exports is not None:
+            export = exports.get(export_id)
+        else:
+            export = db.scalar(select(DocumentExport).where(
+                DocumentExport.id == export_id,
+                DocumentExport.user_id == current_user(db).id,
+            ))
+        if not export:
+            return None
+        return {"export_id": str(export.id), "document_id": str(export.document_id),
+                "title": title, "revision": export.revision,
+                "download_url": f"/v1/exports/{export.id}"}
+    packet = packet_for(item.resume_export_id, item.resume_title)
+    letter_packet = packet_for(item.cover_letter_export_id, item.cover_letter_title)
+    job = jobs.get(item.job_id) if jobs is not None else db.get(Job, item.job_id)
     return {"id": str(item.id), "job_id": str(item.job_id), "status": item.status,
             "notes": item.notes, "applied_at": item.applied_at.isoformat() if item.applied_at else None,
             "revision": item.revision, "job": job_out(job) if job else None,
             "resume_export_id": str(item.resume_export_id) if item.resume_export_id else None,
-            "resume_packet": packet, "cover_letter_text": item.cover_letter_text,
+            "resume_packet": packet, "cover_letter_packet": letter_packet, "cover_letter_text": item.cover_letter_text,
             "packet_updated_at": item.packet_updated_at.isoformat() if item.packet_updated_at else None}
 
 def create_reviewed_export(document: Document, user_id: UUID, db: Session) -> DocumentExport:
@@ -531,9 +581,33 @@ def put_application(job_id: UUID, body: ApplicationWrite, db: Session = Depends(
             item.resume_export_id = export.id
             item.resume_title = document.title
 
+    if "cover_letter_document_id" in fields:
+        if body.cover_letter_document_id is None:
+            item.cover_letter_export_id = None; item.cover_letter_title = None
+        else:
+            if body.expected_cover_letter_revision is None:
+                raise HTTPException(422, detail={"code": "REVISION_REQUIRED", "message": "expected_cover_letter_revision is required when selecting a letter"})
+            letter = db.scalar(select(Document).where(
+                Document.id == body.cover_letter_document_id, Document.user_id == user_id).with_for_update())
+            if letter is None: not_found()
+            if letter.kind != "cover_letter":
+                raise HTTPException(422, detail={"code": "NOT_A_COVER_LETTER", "message": "Select a cover letter document"})
+            if letter.revision != body.expected_cover_letter_revision:
+                raise HTTPException(409, detail={"code": "LETTER_REVISION_CONFLICT", "message": "Letter changed; review the latest version before attaching it"})
+            if letter.reviewed_revision != letter.revision:
+                raise HTTPException(409, detail={"code": "REVIEW_REQUIRED", "message": "Review the current letter revision before attaching it"})
+            old_letter_export = db.scalar(select(DocumentExport).where(
+                DocumentExport.id == item.cover_letter_export_id, DocumentExport.user_id == user_id)) if item.cover_letter_export_id else None
+            if old_letter_export and old_letter_export.document_id == letter.id and old_letter_export.revision == letter.revision:
+                letter_export = old_letter_export
+            else:
+                letter_export = create_reviewed_export(letter, user_id, db)
+            item.cover_letter_export_id = letter_export.id
+            item.cover_letter_title = letter.title
+
     if "cover_letter_text" in fields:
         item.cover_letter_text = body.cover_letter_text
-    if fields & {"resume_document_id", "resume_export_id", "cover_letter_text"}:
+    if fields & {"resume_document_id", "resume_export_id", "cover_letter_text", "cover_letter_document_id"}:
         item.packet_updated_at = now_utc()
     db.flush()
     return application_out(item, db)
@@ -543,8 +617,8 @@ app.include_router(build_resume_router(db_for, validate_document=validate_docume
 @app.get("/v1/documents")
 def list_documents(kind: str | None = None, db: Session = Depends(db_for, scope="function")):
     stmt = select(Document).where(Document.user_id == current_user(db).id)
-    # Without a kind, archived (deleted) resumes stay out of the list; ask for kind=archived to see them.
-    stmt = stmt.where(Document.kind == kind) if kind else stmt.where(Document.kind != "archived")
+    # Without a kind, archived (deleted) documents stay out of the list; ask for kind=archived to see them.
+    stmt = stmt.where(Document.kind == kind) if kind else stmt.where(Document.kind.notin_(tuple(RESTORED_AS)))
     return {"items": [doc_out(x) for x in db.scalars(stmt.order_by(Document.updated_at.desc())).all()]}
 
 @app.post("/v1/documents", status_code=201)
@@ -563,42 +637,42 @@ def create_document(body: DocumentCreate, db: Session = Depends(db_for, scope="f
 
 @app.get("/v1/documents/{document_id}")
 def get_document(document_id: UUID, db: Session = Depends(db_for, scope="function")):
-    item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id).with_for_update())
+    item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id))
     if item is None: not_found()
     return doc_out(item)
 
 @app.patch("/v1/documents/{document_id}")
 def patch_document(document_id: UUID, body: DocumentPatch, db: Session = Depends(db_for, scope="function")):
-    item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id, Document.kind == "resume").with_for_update())
+    item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id, Document.kind.in_(WRITTEN_KINDS)).with_for_update())
     if item is None: not_found()
     if item.revision != body.expected_revision: raise HTTPException(409, detail={"code": "REVISION_CONFLICT", "message": "Document changed"})
     changes = body.model_dump(exclude={"expected_revision"}, exclude_unset=True)
     template = changes.get("template", item.template); content = changes.get("content", item.content); layout = changes.get("layout", item.layout)
-    validate_document(template, content, layout, db, item.content)
+    validate_document(template, content, layout, db, item.content, kind=item.kind)
     for key, value in changes.items(): setattr(item, key, value)
     item.revision += 1; item.reviewed_revision = None; item.updated_at = now_utc()
     return doc_out(item)
 
 @app.delete("/v1/documents/{document_id}", status_code=204)
 def archive_document(document_id: UUID, db: Session = Depends(db_for, scope="function")):
-    """Archive a resume: it leaves the library but its exports and application snapshots keep working."""
+    """Archive a resume or cover letter: it leaves the library but its exports and application snapshots keep working."""
     item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id,
-                                            Document.kind.in_(("resume", "archived"))).with_for_update())
+                                            Document.kind.in_(tuple(ARCHIVED_AS) + tuple(RESTORED_AS))).with_for_update())
     if item is None: not_found()
-    if item.kind == "resume": item.kind = "archived"
+    if item.kind in ARCHIVED_AS: item.kind = ARCHIVED_AS[item.kind]
     return Response(status_code=204)
 
 @app.post("/v1/documents/{document_id}/restore")
 def restore_document(document_id: UUID, db: Session = Depends(db_for, scope="function")):
     item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id,
-                                            Document.kind.in_(("resume", "archived"))).with_for_update())
+                                            Document.kind.in_(tuple(ARCHIVED_AS) + tuple(RESTORED_AS))).with_for_update())
     if item is None: not_found()
-    if item.kind == "archived": item.kind = "resume"
+    if item.kind in RESTORED_AS: item.kind = RESTORED_AS[item.kind]
     return doc_out(item)
 
 @app.post("/v1/documents/{document_id}/duplicate", status_code=201)
 def duplicate_document(document_id: UUID, body: DuplicateWrite, db: Session = Depends(db_for, scope="function")):
-    item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id, Document.kind == "resume"))
+    item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id, Document.kind.in_(WRITTEN_KINDS)))
     if item is None: not_found()
     if body.job_id and db.get(Job, body.job_id) is None: not_found()
     copy = Document(user_id=item.user_id, title=body.title or f"{item.title} copy", kind=item.kind,
@@ -635,7 +709,7 @@ def tailor_document(document_id: UUID, body: TailorWrite, db: Session = Depends(
 
 @app.post("/v1/documents/{document_id}/review")
 def review_document(document_id: UUID, body: DocumentReview, db: Session = Depends(db_for, scope="function")):
-    item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id, Document.kind == "resume").with_for_update())
+    item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id, Document.kind.in_(WRITTEN_KINDS)).with_for_update())
     if item is None: not_found()
     if body.expected_revision != item.revision: raise HTTPException(409, detail={"code": "REVISION_CONFLICT", "message": "Document changed"})
     item.reviewed_revision = item.revision
@@ -653,7 +727,7 @@ def preview_document(document_id: UUID, db: Session = Depends(db_for, scope="fun
 
 @app.post("/v1/documents/{document_id}/exports", status_code=201)
 def export_document(document_id: UUID, db: Session = Depends(db_for, scope="function")):
-    item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id, Document.kind == "resume").with_for_update())
+    item = db.scalar(select(Document).where(Document.id == document_id, Document.user_id == current_user(db).id, Document.kind.in_(WRITTEN_KINDS)).with_for_update())
     if item is None: not_found()
     if item.reviewed_revision != item.revision:
         raise HTTPException(409, detail={"code": "REVIEW_REQUIRED", "message": "Review the current revision before export"})
@@ -665,14 +739,16 @@ def export_document(document_id: UUID, db: Session = Depends(db_for, scope="func
 def download_export(export_id: UUID, db: Session = Depends(db_for, scope="function")):
     item = db.scalar(select(DocumentExport).where(DocumentExport.id == export_id, DocumentExport.user_id == current_user(db).id))
     if item is None: not_found()
+    source = db.get(Document, item.document_id) if getattr(item, "document_id", None) else None
+    filename = f"{'cover-letter' if source is not None and source.kind in ('cover_letter', 'archived_letter') else 'resume'}-r{item.revision}.pdf"
     if item.file_path.startswith("s3://"):
-        return JSONResponse({"url": storage.download_url(item.file_path, f"resume-r{item.revision}.pdf", "application/pdf")}, headers={"Cache-Control": "no-store"})
+        return JSONResponse({"url": storage.download_url(item.file_path, filename, "application/pdf")}, headers={"Cache-Control": "no-store"})
     try:
         data = storage.read(item.file_path)
     except FileNotFoundError:
         not_found()
     return Response(data, media_type="application/pdf",
-                    headers={"Content-Disposition": f'attachment; filename="resume-r{item.revision}.pdf"'})
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 @app.post("/v1/uploads", status_code=201)
 def upload_resume(body: UploadCreate, db: Session = Depends(db_for, scope="function")):
