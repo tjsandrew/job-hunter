@@ -1,6 +1,7 @@
 import { downloadFile } from '../download';
 import { useEffect, useRef, useState } from 'react';
 import { api, HttpError } from '../api';
+import { listKey, readList, writeList } from '../listCache';
 import { ChoiceChips, Field, Icon, Loading, Pill, SelectField, TagInput } from '../ui';
 import { ImportReview } from './ImportReview';
 import type { ImportDecision, ImportResult, ImportSource, ProfileImport, ItemData, ItemKind, ProfileBank, ProfileDraft, ProfileItem, ProfilePoint, ProfileResponse, Resume, UploadedResume } from '../types';
@@ -67,14 +68,22 @@ export function ProfileView({ userKey, onChanged, onBasicsSaved, onOpenResume, o
   const lock = useRef(false);
   const changedRef = useRef(onChanged); changedRef.current = onChanged;
 
+  const basicsDirtyRef = useRef(false); basicsDirtyRef.current = basicsDirty;
+  const profileKey = listKey('profile', userKey), sourcesKey = listKey('profile-sources', userKey);
   useEffect(() => {
     alive.current = true;
     let active = true;
-    setLoading(true); setSourcesLoading(true); setSourcesError('');
+    // What this page showed last time is put up at once and the server is asked again either way, so the page does not
+    // start from a spinner on every visit. Text typed before the answer arrives is never overwritten.
+    const seen = readList<{ bank: ProfileBank; profile: ProfileResponse }>(profileKey);
+    const seenSources = readList<{ uploads: UploadedResume[]; imports: ProfileImport[] }>(sourcesKey);
+    if (seen) { setBank(seen.value.bank); setProfile(seen.value.profile); }
+    if (seenSources) { setUploads(seenSources.value.uploads); setImports(seenSources.value.imports); }
+    setLoading(!seen); setSourcesLoading(!seenSources); setSourcesError('');
     // Profile content is useful before the optional sources/history arrive.
     Promise.all([api.getBank(), api.getProfile()]).then(([nextBank, nextProfile]) => {
       if (!active) return;
-      setBank(nextBank); setProfile(nextProfile);
+      setBank(nextBank); if (!basicsDirtyRef.current) setProfile(nextProfile);
     }).catch((cause: Error) => active && setError(cause.message)).finally(() => active && setLoading(false));
     Promise.all([api.uploads(), api.imports()]).then(([files, recent]) => {
       if (!active) return;
@@ -82,6 +91,8 @@ export function ProfileView({ userKey, onChanged, onBasicsSaved, onOpenResume, o
     }).catch((cause: Error) => active && setSourcesError(cause.message)).finally(() => active && setSourcesLoading(false));
     return () => { active = false; alive.current = false; };
   }, [userKey]);
+  useEffect(() => { if (bank && profile) writeList(profileKey, { bank, profile }); }, [bank, profile, profileKey]);
+  useEffect(() => { if (!sourcesLoading) writeList(sourcesKey, { uploads, imports }); }, [uploads, imports, sourcesLoading, sourcesKey]);
 
   const reload = async () => {
     const next = await api.getBank();

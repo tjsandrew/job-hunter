@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, HttpError } from './api';
+import { dropList, listKey, readList, writeList } from './listCache';
 import type { FitAnalysis, FitResult, FitVerdict } from './types';
 import { Loading } from './ui';
 import './fit.css';
@@ -82,15 +83,21 @@ export function FitPanel({ jobId, available, remaining, onUsed }: { jobId: strin
   usedRef.current = onUsed;
 
   const apply = useCallback((next: FitAnalysis) => {
-    setAnalysis(next);
+    setAnalysis(next); writeList(listKey('fit', next.job_id), next);
     if (next.status === 'ready' && settled.current !== next.id) { settled.current = next.id; usedRef.current(); }
   }, []);
 
   useEffect(() => {
     let cancelled = false;
-    setAnalysis(null); setError(''); setLoading(true);
+    // The result seen the last time this job was opened shows at once; the server is asked again either way.
+    const seen = readList<FitAnalysis>(listKey('fit', jobId));
+    setAnalysis(seen ? seen.value : null); setError(''); setLoading(!seen);
     api.jobFit(jobId).then((found) => { if (!cancelled) apply(found); })
-      .catch((cause) => { if (!cancelled && !(cause instanceof HttpError && cause.status === 404)) setError(cause instanceof Error ? cause.message : 'Could not load the analysis.'); })
+      .catch((cause) => {
+        if (cancelled) return;
+        if (cause instanceof HttpError && cause.status === 404) { setAnalysis(null); dropList(listKey('fit', jobId)); }
+        else setError(cause instanceof Error ? cause.message : 'Could not load the analysis.');
+      })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [jobId, apply]);

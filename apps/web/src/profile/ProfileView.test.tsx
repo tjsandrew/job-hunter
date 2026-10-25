@@ -53,6 +53,27 @@ async function setup() {
 }
 
 describe('Profile bank', () => {
+  it('shows the profile it had last time at once while it asks the server again', async () => {
+    await setup();
+    cleanup();
+    let release!: (value: ProfileBank) => void;
+    mockApi.getBank.mockReturnValue(new Promise<ProfileBank>((resolve) => { release = resolve; }));      // the second visit's answer is still on its way
+    render(<ProfileView {...callbacks} userKey="alice" preferences={{ roles: [], locations: ['Singapore'], work_modes: [] }} savingPreferences={false} uploading={false} uploadMessage="" extractedResumeText="" resumes={[]} />);
+    expect(screen.getByRole('heading', { name: 'Your profile bank.' })).toBeInTheDocument();           // no spinner first
+    expect(screen.getByText('Backend Engineer')).toBeInTheDocument();
+    expect(mockApi.getBank).toHaveBeenCalledTimes(2);
+    release({ ...copy(bank), items: [{ ...experience(), data: { ...experience().data, title: 'Staff Engineer' } }] });
+    expect(await screen.findByText('Staff Engineer')).toBeInTheDocument();
+  });
+
+  it('does not show one person the last profile of another', async () => {
+    await setup();
+    cleanup();
+    mockApi.getBank.mockReturnValue(new Promise(() => undefined));
+    render(<ProfileView {...callbacks} userKey="casey" preferences={{ roles: [], locations: [], work_modes: [] }} savingPreferences={false} uploading={false} uploadMessage="" extractedResumeText="" resumes={[]} />);
+    expect(screen.queryByText('Backend Engineer')).not.toBeInTheDocument();
+  });
+
   it('loads canonical seniority options and keeps target roles free-text', async () => {
     const user = await setup();
     expect(await screen.findByRole('option', {name:'Junior / Entry-level'})).toHaveValue('junior');

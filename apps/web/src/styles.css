@@ -134,6 +134,8 @@
 .prepare-banner{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,1.1fr);align-items:center;gap:16px;background:#f2f6ef;border:1px solid #e3ebdf;border-radius:10px;padding:16px;margin:0 0 20px}
 .prepare-banner strong{font-size:15px;color:#2d3a30}
 .prepare-banner p{margin:5px 0 0;font-size:13px;line-height:1.45;color:#667166}
+.prepare-help{margin:8px 0 0;padding-left:18px;font-size:12px;line-height:1.45;color:#667166}
+.prepare-help li+li{margin-top:3px}
 .prepare-actions{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap}
 .prepare-actions .field{margin:0;flex:1 1 180px}
 .prepare-actions .button{flex:none}

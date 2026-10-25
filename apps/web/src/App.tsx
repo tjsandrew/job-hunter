@@ -3,8 +3,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, getDevUser, setDevUser, HttpError } from './api';
 import { cloudAuth, signOut, signedInEmail } from './auth';
 import { blankContent } from './editor';
-import { parseRoute, routePath, type Page } from './routes';
-import type { Application, DiscoverMode, FitSummary, Job, Me, Recommendation, Resume, ResumeContent } from './types';
+import { clearLists, listKey, readList, SETTINGS_KEY, writeList } from './listCache';
+import { parseRoute, routePath, type DocumentTab, type Page } from './routes';
+import { Letters } from './letters/Letters';
+import { PrepareResume } from './studio/PrepareResume';
+import { PlanPanel, PlanPill } from './plan/PlanPanel';
+import type { Application, CoverLetter, DiscoverMode, FitSummary, Job, Me, Recommendation, Resume, ResumeContent } from './types';
 
 import { FitPanel } from './FitPanel';
 import { BrandLogo, Field, Icon, Loading, Pill, SelectField, fmtDate } from './ui';
@@ -72,6 +76,12 @@ export default function App() {
   latestResumeRef.current = activeResume;
   const [previewUrl, setPreviewUrl] = useState('');
   const [studioTab, setStudioTab] = useState<'edit' | 'preview'>('edit');
+  const [section, setSection] = useState<DocumentTab>(initialRoute.tab);                 // "My resumes" shows resumes or cover letters
+  const [activeLetterId, setActiveLetterId] = useState<string | null>(initialRoute.letterId);
+  const [letterTarget, setLetterTarget] = useState<string | null>(null);                 // a job to start a cover letter for
+  const [planOpen, setPlanOpen] = useState(false);
+  const [prepareFor, setPrepareFor] = useState<Application | null>(null);               // the application a resume is being prepared for (the window)
+  const [buildRequested, setBuildRequested] = useState(false);                          // open the resume builder as soon as My resumes shows
   const [saving, setSaving] = useState(false);
   const [saveLabel, setSaveLabel] = useState('Saved');
   const [history, setHistory] = useState<ResumeContent[]>([]);
@@ -115,19 +125,28 @@ export default function App() {
     let alive = true;
     if (page !== 'discover') { setRecommendationLoading(false); return; }
     const revision = ++searchRequestRevision.current;
-    setLoadingMoreJobs(false); setRecommendationLoading(true);
-    const timer = window.setTimeout(() => {
+    setLoadingMoreJobs(false);
+    type JobsResult = Awaited<ReturnType<typeof fetchJobs>>;
+    const show = (result: JobsResult) => {
+      setJobs(result.items || []); setRecommendationTotal(result.total ?? result.items.length);
+      setNextJobOffset(result.next_offset ?? null); setRecommendationsDegraded(Boolean(result.degraded_mode)); setRankingStatus(result.ranking_status || '');
+      setForYouNote(result.note); setForYouPending(result.pending);
+    };
+    // A list seen a moment ago (same tab, search and refresh count) is shown at once; an older one is shown while a newer one is fetched.
+    const key = listKey(user, effectiveMode, query.trim(), refresh, bootstrapAttempt, forYouRecheck, forYouAvailable);
+    const cached = readList<JobsResult>(key);
+    if (cached) show(cached.value);
+    setRecommendationLoading(!cached);
+    const timer = cached?.fresh ? undefined : window.setTimeout(() => {
       fetchJobs(effectiveMode, query, 0).then((result) => {
         if (!alive) return;
-        setJobs(result.items || []); setRecommendationTotal(result.total ?? result.items.length);
-        setNextJobOffset(result.next_offset ?? null); setRecommendationsDegraded(Boolean(result.degraded_mode)); setRankingStatus(result.ranking_status || '');
-        setForYouNote(result.note); setForYouPending(result.pending);
-      }).catch((error: Error) => alive && setFatal(error.message)).finally(() => alive && setRecommendationLoading(false));
-    }, 250);
+        writeList(key, result); show(result);
+      }).catch((error: Error) => alive && !cached && setFatal(error.message)).finally(() => alive && setRecommendationLoading(false));
+    }, cached ? 0 : 250);
     return () => { alive = false; clearTimeout(timer); if (searchRequestRevision.current === revision) searchRequestRevision.current += 1; };
   }, [user, query, refresh, bootstrapAttempt, discoverMode, page, forYouRecheck]);
 
-  useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => { setToast(''); setToastAction(null); }, toastAction ? 9000 : 3200); return () => window.clearTimeout(timer); }, [toast, toastAction]);
+  useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => { setToast(''); setToastAction(null); }, toastAction ? 9000 : Math.min(10000, Math.max(3200, toast.length * 55))); return () => window.clearTimeout(timer); }, [toast, toastAction]);
   const announce = (message: string) => { setToast(message); setToastAction(null); };
   const loadFitMarks = useCallback(() => { api.fitSummaries().then((result) => setFitMarks(Object.fromEntries(result.items.map((item) => [item.job_id, item])))).catch(() => undefined); }, []);
   useEffect(() => { loadFitMarks(); }, [user, bootstrapAttempt, loadFitMarks]);
@@ -136,7 +155,7 @@ export default function App() {
     if ((activeResume && saveLabel !== 'Saved') || saving || prefSaving || uploading || busyResumeAction || busyJob || trackerEdit || trackerSaving || profileBusy) {
       announce('Finish or close the current save or action before switching users.'); return;
     }
-    setDevUser(next); setUser(next); setMe(null); setFatal('');
+    setDevUser(next); setUser(next); setMe(null); setFatal(''); clearLists();
     setJobs([]); setRecommendationLoading(true); setRecordsLoading(true); setRecommendationTotal(0); setNextJobOffset(null); setRankingStatus(''); setApps([]); setResumes([]);
     setProfile(emptyProfile); setFitMarks({}); setDiscoverMode('for-you');
     setPreferences({ roles: [], locations: [], work_modes: [], seniority: '', salary_min: '', salary_currency: 'SGD', salary_period: 'year', revision: 0 });
@@ -218,7 +237,11 @@ export default function App() {
     try {
       // A new resume starts from the user's saved defaults; without them it is the built-in blank.
       let defaults: Awaited<ReturnType<typeof api.getSettings>>['resume_defaults'] | undefined;
-      try { defaults = (await api.getSettings()).resume_defaults; } catch { /* no settings yet */ }
+      try {
+        const remembered = readList<Awaited<ReturnType<typeof api.getSettings>>>(SETTINGS_KEY);
+        if (remembered?.fresh) defaults = remembered.value.resume_defaults;
+        else { const settings = await api.getSettings(); writeList(SETTINGS_KEY, settings); defaults = settings.resume_defaults; }
+      } catch { /* no settings yet */ }
       const start = applyDefaults({ template: 'classic', content: fullContent, layout: { font_size: 11, margin: 18, font_family: 'auto', line_spacing: 1.25, page_size: 'A4' } }, defaults);
       const created = await api.createDocument({ title: resumeAttachTarget ? `Resume for ${resumeAttachTarget.title}` : 'Untitled resume', template: start.template, content: start.content, layout: start.layout, job_id: jobId });
       setResumes((items) => [created, ...items]); openResume(created); announce('Resume created.');
@@ -227,16 +250,18 @@ export default function App() {
   };
 
   const aiNote = { off: '', applied: ' AI reworded some bullets; check them.', unchanged: ' AI made no changes.', fallback: ' AI was unavailable, so only the rule-based ordering was applied.' };
-  const createTailoredCopy = async (source: Resume, mode: 'rules' | 'ai' = 'rules') => {
-    if (!resumeAttachTarget) return;
+  // Returns whether the copy was made, so a window that asked for it knows when to close.
+  const createTailoredCopy = async (source: Resume, mode: 'rules' | 'ai' = 'rules', target = resumeAttachTarget): Promise<boolean> => {
+    if (!target) return false;
     setBusyResumeAction(true);
     try {
-      const { document: copy, matched, missing, ai } = await api.tailorDocument(source.id, resumeAttachTarget.job_id, `${source.title} — ${resumeAttachTarget.title}`, mode);
+      const { document: copy, ai } = await api.tailorDocument(source.id, target.job_id, `${source.title} — ${target.title}`, mode);
       if (mode === 'ai') api.me().then(setMe).catch(() => undefined);
       setResumes((items) => [copy, ...items]); openResume(copy);
-      announce(`A tailored draft was created for this application.${aiNote[ai.status]} Matched: ${matched.join(', ') || 'none'}. Missing: ${missing.join(', ') || 'none'}. Review it before attaching.`);
+      announce(`A tailored draft was created for this application.${aiNote[ai.status]} Review it before attaching.`);
+      return true;
     }
-    catch (error) { announce((error as Error).message); }
+    catch (error) { announce((error as Error).message); return false; }
     finally { setBusyResumeAction(false); }
   };
   const copyResume = async (source: Resume) => {
@@ -268,16 +293,22 @@ export default function App() {
   };
   const resumeBuilt = (created: Resume) => { setResumes((items) => [created, ...items]); openResume(created); announce('Resume created from your profile. Review it before exporting.'); };
   const buildJobs = useMemo(() => apps.filter((item) => item.job).map((item) => ({ id: item.job_id, title: item.job!.title, company: item.job!.company, location: item.job!.location, work_mode: item.job!.work_mode })), [apps]);
-  const openResume = (resume: Resume) => { const linkedApp = resume.job_id ? apps.find((application) => application.job_id === resume.job_id) : undefined; setResumeAttachTarget(linkedApp ? { job_id: linkedApp.job_id, title: linkedApp.job?.title || 'this opportunity', revision: linkedApp.revision } : null); setActiveResume(structuredClone(resume)); setHistory([]); setFuture([]); setStudioTab('edit'); setSaveLabel('Saved'); setPage('studio'); };
+  const openResume = (resume: Resume) => { const linkedApp = resume.job_id ? apps.find((application) => application.job_id === resume.job_id) : undefined; setResumeAttachTarget(linkedApp ? { job_id: linkedApp.job_id, title: linkedApp.job?.title || 'this opportunity', revision: linkedApp.revision } : null); setActiveResume(structuredClone(resume)); setHistory([]); setFuture([]); setStudioTab('edit'); setSaveLabel('Saved'); setSection('resumes'); setActiveLetterId(null); setPage('studio'); };
   const prepareApplicationResume = (application: Application) => {
     const attached = resumes.find((resume) => resume.id === application.resume_packet?.document_id);
     // Reopen this application's draft; never reuse a document linked to another job.
     const existing = attached?.job_id === application.job_id ? attached
       : resumes.find((resume) => resume.job_id === application.job_id);
-    if (existing) openResume(existing);
-    else { setActiveResume(null); setPage('studio'); }
-    setResumeAttachTarget({ job_id: application.job_id, title: application.job?.title || 'this opportunity', revision: application.revision });
     setTrackerEdit(null);
+    if (existing) {
+      openResume(existing);
+      setResumeAttachTarget({ job_id: application.job_id, title: application.job?.title || 'this opportunity', revision: application.revision });
+    } else setPrepareFor(application);       // no draft for this job yet: a window offers a tailored copy or a new resume, no page change
+  };
+  const prepareTarget = (application: Application) => ({ job_id: application.job_id, title: application.job?.title || 'this opportunity', revision: application.revision });
+  const buildForApplication = (application: Application) => {
+    setPrepareFor(null); setResumeAttachTarget(prepareTarget(application)); setBuildRequested(true);
+    setActiveResume(null); setSection('resumes'); setActiveLetterId(null); setPage('studio');
   };
   const returnToApplication = () => {
     if (saving || saveLabel !== 'Saved') { announce('Wait for changes to save before returning.'); return; }
@@ -379,11 +410,17 @@ export default function App() {
 
   const openResumeLibrary = () => {
     if (activeResume && saveLabel !== 'Saved') { announce('Wait for your resume changes to save before opening the library.'); return; }
-    setActiveResume(null); setResumeAttachTarget(null); setPage('studio');
+    setActiveResume(null); setResumeAttachTarget(null); setSection('resumes'); setActiveLetterId(null); setPage('studio');
     document.scrollingElement?.scrollTo?.({top: 0, left: 0});
   };
+  const switchSection = (next: DocumentTab) => { setSection(next); setActiveLetterId(null); };
+  const openLetter = useCallback((id: string | null) => setActiveLetterId(id), []);
+  const letterTargetDone = useCallback(() => setLetterTarget(null), []);
+  const refreshMe = useCallback(() => { api.me().then(setMe).catch(() => undefined); }, []);
+  const applicationSaved = useCallback((saved: Application) => setApps((items) => (items.some((item) => item.job_id === saved.job_id) ? items.map((item) => (item.job_id === saved.job_id ? saved : item)) : [saved, ...items])), []);
+  const prepareApplicationLetter = (application: Application) => { setTrackerEdit(null); setLetterTarget(application.job_id); setSection('letters'); setActiveLetterId(null); setActiveResume(null); setPage('studio'); };
 
-  const confirmSignOut = () => { if (window.confirm("Sign out? Wait for any pending resume save before continuing.")) void signOut(); };
+  const confirmSignOut = () => { if (window.confirm("Sign out? Wait for any pending resume save before continuing.")) { clearLists(); void signOut(); } };
   // The API names every cloud account "Job seeker" and has no email, so the sidebar uses the profile name,
   // then the sign-in email. Local development keeps the seeded dev user.
   const emailName = signInEmail.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -392,7 +429,8 @@ export default function App() {
   const aiReady = !!(me?.ai_available || me?.fit_available);
 
   // ---- addresses: every page, list and opened listing has its own link (routes.ts) ----
-  const currentPath = routePath({ page, mode: discoverMode, jobId: jobDetail?.id ?? null, resumeId: page === 'studio' ? activeResume?.id ?? null : null });
+  const onLetters = page === 'studio' && section === 'letters';
+  const currentPath = routePath({ page, mode: discoverMode, jobId: jobDetail?.id ?? null, resumeId: page === 'studio' && !onLetters ? activeResume?.id ?? null : null, tab: onLetters ? 'letters' : 'resumes', letterId: onLetters ? activeLetterId : null });
   const address = useRef({ path: currentPath, unsaved: false, synced: false, resumeId: null as string | null, openResume });
   address.current.path = currentPath;
   address.current.unsaved = !!activeResume && saveLabel !== 'Saved';
@@ -421,6 +459,7 @@ export default function App() {
       }
       if (target.jobId) setWantedJob(target.jobId);
       else { setJobDetail(null); setPage(target.page); setDiscoverMode(target.mode); }
+      setSection(target.tab); setActiveLetterId(target.letterId);
       if (target.resumeId) setWantedResume(target.resumeId);
       else if (target.page === 'studio' && !target.jobId) { setActiveResume(null); setResumeAttachTarget(null); }
     };
@@ -460,7 +499,8 @@ export default function App() {
       <nav aria-label="Main navigation">{(['discover', 'profile', 'tracker', 'studio'] as Page[]).map((item) => <button key={item} aria-label={pageNames[item]} className={`nav-link ${page === item ? 'active' : ''}`} onClick={() => item === 'studio' ? openResumeLibrary() : setPage(item)}><Icon name={item} /><span>{pageNames[item]}</span>{item === 'tracker' && apps.length > 0 && <b className="nav-count">{apps.length}</b>}</button>)}</nav>
       <div className="sidebar-bottom">
         {(aiReady || !cloudAuth) && <div className="ai-card"><span className="ai-icon">✳</span><div><strong>AI assistant</strong><p>{aiReady ? 'Fit checks and resume tailoring are available.' : 'No AI model is configured on this machine.'}</p><span className={`status-dot ${aiReady ? 'on' : ''}`} /> {aiReady ? 'Ready' : 'Offline'}</div></div>}
-        <div className="account-row"><div className="avatar">{initials(shownName)}</div><div className="account-name"><strong>{shownName}</strong><span title={shownSub}>{shownSub}</span></div>{cloudAuth ? <button className="signout-button icon-only" title="Sign out" aria-label="Sign out" onClick={confirmSignOut}><Icon name="signout" /></button> : (<select aria-label="Development user" value={user} onChange={(e) => switchUser(e.target.value as 'alice' | 'casey')}><option value="alice">Alice</option><option value="casey">Casey</option></select>)}</div>
+        <PlanPill me={me} open={planOpen} onClick={() => setPlanOpen((value) => !value)} />
+        <div className="account-row"><button type="button" className="account-button" aria-label="Your plan and account" aria-haspopup="dialog" onClick={() => setPlanOpen(true)}><div className="avatar">{initials(shownName)}</div><div className="account-name"><strong>{shownName}</strong><span title={shownSub}>{shownSub}</span></div></button>{cloudAuth ? <button className="signout-button icon-only" title="Sign out" aria-label="Sign out" onClick={confirmSignOut}><Icon name="signout" /></button> : (<select aria-label="Development user" value={user} onChange={(e) => switchUser(e.target.value as 'alice' | 'casey')}><option value="alice">Alice</option><option value="casey">Casey</option></select>)}</div>
         {!cloudAuth && <p className="dev-note">LOCAL DEVELOPMENT · {user.toUpperCase()}</p>}
       </div>
     </aside>
@@ -473,14 +513,18 @@ export default function App() {
           {page === 'discover' && <Discover jobs={jobs} loading={recommendationLoading} total={recommendationTotal} hasMore={nextJobOffset !== null} loadingMore={loadingMoreJobs} onLoadMore={loadMoreJobs} query={query} setQuery={setQuery} busyJob={busyJob} onReview={review} onDetails={setJobDetail} degraded={recommendationsDegraded} rankingStatus={rankingStatus} mode={effectiveMode} forYouAvailable={forYouAvailable} setMode={setDiscoverMode} fitMarks={fitMarks} forYouNote={forYouNote} forYouPending={forYouPending} onRecheck={() => setForYouRecheck((x) => x + 1)} thinProfile={!(preferences.roles || []).length || !preferences.seniority} aiReady={!!(me?.ai_available || me?.fit_available)} />}
           {page === 'profile' && <ProfileView key={user} userKey={user} onChanged={() => setRefresh(value => value + 1)} onBasicsSaved={draft => setProfile(profileToForm(draft))} onOpenResume={openResume} onOpenLibrary={openResumeLibrary} preferences={preferences} setPreferences={setPreferences} savePreferences={savePreferences} savingPreferences={prefSaving} uploading={uploading} uploadMessage={uploadMessage} extractedResumeText={extractedResumeText} onUpload={uploadProfileResume} resumes={resumes} onBusyChange={setProfileBusy} />}
           {page === 'tracker' && <Tracker apps={filteredApps} loading={recordsLoading} query={trackerQuery} setQuery={setTrackerQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onEdit={setTrackerEdit} />}
-          {page === 'studio' && <Studio onDelete={deleteResume} resumes={resumes} loading={recordsLoading} active={activeResume} attachTarget={resumeAttachTarget} tab={studioTab} setTab={setStudioTab} busy={busyResumeAction} saving={saving} saveLabel={saveLabel} history={history} future={future} onCreate={createResume} onOpen={openResume} onCreateTailoredCopy={createTailoredCopy} onTailorWithAI={(resume) => createTailoredCopy(resume, 'ai')} ai={{ available: !!me?.ai_available, remaining: me?.allowance.remaining ?? 0, limit: me?.allowance.limit ?? 5 }} onCopyResume={copyResume} onBuilt={resumeBuilt} onApplyDefaults={applyStyleDefaults} jobs={buildJobs} onAttach={attachResumeToApplication} onReturn={returnToApplication} onBack={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before leaving the editor.'); return; } setActiveResume(null); }} onUpdate={updateResume} onContent={pushContent} onUndo={undo} onRedo={redo} onDuplicate={duplicateResume} onReview={reviewResume} onExport={exportResume} onPreview={previewResume} onReload={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before reloading.'); return; } reloadResume(); }} />}
+          {page === 'studio' && section === 'letters' && <Letters me={me} apps={apps} resumeCount={resumes.length} activeId={activeLetterId} target={letterTarget} refresh={refresh} onOpen={openLetter} onTargetDone={letterTargetDone} onSection={switchSection} onMeChanged={refreshMe} onApplicationSaved={applicationSaved} announce={announce} />}
+          {page === 'studio' && section === 'resumes' && <Studio section={section} onSection={switchSection} startBuild={buildRequested} onBuildStarted={() => setBuildRequested(false)} onDelete={deleteResume} resumes={resumes} loading={recordsLoading} active={activeResume} attachTarget={resumeAttachTarget} tab={studioTab} setTab={setStudioTab} busy={busyResumeAction} saving={saving} saveLabel={saveLabel} history={history} future={future} onCreate={createResume} onOpen={openResume} onCreateTailoredCopy={createTailoredCopy} onTailorWithAI={(resume) => createTailoredCopy(resume, 'ai')} ai={{ available: !!me?.ai_available, remaining: me?.allowance.remaining ?? 0, limit: me?.allowance.limit ?? 5 }} onCopyResume={copyResume} onBuilt={resumeBuilt} onApplyDefaults={applyStyleDefaults} jobs={buildJobs} onAttach={attachResumeToApplication} onReturn={returnToApplication} onBack={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before leaving the editor.'); return; } setActiveResume(null); }} onUpdate={updateResume} onContent={pushContent} onUndo={undo} onRedo={redo} onDuplicate={duplicateResume} onReview={reviewResume} onExport={exportResume} onPreview={previewResume} onReload={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before reloading.'); return; } reloadResume(); }} />}
         </>}
       </div>
     </main>
     {toast && <div className="toast" role="status">{toast}{toastAction && <button className="toast-action" onClick={() => { const action = toastAction; setToastAction(null); setToast(''); action.run(); }}>{toastAction.label}</button>}<button onClick={() => { setToast(''); setToastAction(null); }} aria-label="Dismiss notification"><Icon name="close" /></button></div>}
     {previewUrl && <div className="modal-backdrop pdf-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) { URL.revokeObjectURL(previewUrl); setPreviewUrl(''); } }}><section className="pdf-modal" role="dialog" aria-modal="true" aria-label="PDF resume preview"><div className="pdf-modal-head"><strong>PDF preview · server rendered</strong><button className="icon-button" aria-label="Close PDF preview" onClick={() => { URL.revokeObjectURL(previewUrl); setPreviewUrl(''); }}><Icon name="close" /></button></div><iframe title="Resume PDF preview" src={previewUrl} /></section></div>}
     {jobDetail && <JobDetailModal job={jobDetail} onClose={() => setJobDetail(null)} onReview={review} fit={{ available: !!me?.fit_available, remaining: me?.allowance.remaining ?? 0 }} onFitUsed={() => { api.me().then(setMe).catch(() => undefined); loadFitMarks(); }} />}
-    {trackerEdit && <TrackerModal application={trackerEdit} resumes={resumes} saving={trackerSaving} onClose={() => setTrackerEdit(null)} onPrepare={() => prepareApplicationResume(trackerEdit)} onDownload={async (exportId) => { try { const blob = await api.downloadExport(exportId); downloadFile(blob, `${trackerEdit.resume_packet?.title || 'resume'}-revision-${trackerEdit.resume_packet?.revision || ''}.pdf`); } catch (error) { announce((error as Error).message); } }} onSave={async (changes) => { setTrackerSaving(true); try { const result = await api.putApplication(trackerEdit.job_id, { ...changes, expected_revision: trackerEdit.revision }); setApps((items) => items.map((item) => item.job_id === result.job_id ? { ...item, ...result } : item)); setTrackerEdit(null); announce('Application record updated. The packet is stored locally; it has not been sent to the employer.'); } catch (error) { announce((error as Error).message); } finally { setTrackerSaving(false); } }} />}
+    {planOpen && me && <PlanPanel me={me} name={shownName} email={cloudAuth ? shownSub : ''} onClose={() => setPlanOpen(false)} onProfile={() => { setPlanOpen(false); setPage('profile'); }} onSignOut={cloudAuth ? () => { setPlanOpen(false); confirmSignOut(); } : undefined} onDemoUpgrade={() => announce('Demo only: no payment was taken and your plan did not change.')} />}
+    {prepareFor && <PrepareResume jobTitle={prepareFor.job?.title || 'this job'} resumes={resumes} ai={{ available: !!me?.ai_available, remaining: me?.allowance.remaining ?? 0, limit: me?.allowance.limit ?? 5 }} busy={busyResumeAction}
+      onTailor={async (source, mode) => { if (await createTailoredCopy(source, mode, prepareTarget(prepareFor))) setPrepareFor(null); }} onBuild={() => buildForApplication(prepareFor)} onClose={() => setPrepareFor(null)} />}
+    {trackerEdit && <TrackerModal application={trackerEdit} resumes={resumes} saving={trackerSaving} onClose={() => setTrackerEdit(null)} onPrepare={() => prepareApplicationResume(trackerEdit)} onPrepareLetter={() => prepareApplicationLetter(trackerEdit)} onDownload={async (exportId) => { try { const blob = await api.downloadExport(exportId); const packet = trackerEdit.cover_letter_packet?.export_id === exportId ? trackerEdit.cover_letter_packet : trackerEdit.resume_packet; downloadFile(blob, `${packet?.title || 'document'}-revision-${packet?.revision || ''}.pdf`); } catch (error) { announce((error as Error).message); } }} onSave={async (changes) => { setTrackerSaving(true); try { const result = await api.putApplication(trackerEdit.job_id, { ...changes, expected_revision: trackerEdit.revision }); setApps((items) => items.map((item) => item.job_id === result.job_id ? { ...item, ...result } : item)); setTrackerEdit(null); announce('Application record updated. The packet is stored locally; it has not been sent to the employer.'); } catch (error) { announce((error as Error).message); } finally { setTrackerSaving(false); } }} />}
   </div>;
 }
 
@@ -502,18 +546,40 @@ function JobDetailModal({ job, onClose, onReview, fit, onFitUsed }: { job: Job; 
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className="modal job-detail-modal" role="dialog" aria-modal="true" aria-labelledby="job-detail-title" tabIndex={-1}><div className="modal-heading"><div><div className="eyebrow">FULL JOB DESCRIPTION</div><h2 id="job-detail-title">{job.title}</h2><p>{job.company} · {job.location || 'Location not specified'}{job.work_mode ? ` · ${job.work_mode}` : ''}</p></div><button className="icon-button" aria-label="Close job details" onClick={onClose}><Icon name="close" /></button></div><div className="job-detail-meta">{sourceLabel(job) && <span>Source: {sourceLabel(job)}</span>}{otherSources(job).length > 0 && <span>Also listed on {otherSources(job).join(', ')}</span>}{job.posted_at && <span>Posted {fmtDay(job.posted_at)}</span>}{job.employment_type && <span>{job.employment_type}</span>}</div><div className="job-detail-description">{job.description || 'The source did not provide a description.'}</div>{sourceUrl && <a className="job-source-link" href={sourceUrl} target="_blank" rel="noreferrer">Open original listing ↗</a>}{(job.also_seen_on || []).map((seen) => { const href = safeHttpUrl(seen.source_url || undefined); return href ? <a key={seen.job_id} className="job-source-link" style={{ marginLeft: 14 }} href={href} target="_blank" rel="noreferrer">Also on {sourceName(seen.source)} ↗</a> : null; })}<FitPanel jobId={job.id} available={fit.available} remaining={fit.remaining} onUsed={onFitUsed} /><div className="modal-footer"><button className="button secondary" onClick={() => { onReview(job, 'dismissed'); onClose(); }}>Pass</button><button className="button primary" onClick={() => { onReview(job, 'saved'); onClose(); }}><Icon name="save" /> Save job</button></div></section></div>;
 }
 
+/** What is in an application's packet, for the tracker: the resume snapshot and the cover letter, each attached or missing. */
+export function packetLines(application: Application): { label: string; attached: boolean }[] {
+  const letter = application.cover_letter_packet;
+  return [
+    application.resume_packet ? { label: `Resume · rev ${application.resume_packet.revision}`, attached: true } : { label: 'No resume', attached: false },
+    letter ? { label: `Cover letter · rev ${letter.revision}`, attached: true }
+      : application.cover_letter_text ? { label: 'Cover letter (text)', attached: true } : { label: 'No cover letter', attached: false },
+  ];
+}
+
 function Tracker({ apps, loading, query, setQuery, statusFilter, setStatusFilter, onEdit }: { apps: Application[]; loading: boolean; query: string; setQuery: (v: string) => void; statusFilter: string; setStatusFilter: (v: string) => void; onEdit: (app: Application) => void }) {
   const counts = statusOptions.map((status) => ({ status, count: apps.filter((app) => app.status === status).length }));
-  return <div className="page-wrap"><div className="page-heading"><div><div className="eyebrow">YOUR SEARCH, AT A GLANCE</div><h1>Keep the momentum.</h1><p>Track progress and keep the materials you prepared for each opportunity.</p></div><span className="tracker-total"><strong>{apps.length}</strong> tracked roles</span></div><div className="stat-grid">{[{ label: 'Saved', color: 'blue', key: 'saved' }, { label: 'In progress', color: 'purple', key: 'preparing' }, { label: 'Applied', color: 'orange', key: 'applied' }, { label: 'Interviews', color: 'green', key: 'interviewing' }].map((stat) => <div className="stat-card" key={stat.key}><div><span>{stat.label}</span><strong>{counts.find((item) => item.status === stat.key)?.count || 0}</strong></div><span className={`stat-mark ${stat.color}`} /></div>)}</div><div className="toolbar tracker-toolbar"><label className="search-field"><Icon name="search" /><input aria-label="Search applications" placeholder="Search applications..." value={query} onChange={(e) => setQuery(e.target.value)} /></label><select aria-label="Filter by status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="all">All statuses</option>{statusOptions.map((status) => <option key={status} value={status}>{status[0].toUpperCase() + status.slice(1)}</option>)}</select><span className="result-count">{apps.length} applications</span></div>{loading ? <Loading label="Loading applications…" /> : apps.length ? <><div className="tracker-table-wrap"><table className="tracker-table"><thead><tr><th>ROLE</th><th>STATUS</th><th>APPLIED</th><th>PACKET</th><th></th></tr></thead><tbody>{apps.map((application) => <tr key={application.id}><td><div className="tracker-role"><div className="company-logo tiny">{initials(application.job?.company || '')}</div><div><strong>{application.job?.title || 'Job role'}</strong><span>{application.job?.company || 'Company'}</span></div></div></td><td><Pill color={application.status === 'interviewing' || application.status === 'offer' ? 'green' : application.status === 'applied' || application.status === 'preparing' ? 'blue' : 'neutral'}>{application.status}</Pill></td><td>{fmtDate(application.applied_at)}</td><td className="note-cell">{application.resume_packet ? `Resume · rev ${application.resume_packet.revision}` : 'No resume'}{application.cover_letter_text ? ' · Cover letter' : ''}</td><td><button className="button secondary small-button" aria-label={`Edit application: ${application.job?.title || 'Job role'}`} onClick={() => onEdit(application)}>Details</button></td></tr>)}</tbody></table></div><div className="tracker-responsive-cards">{apps.map((application) => <article className="tracker-responsive-card" key={`mobile-${application.id}`}><div className="tracker-responsive-head"><div><strong>{application.job?.title || 'Job role'}</strong><span>{application.job?.company || 'Company'}</span></div><Pill color={application.status === 'interviewing' || application.status === 'offer' ? 'green' : application.status === 'applied' || application.status === 'preparing' ? 'blue' : 'neutral'}>{application.status}</Pill></div><p>{application.resume_packet ? `${application.resume_packet.title} · rev ${application.resume_packet.revision}` : 'No resume snapshot'}{application.cover_letter_text ? ' · Cover letter saved' : ''}</p><button className="button secondary" aria-label={`Edit application: ${application.job?.title || 'Job role'}`} onClick={() => onEdit(application)}>View application</button></article>)}</div></> : <div className="empty-state compact"><div className="empty-art">↗</div><h2>{query || statusFilter !== 'all' ? 'No matching applications' : 'No applications yet'}</h2><p>{query || statusFilter !== 'all' ? 'Try another search or status filter.' : 'Save interesting jobs from Discover and they’ll appear here.'}</p></div>}</div>;
+  return <div className="page-wrap"><div className="page-heading"><div><div className="eyebrow">YOUR SEARCH, AT A GLANCE</div><h1>Keep the momentum.</h1><p>Track progress and keep the materials you prepared for each opportunity.</p></div><span className="tracker-total"><strong>{apps.length}</strong> tracked roles</span></div><div className="stat-grid">{[{ label: 'Saved', color: 'blue', key: 'saved' }, { label: 'In progress', color: 'purple', key: 'preparing' }, { label: 'Applied', color: 'orange', key: 'applied' }, { label: 'Interviews', color: 'green', key: 'interviewing' }].map((stat) => <div className="stat-card" key={stat.key}><div><span>{stat.label}</span><strong>{counts.find((item) => item.status === stat.key)?.count || 0}</strong></div><span className={`stat-mark ${stat.color}`} /></div>)}</div><div className="toolbar tracker-toolbar"><label className="search-field"><Icon name="search" /><input aria-label="Search applications" placeholder="Search applications..." value={query} onChange={(e) => setQuery(e.target.value)} /></label><select aria-label="Filter by status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="all">All statuses</option>{statusOptions.map((status) => <option key={status} value={status}>{status[0].toUpperCase() + status.slice(1)}</option>)}</select><span className="result-count">{apps.length} applications</span></div>{loading ? <Loading label="Loading applications…" /> : apps.length ? <><div className="tracker-table-wrap"><table className="tracker-table"><thead><tr><th>ROLE</th><th>STATUS</th><th>APPLIED</th><th>PACKET</th><th></th></tr></thead><tbody>{apps.map((application) => <tr key={application.id}><td><div className="tracker-role"><div className="company-logo tiny">{initials(application.job?.company || '')}</div><div><strong>{application.job?.title || 'Job role'}</strong><span>{application.job?.company || 'Company'}</span></div></div></td><td><Pill color={application.status === 'interviewing' || application.status === 'offer' ? 'green' : application.status === 'applied' || application.status === 'preparing' ? 'blue' : 'neutral'}>{application.status}</Pill></td><td>{fmtDate(application.applied_at)}</td><td className="note-cell packet-cell">{packetLines(application).map((line) => <div key={line.label} className={line.attached ? '' : 'packet-missing'}>{line.label}</div>)}</td><td><button className="button secondary small-button" aria-label={`Edit application: ${application.job?.title || 'Job role'}`} onClick={() => onEdit(application)}>Details</button></td></tr>)}</tbody></table></div><div className="tracker-responsive-cards">{apps.map((application) => <article className="tracker-responsive-card" key={`mobile-${application.id}`}><div className="tracker-responsive-head"><div><strong>{application.job?.title || 'Job role'}</strong><span>{application.job?.company || 'Company'}</span></div><Pill color={application.status === 'interviewing' || application.status === 'offer' ? 'green' : application.status === 'applied' || application.status === 'preparing' ? 'blue' : 'neutral'}>{application.status}</Pill></div><p>{packetLines(application).map((line) => line.label).join(' · ')}</p><button className="button secondary" aria-label={`Edit application: ${application.job?.title || 'Job role'}`} onClick={() => onEdit(application)}>View application</button></article>)}</div></> : <div className="empty-state compact"><div className="empty-art">↗</div><h2>{query || statusFilter !== 'all' ? 'No matching applications' : 'No applications yet'}</h2><p>{query || statusFilter !== 'all' ? 'Try another search or status filter.' : 'Save interesting jobs from Discover and they’ll appear here.'}</p></div>}</div>;
 }
-function TrackerModal({ application, resumes, saving, onClose, onSave, onDownload, onPrepare }: { application: Application; resumes: Resume[]; saving: boolean; onClose: () => void; onSave: (v: Record<string, unknown>) => void; onDownload: (exportId: string) => void; onPrepare: () => void }) {
+function TrackerModal({ application, resumes, saving, onClose, onSave, onDownload, onPrepare, onPrepareLetter }: { application: Application; resumes: Resume[]; saving: boolean; onClose: () => void; onSave: (v: Record<string, unknown>) => void; onDownload: (exportId: string) => void; onPrepare: () => void; onPrepareLetter: () => void }) {
   const [status, setStatus] = useState(application.status); const [notes, setNotes] = useState(application.notes || ''); const [appliedAt, setAppliedAt] = useState(application.applied_at?.slice(0, 10) || '');
-  const initialLetter = application.cover_letter_text || ''; const [coverLetter, setCoverLetter] = useState(initialLetter); const [resumeChoice, setResumeChoice] = useState('');
+  const [resumeChoice, setResumeChoice] = useState('');
+  const [letterChoice, setLetterChoice] = useState('');
+  const [letters, setLetters] = useState<CoverLetter[]>([]);
+  // The person's cover letters, for the "attach reviewed cover letter" list; a failure just leaves the list empty.
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve().then(() => api.letters()).then((result) => { if (alive) setLetters(result?.items || []); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, []);
   const reviewedResumes = resumes.filter((resume) => resume.reviewed_revision === resume.revision);
   const sourceUrl = safeHttpUrl(application.job?.url || application.job?.source_url);
   const selected = reviewedResumes.find((resume) => resume.id === resumeChoice);
+  // Reviewed letters only (the same rule as resumes), the ones written for this job first.
+  const reviewedLetters = letters.filter((letter) => letter.reviewed_revision === letter.revision)
+    .sort((a, b) => Number(b.job_id === application.job_id) - Number(a.job_id === application.job_id));
+  const selectedLetter = reviewedLetters.find((letter) => letter.id === letterChoice);
   const modalRef = useRef<HTMLElement | null>(null);
-  const dirty = status !== application.status || notes !== (application.notes || '') || appliedAt !== (application.applied_at?.slice(0, 10) || '') || coverLetter !== initialLetter || resumeChoice !== '';
+  const dirty = status !== application.status || notes !== (application.notes || '') || appliedAt !== (application.applied_at?.slice(0, 10) || '') || resumeChoice !== '' || letterChoice !== '';
   const dirtyRef = useRef(dirty); dirtyRef.current = dirty;
   const savingRef = useRef(saving); savingRef.current = saving;
   const closeRef = useRef(onClose); closeRef.current = onClose;
@@ -524,7 +590,8 @@ function TrackerModal({ application, resumes, saving, onClose, onSave, onDownloa
     const changes: Record<string, unknown> = { status, notes, applied_at: appliedAt ? new Date(`${appliedAt}T12:00:00`).toISOString() : null };
     if (resumeChoice === '__clear') changes.resume_export_id = null;
     else if (selected) { changes.resume_document_id = selected.id; changes.expected_resume_revision = selected.revision; }
-    if (coverLetter !== initialLetter) changes.cover_letter_text = coverLetter || null;
+    if (letterChoice === '__clear') changes.cover_letter_document_id = null;
+    else if (selectedLetter) { changes.cover_letter_document_id = selectedLetter.id; changes.expected_cover_letter_revision = selectedLetter.revision; }
     onSave(changes);
   };
   return <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && attemptClose()}><section ref={modalRef} tabIndex={-1} className="modal tracker-modal" role="dialog" aria-modal="true" aria-labelledby="application-modal-title"><form onSubmit={(e) => { e.preventDefault(); submit(); }}><div className="modal-heading"><div><div className="eyebrow">APPLICATION DETAILS</div><h2 id="application-modal-title">{application.job?.title || 'Job application'}</h2><p>{application.job?.company}</p></div><button type="button" className="icon-button" aria-label="Close" disabled={saving} onClick={attemptClose}><Icon name="close" /></button></div>
@@ -534,8 +601,10 @@ function TrackerModal({ application, resumes, saving, onClose, onSave, onDownloa
     <section className="packet-section"><div className="packet-heading"><div><h3>Application packet</h3><p>Stored for your reference. Nothing is sent to the employer.</p></div><button type="button" className="button secondary small-button" disabled={saving || dirty} onClick={onPrepare}>Prepare resume</button></div>{dirty && <p className="packet-empty">Save or discard your current application edits before preparing a resume.</p>}
       {application.resume_packet ? <div className="attached-resume"><div><strong>{application.resume_packet.title}</strong><span>Reviewed revision {application.resume_packet.revision} · PDF snapshot</span></div><button type="button" className="button secondary small-button" disabled={saving} onClick={() => onDownload(application.resume_packet!.export_id)}>Download</button></div> : <p className="packet-empty">No resume snapshot attached.</p>}
       <label className="field"><span>{application.resume_packet ? 'Replace resume snapshot' : 'Attach reviewed resume'}</span><select aria-label="Attach reviewed resume" value={resumeChoice} disabled={saving} onChange={(e) => setResumeChoice(e.target.value)}><option value="">{application.resume_packet ? 'Keep current attachment' : 'No resume selected'}</option>{reviewedResumes.map((resume) => <option key={resume.id} value={resume.id}>{resume.title} · revision {resume.revision}</option>)}{application.resume_packet && <option value="__clear">Remove attached resume</option>}</select>{!reviewedResumes.length && <small>Review a current resume revision in Resume Studio before attaching it.</small>}</label>
-      <Field label="Cover letter (written by you)" value={coverLetter} onChange={(value) => setCoverLetter(value.slice(0, 20000))} placeholder="Write or paste the letter you prepared for this role…" multiline disabled={saving} help={`${coverLetter.length.toLocaleString()} / 20,000 characters`} />
-      {application.cover_letter_text && <div className="packet-saved-note">Cover letter saved with this application. <button type="button" className="link-button" onClick={() => { const blob = new Blob([application.cover_letter_text || ''], { type: 'text/plain;charset=utf-8' }); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `${(application.job?.company || 'application').replace(/[^a-z0-9]+/gi, '-')}-cover-letter.txt`; document.body.append(anchor); anchor.click(); anchor.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1500); }}>Download saved cover letter</button></div>}
+      <div className="packet-heading letter-packet"><div><h3>Cover letter</h3><p>Write one with AI, or paste your own letter into the editor.</p></div><button type="button" className="button secondary small-button" disabled={saving || dirty} onClick={onPrepareLetter}>{application.cover_letter_packet ? 'Open cover letter' : 'Prepare cover letter'}</button></div>
+      {application.cover_letter_packet && <div className="attached-resume"><div><strong>{application.cover_letter_packet.title}</strong><span>Reviewed revision {application.cover_letter_packet.revision} · PDF snapshot</span></div><button type="button" className="button secondary small-button" disabled={saving} onClick={() => onDownload(application.cover_letter_packet!.export_id)}>Download</button></div>}
+      <label className="field"><span>{application.cover_letter_packet ? 'Replace cover letter snapshot' : 'Attach reviewed cover letter'}</span><select aria-label="Attach reviewed cover letter" value={letterChoice} disabled={saving} onChange={(e) => setLetterChoice(e.target.value)}><option value="">{application.cover_letter_packet ? 'Keep current attachment' : 'No cover letter selected'}</option>{reviewedLetters.map((letter) => <option key={letter.id} value={letter.id}>{letter.title} · revision {letter.revision}</option>)}{application.cover_letter_packet && <option value="__clear">Remove attached cover letter</option>}</select>{!reviewedLetters.length && <small>Review a cover letter in the letter editor before attaching it.</small>}</label>
+      {application.cover_letter_text && <div className="packet-saved-note">Cover letter text saved with this application earlier. <button type="button" className="link-button" onClick={() => { const blob = new Blob([application.cover_letter_text || ''], { type: 'text/plain;charset=utf-8' }); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `${(application.job?.company || 'application').replace(/[^a-z0-9]+/gi, '-')}-cover-letter.txt`; document.body.append(anchor); anchor.click(); anchor.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1500); }}>Download saved cover letter</button></div>}
     </section>
     <div className="modal-footer"><button type="button" className="button secondary" disabled={saving} onClick={attemptClose}>Cancel</button><button className="button primary" disabled={saving}>{saving ? 'Saving…' : 'Save application record'}</button></div></form></section></div>;
 }

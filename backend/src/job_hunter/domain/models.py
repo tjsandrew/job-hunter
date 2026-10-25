@@ -119,6 +119,8 @@ class Application(Base):
         UniqueConstraint("user_id", "job_id", name="uq_application_user_job"),
         ForeignKeyConstraint(["resume_export_id", "user_id"], ["document_exports.id", "document_exports.user_id"],
                              name="fk_application_resume_export_owner"),
+        ForeignKeyConstraint(["cover_letter_export_id", "user_id"], ["document_exports.id", "document_exports.user_id"],
+                             name="fk_application_letter_export_owner"),
     )
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     user_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
@@ -129,6 +131,8 @@ class Application(Base):
     resume_export_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
     resume_title: Mapped[str | None] = mapped_column(String(240))
     cover_letter_text: Mapped[str | None] = mapped_column(Text)
+    cover_letter_export_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    cover_letter_title: Mapped[str | None] = mapped_column(String(240))
     packet_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revision: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)

@@ -15,6 +15,8 @@ describe('routes', () => {
       ['/resumes', { ...DEFAULT_ROUTE, page: 'studio' }],
       [`/resumes/${JOB}`, { ...DEFAULT_ROUTE, page: 'studio', resumeId: JOB }],
       [`/jobs/${JOB}`, { ...DEFAULT_ROUTE, jobId: JOB }],
+      ['/resumes/letters', { ...DEFAULT_ROUTE, page: 'studio', tab: 'letters' }],
+      [`/resumes/letters/${JOB}`, { ...DEFAULT_ROUTE, page: 'studio', tab: 'letters', letterId: JOB }],
     ];
     for (const [path, route] of cases) {
       expect(parseRoute(path)).toEqual(route);
@@ -23,7 +25,7 @@ describe('routes', () => {
   });
 
   it('opens the default page for the root and for anything unknown or malformed', () => {
-    for (const path of ['/', '', '/nowhere', '/discover/bogus', '/discover/all/extra', '/jobs', '/jobs/', '/jobs/a/b', '/jobs/has space', '/resumes/%E0%A4%A', '/profile/x']) {
+    for (const path of ['/', '', '/nowhere', '/discover/bogus', '/discover/all/extra', '/jobs', '/jobs/', '/jobs/a/b', '/jobs/has space', '/resumes/%E0%A4%A', '/profile/x', '/resumes/letters/a/b', '/resumes/letters/has space']) {
       expect(parseRoute(path)).toEqual(DEFAULT_ROUTE);
     }
   });

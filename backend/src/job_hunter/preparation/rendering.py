@@ -34,13 +34,8 @@ def _safe(value: Any) -> str:
     return escape(str(value or ""))
 
 
-def pdf_bytes(doc: Document) -> bytes:
-    content, layout = doc.content, doc.layout
-    page = letter if layout.get("page_size") == "letter" else A4
-    margin = float(layout.get("margin", 18)) * mm
-    fs = float(layout.get("font_size", 11))
-    line_spacing = float(layout.get("line_spacing", 1.25))
-
+def _fonts(layout: dict, template: str) -> tuple[str, str]:
+    """Register the fonts a layout can ask for and return the regular and bold font names."""
     # ReportLab ships the embedded Vera fonts, so sans-serif exports remain
     # portable and selectable without host-installed fonts.
     font_dir = Path(reportlab.__file__).parent / "fonts"
@@ -52,27 +47,74 @@ def pdf_bytes(doc: Document) -> bytes:
                                   italic="JobHunterVera", boldItalic="JobHunterVeraBold")
     pdfmetrics.registerFontFamily("Times-Roman", normal="Times-Roman", bold="Times-Bold",
                                   italic="Times-Italic", boldItalic="Times-BoldItalic")
-
-    out = BytesIO()
-    pdf = SimpleDocTemplate(out, pagesize=page, leftMargin=margin, rightMargin=margin,
-                            topMargin=margin, bottomMargin=margin, title=doc.title)
-    styles = getSampleStyleSheet()
     family = layout.get("font_family", "auto")
     if family == "auto":
-        family = "serif" if doc.template == "classic" else "sans"
+        family = "serif" if template == "classic" else "sans"
     if family == "latex":
         bundled = Path(__file__).parent / "fonts"
         for name, filename in [("JobHunterLatinModern", "lmroman-regular.ttf"), ("JobHunterLatinModernBold", "lmroman-bold.ttf")]:
             if name not in pdfmetrics.getRegisteredFontNames():
                 pdfmetrics.registerFont(TTFont(name, str(bundled / filename)))
         pdfmetrics.registerFontFamily("JobHunterLatinModern", normal="JobHunterLatinModern", bold="JobHunterLatinModernBold")
-        body_font, bold_font = "JobHunterLatinModern", "JobHunterLatinModernBold"
-    elif family == "serif":
-        body_font, bold_font = "Times-Roman", "Times-Bold"
-    elif family == "mono":
-        body_font, bold_font = "Courier", "Courier-Bold"
-    else:
-        body_font, bold_font = "JobHunterVera", "JobHunterVeraBold"
+        return "JobHunterLatinModern", "JobHunterLatinModernBold"
+    if family == "serif":
+        return "Times-Roman", "Times-Bold"
+    if family == "mono":
+        return "Courier", "Courier-Bold"
+    return "JobHunterVera", "JobHunterVeraBold"
+
+
+def letter_pdf_bytes(doc: Document) -> bytes:
+    """A cover letter as a PDF: sender block, date, recipient, greeting, paragraphs, closing and signature."""
+    content, layout = doc.content, doc.layout
+    page = letter if layout.get("page_size") == "letter" else A4
+    margin = float(layout.get("margin", 22)) * mm
+    fs = float(layout.get("font_size", 11))
+    leading = fs * float(layout.get("line_spacing", 1.3))
+    body_font, bold_font = _fonts(layout, doc.template)
+    out = BytesIO()
+    pdf = SimpleDocTemplate(out, pagesize=page, leftMargin=margin, rightMargin=margin,
+                            topMargin=margin, bottomMargin=margin, title=doc.title)
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name="LetterName", parent=styles["Title"], fontName=bold_font, fontSize=fs + 6,
+                              leading=(fs + 6) * 1.2, alignment=TA_LEFT, spaceAfter=2))
+    styles.add(ParagraphStyle(name="LetterBody", parent=styles["BodyText"], fontName=body_font, fontSize=fs,
+                              leading=leading, spaceAfter=fs * 0.8))
+    contact = " · ".join(_safe(content.get(key)) for key in ("email", "phone", "location") if content.get(key))
+    flow = [Paragraph(_safe(content.get("name") or "Your Name"), styles["LetterName"])]
+    if contact:
+        flow.append(Paragraph(contact, styles["LetterBody"]))
+    flow.append(HRFlowable(width="100%", thickness=0.7, color=ACCENT_COLORS["black"], spaceBefore=2, spaceAfter=fs))
+    if content.get("date"):
+        flow.append(Paragraph(_safe(content["date"]), styles["LetterBody"]))
+    if content.get("recipient"):
+        flow.append(Paragraph("<br/>".join(_safe(line) for line in str(content["recipient"]).splitlines() if line.strip()), styles["LetterBody"]))
+    if content.get("greeting"):
+        flow.append(Paragraph(_safe(content["greeting"]), styles["LetterBody"]))
+    for paragraph in content.get("paragraphs", []):
+        if str(paragraph or "").strip():
+            flow.append(Paragraph("<br/>".join(_safe(line) for line in str(paragraph).splitlines()), styles["LetterBody"]))
+    if content.get("closing"):
+        flow.append(Paragraph(_safe(content["closing"]), styles["LetterBody"]))
+    flow.append(Paragraph(_safe(content.get("signature") or content.get("name")), styles["LetterBody"]))
+    pdf.build(flow)
+    return out.getvalue()
+
+
+def pdf_bytes(doc: Document) -> bytes:
+    if getattr(doc, "kind", "resume") in ("cover_letter", "archived_letter"):
+        return letter_pdf_bytes(doc)
+    content, layout = doc.content, doc.layout
+    page = letter if layout.get("page_size") == "letter" else A4
+    margin = float(layout.get("margin", 18)) * mm
+    fs = float(layout.get("font_size", 11))
+    line_spacing = float(layout.get("line_spacing", 1.25))
+    body_font, bold_font = _fonts(layout, doc.template)
+
+    out = BytesIO()
+    pdf = SimpleDocTemplate(out, pagesize=page, leftMargin=margin, rightMargin=margin,
+                            topMargin=margin, bottomMargin=margin, title=doc.title)
+    styles = getSampleStyleSheet()
     leading = fs * line_spacing
     accent = ACCENT_COLORS.get(layout.get("accent_color"), LEGACY_HEADING_COLOR)
     header_align = layout.get("header_align")

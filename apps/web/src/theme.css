@@ -387,3 +387,7 @@ button, a { transition: background-color 160ms, color 160ms, border-color 160ms,
   .auth-hero-body { display: none; }
   .auth-card { padding: 30px 24px; }
 }
+
+/* One size for the large windows: application details, job details, write a cover letter, upgrade. Small confirm pop-ups keep their own width.
+   `.modal.x` (two classes) so the order the stylesheets load in cannot change the result. */
+.modal.tracker-modal, .modal.job-detail-modal, .modal.letter-start, .modal.upgrade-dialog, .modal.prepare-dialog { width: min(1100px, 96vw); max-width: 1100px; max-height: min(92vh, 900px); }

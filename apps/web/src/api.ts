@@ -1,5 +1,6 @@
-import type { Application, FitAnalysis, FitSummary, Job, Me, ProfileDraft, Recommendation, Resume, ProfileResponse, ProfileBank, ProfileItem, ItemKind, ItemData, ItemChanges, PointWrite, PointUpdate, UserSettings, UploadedResume, ProfileExport, ProfileImport, ImportSource, ImportDecision, ImportResult } from './types';
+import type { Application, CoverLetter, LetterNote, LetterRequest, FitAnalysis, FitSummary, Job, Me, ProfileDraft, Recommendation, Resume, ProfileResponse, ProfileBank, ProfileItem, ItemKind, ItemData, ItemChanges, PointWrite, PointUpdate, UserSettings, UploadedResume, ProfileExport, ProfileImport, ImportSource, ImportDecision, ImportResult } from './types';
 import { accessToken, cloudAuth } from './auth';
+import { dropList, SETTINGS_KEY } from './listCache';
 
 const base = (import.meta.env.VITE_API_BASE_URL || '/v1').replace(/\/$/, '');
 export const devUserStorageKey = 'jh-dev-user';
@@ -104,7 +105,7 @@ export const api = {
   addAlternative: (id: string, pointId: string, values: PointWrite) => request<ProfileItem>(`/profile/items/${encodeURIComponent(id)}/bullets/${encodeURIComponent(pointId)}/alternatives`, json('POST', values)),
   revertItem: (id: string, values: ItemChanges) => request<ProfileItem>(`/profile/items/${encodeURIComponent(id)}/revert`, json('POST', values)),
   getSettings: () => request<UserSettings>('/settings'),
-  putSettings: (values: Omit<UserSettings, 'revision'> & {expected_revision: number}) => request<UserSettings>('/settings', json('PUT', {resume_defaults: values.resume_defaults, expected_revision: values.expected_revision})),
+  putSettings: (values: Omit<UserSettings, 'revision'> & {expected_revision: number}) => request<UserSettings>('/settings', json('PUT', {resume_defaults: values.resume_defaults, expected_revision: values.expected_revision})).then((saved) => { dropList(SETTINGS_KEY); return saved; }),
   deleteProfile: (values: {confirmation: 'DELETE'; delete_settings: boolean}) => request<{deleted: boolean; bank_revision: number; profile_epoch: number}>('/profile/data', json('DELETE', values)),
   exportProfile: () => request<ProfileExport>('/profile/export.json'),
   deleteUpload: (id: string) => request<void>(`/uploads/${encodeURIComponent(id)}`, json('DELETE')),
@@ -131,7 +132,12 @@ export const api = {
   fitSummaries: () => request<{ items: FitSummary[] }>('/fit-analyses'),
   reviewJob: (id: string, decision: 'saved' | 'dismissed' | 'none') => request(`/jobs/${encodeURIComponent(id)}/review`, json('PUT', { decision })),
   applications: () => request<{ items: Application[] }>('/applications'),
-  putApplication: (jobId: string, values: Partial<Application> & { expected_revision?: number; resume_document_id?: string; expected_resume_revision?: number; resume_export_id?: string | null; cover_letter_text?: string | null }) => request<Application>(`/applications/${encodeURIComponent(jobId)}`, json('PUT', values)),
+  putApplication: (jobId: string, values: Partial<Application> & { expected_revision?: number; resume_document_id?: string; expected_resume_revision?: number; resume_export_id?: string | null; cover_letter_text?: string | null; cover_letter_document_id?: string | null; expected_cover_letter_revision?: number }) => request<Application>(`/applications/${encodeURIComponent(jobId)}`, json('PUT', values)),
+  letters: () => request<{ items: CoverLetter[] }>('/documents?kind=cover_letter'),
+  createLetter: (jobId: string, values: LetterRequest) => request<{ document: CoverLetter; notes: LetterNote[]; ai: { status: 'off' | 'applied'; reason: string | null } }>(`/jobs/${encodeURIComponent(jobId)}/cover-letter`, json('POST', values)),
+  patchLetter: (id: string, values: Partial<Pick<CoverLetter, 'title' | 'template' | 'content' | 'layout'>> & { expected_revision: number }) => request<CoverLetter>(`/documents/${encodeURIComponent(id)}`, json('PATCH', values)),
+  reviewLetter: (id: string, expected_revision: number) => request<CoverLetter>(`/documents/${encodeURIComponent(id)}/review`, json('POST', { expected_revision })),
+  restoreLetter: (id: string) => request<CoverLetter>(`/documents/${encodeURIComponent(id)}/restore`, json('POST')),
   documents: () => request<{ items: Resume[] }>('/documents?kind=resume'),
   createDocument: (values: { title: string; template: string; content: unknown; layout: unknown; job_id?: string }) => request<Resume>('/documents', json('POST', values)),
   patchDocument: (id: string, values: Partial<Resume> & { expected_revision: number }) => request<Resume>(`/documents/${encodeURIComponent(id)}`, json('PATCH', values)),

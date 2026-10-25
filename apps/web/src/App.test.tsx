@@ -3,13 +3,14 @@ import { act, cleanup, render, screen, waitFor, within } from '@testing-library/
 import userEvent from '@testing-library/user-event';
 import App from './App';
 import { api, HttpError } from './api';
+import { clearLists } from './listCache';
 
 vi.mock('./api', async (importOriginal) => {
   const original = await importOriginal<typeof import('./api')>();
   return { ...original, api: {
     getBank: vi.fn(), uploads: vi.fn(), imports: vi.fn(), me: vi.fn(), getProfile: vi.fn(), getPreferences: vi.fn(), getSeniorityOptions: vi.fn(), recommendations: vi.fn(), recommendationsForYou: vi.fn(), applications: vi.fn(), documents: vi.fn(),
     uploadResume: vi.fn(), reviewJob: vi.fn(), putProfile: vi.fn(), confirmProfile: vi.fn(), putPreferences: vi.fn(), putApplication: vi.fn(), createDocument: vi.fn(), patchDocument: vi.fn(),
-    job: vi.fn(), startFit: vi.fn(), jobFit: vi.fn(), fit: vi.fn(), fitSummaries: vi.fn(), reviewedJobs: vi.fn(),
+    job: vi.fn(), startFit: vi.fn(), jobFit: vi.fn(), fit: vi.fn(), fitSummaries: vi.fn(), reviewedJobs: vi.fn(), letters: vi.fn(), createLetter: vi.fn(), getSettings: vi.fn(),
     duplicateDocument: vi.fn(), tailorDocument: vi.fn(), reviewDocument: vi.fn(), exportDocument: vi.fn(), previewDocument: vi.fn(), downloadExport: vi.fn(),
   } };
 });
@@ -17,6 +18,7 @@ const mockApi = vi.mocked(api);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearLists();   // the Discover lists are remembered in memory between renders; each test starts without them
   history.replaceState(null, '', '/');   // every test starts at the root address
   mockApi.jobFit.mockRejectedValue(new HttpError('Not found', 404));
   mockApi.me.mockResolvedValue({ user_id: '1', display_name: 'Alice Tan', plan: 'free', allowance: { limit: 5, used: 0, remaining: 5, period: '2026-10' }, ai_available: false });
@@ -274,20 +276,22 @@ describe('Job Hunter user journey', () => {
     expect(screen.getByRole('textbox', { name: 'Professional summary' })).toHaveValue('Newer typing during save');
   });
 
-  it('saves a reviewed resume snapshot and manual cover letter without sending an application', async () => {
+  it('saves a reviewed resume snapshot without sending an application, and has no second box for a cover letter', async () => {
     const user = userEvent.setup();
     const application = { id: 'app-1', job_id: 'role-1', status: 'saved', notes: '', applied_at: null, revision: 1, job: { id: 'role-1', title: 'Product Designer', company: 'Northstar', location: 'Singapore', source_url: 'https://jobs.example/role-1' } };
     const reviewed = { id: 'resume-ready', title: 'Product design resume', kind: 'resume' as const, revision: 3, template: 'classic' as const, content: { name: 'Alice Tan', email: '', phone: '', location: '', summary: '', sections: [] }, layout: { font_size: 11, margin: 18 }, reviewed_revision: 3 };
     mockApi.applications.mockResolvedValue({ items: [application] }); mockApi.documents.mockResolvedValue({ items: [reviewed] });
-    mockApi.putApplication.mockResolvedValue({ ...application, revision: 2, resume_packet: { export_id: 'export-1', document_id: reviewed.id, title: reviewed.title, revision: 3, download_url: '/v1/exports/export-1' }, cover_letter_text: 'Hello Northstar' });
+    mockApi.putApplication.mockResolvedValue({ ...application, revision: 2, resume_packet: { export_id: 'export-1', document_id: reviewed.id, title: reviewed.title, revision: 3, download_url: '/v1/exports/export-1' } });
     render(<App />); await screen.findByText('Product Designer');
     await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Application tracker' }));
     await user.click(screen.getAllByRole('button', { name: 'Edit application: Product Designer' })[0]);
     expect(screen.getByRole('link', { name: /original job posting/i })).toHaveAttribute('href', 'https://jobs.example/role-1');
+    expect(screen.queryByLabelText(/Cover letter \(written by you\)/)).not.toBeInTheDocument();      // the letter is written or pasted in the editor, not here
+    expect(screen.getByRole('button', { name: 'Prepare cover letter' })).toBeInTheDocument();
     await user.selectOptions(screen.getByRole('combobox', { name: 'Attach reviewed resume' }), reviewed.id);
-    await user.type(screen.getByLabelText(/Cover letter \(written by you\)/), 'Hello Northstar');
     await user.click(screen.getByRole('button', { name: 'Save application record' }));
-    await waitFor(() => expect(mockApi.putApplication).toHaveBeenCalledWith('role-1', expect.objectContaining({ expected_revision: 1, resume_document_id: reviewed.id, expected_resume_revision: 3, cover_letter_text: 'Hello Northstar' })));
+    await waitFor(() => expect(mockApi.putApplication).toHaveBeenCalledWith('role-1', expect.objectContaining({ expected_revision: 1, resume_document_id: reviewed.id, expected_resume_revision: 3 })));
+    expect(mockApi.putApplication.mock.calls[0][1]).not.toHaveProperty('cover_letter_text');
     expect(await screen.findByText(/stored locally; it has not been sent/i)).toBeInTheDocument();
   });
 
@@ -323,11 +327,39 @@ describe('Job Hunter user journey', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: 'Choose a resume to tailor' }), original.id);
     await user.click(screen.getByRole('button', { name: 'Create tailored copy' }));
     await waitFor(() => expect(mockApi.tailorDocument).toHaveBeenCalledWith(original.id, 'role-3', 'My resume — UX Designer', 'rules'));
-    expect(await screen.findByText(/Matched: SQL. Missing: Figma./)).toBeInTheDocument();
+    expect(await screen.findByText(/A tailored draft was created for this application\. Review it before attaching\./)).toBeInTheDocument();
+    expect(screen.queryByText(/Matched:|Missing:/)).not.toBeInTheDocument();      // the matched and missing lists are no longer shown
     await user.click(await screen.findByRole('button', { name: 'Mark as reviewed' }));
     await user.click(await screen.findByRole('button', { name: 'Attach reviewed revision' }));
     await waitFor(() => expect(mockApi.putApplication).toHaveBeenCalledWith('role-3', { resume_document_id: copy.id, expected_resume_revision: 1, expected_revision: 1 }));
     expect(await screen.findByRole('dialog', { name: 'UX Designer' })).toBeInTheDocument();
+  });
+  it('never shows Matched: none and Missing: none, even for a job with no skills', async () => {
+    const user = userEvent.setup();
+    const application = { id: 'app-3', job_id: 'role-3', status: 'saved', notes: '', applied_at: null, revision: 1, job: { id: 'role-3', title: 'UX Designer', company: 'Harbor', location: null } };
+    const original = { id: 'resume-base', title: 'My resume', kind: 'resume' as const, revision: 2, template: 'modern' as const, content: { name: 'Alice Tan', email: 'alice@example.com', phone: '', location: 'Singapore', summary: '', sections: [] }, layout: { font_size: 11, margin: 18 }, reviewed_revision: 2 };
+    const copy = { ...original, id: 'resume-role', job_id: 'role-3', title: 'My resume — UX Designer', revision: 1, reviewed_revision: null };
+    mockApi.applications.mockResolvedValue({ items: [application] }); mockApi.documents.mockResolvedValue({ items: [original] });
+    mockApi.tailorDocument.mockResolvedValue({ document: copy, matched: [], missing: [], ai: { status: 'off', changed: 0, reason: null } });
+    render(<App />); await screen.findByText('Product Designer');
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Application tracker' }));
+    await user.click(screen.getAllByRole('button', { name: 'Edit application: UX Designer' })[0]);
+    await user.click(screen.getByRole('button', { name: 'Prepare resume' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Choose a resume to tailor' }), original.id);
+    await user.click(screen.getByRole('button', { name: 'Create tailored copy' }));
+    expect(await screen.findByText(/A tailored draft was created for this application\./)).toBeInTheDocument();
+    expect(screen.queryByText(/Matched: none|Missing: none|nothing was compared/)).not.toBeInTheDocument();
+  });
+  it('explains what each tailoring button does', async () => {
+    const user = userEvent.setup();
+    const application = { id: 'app-3', job_id: 'role-3', status: 'saved', notes: '', applied_at: null, revision: 1, job: { id: 'role-3', title: 'UX Designer', company: 'Harbor', location: null } };
+    mockApi.applications.mockResolvedValue({ items: [application] });
+    render(<App />); await screen.findByText('Product Designer');
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Application tracker' }));
+    await user.click(screen.getAllByRole('button', { name: 'Edit application: UX Designer' })[0]);
+    await user.click(screen.getByRole('button', { name: 'Prepare resume' }));
+    expect(await screen.findByText(/puts the bullets that match this job first/)).toBeInTheDocument();
+    expect(screen.getByText(/uses 1 AI use this month/i)).toBeInTheDocument();
   });
   it('tailors with AI from the application, showing the allowance left', async () => {
     const user = userEvent.setup();
@@ -402,6 +434,51 @@ describe('Discover: For you and All jobs', () => {
     expect(screen.getByRole('button', { name: 'All jobs' })).toHaveAttribute('aria-pressed', 'true');
     await user.click(screen.getByRole('button', { name: 'For you' }));
     expect(await screen.findByText('Backend Engineer')).toBeInTheDocument();
+  });
+
+  it('shows a list it fetched a moment ago when you switch back, without asking the server again', async () => {
+    const user = userEvent.setup();
+    mockApi.recommendationsForYou.mockResolvedValue(semantic());
+    render(<App />);
+    expect(await screen.findByText('Backend Engineer')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'All jobs' }));
+    expect(await screen.findByText('Product Designer')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'For you' }));
+    expect(screen.getByText('Backend Engineer')).toBeInTheDocument();   // at once, nothing to wait for
+    await user.click(screen.getByRole('button', { name: 'All jobs' }));
+    expect(screen.getByText('Product Designer')).toBeInTheDocument();
+    expect(mockApi.recommendationsForYou).toHaveBeenCalledTimes(1);
+    expect(mockApi.recommendations).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows an older list at once and replaces it when a newer one arrives', async () => {
+    const user = userEvent.setup();
+    mockApi.recommendationsForYou.mockResolvedValue(semantic());
+    render(<App />);
+    expect(await screen.findByText('Backend Engineer')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'All jobs' }));
+    expect(await screen.findByText('Product Designer')).toBeInTheDocument();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 2 * 60_000);   // two minutes later: remembered, but no longer fresh
+    try {
+      let release: (value: ReturnType<typeof semantic>) => void = () => undefined;
+      mockApi.recommendationsForYou.mockReturnValue(new Promise((resolve) => { release = resolve; }));   // the newer list is still on its way
+      await user.click(screen.getByRole('button', { name: 'For you' }));
+      expect(screen.getByText('Backend Engineer')).toBeInTheDocument();
+      act(() => release(semantic({ items: [{ job: { id: 'fy-2', title: 'Data Engineer', company: 'Northstar', location: 'Singapore', description: 'Build pipelines.' }, score: null, reasons: [] }] })));
+      expect(await screen.findByText('Data Engineer')).toBeInTheDocument();
+      expect(screen.queryByText('Backend Engineer')).not.toBeInTheDocument();
+      expect(mockApi.recommendationsForYou).toHaveBeenCalledTimes(2);
+    } finally { clock.mockRestore(); }
+  });
+
+  it('asks again for the lists after a save, because they changed', async () => {
+    const user = userEvent.setup();
+    mockApi.recommendationsForYou.mockResolvedValue(semantic());
+    mockApi.reviewJob.mockResolvedValue({ job_id: 'fy-1', decision: 'dismissed' });
+    render(<App />);
+    expect(await screen.findByText('Backend Engineer')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Pass' }));
+    await waitFor(() => expect(mockApi.recommendationsForYou).toHaveBeenCalledTimes(2));
   });
 
   it('falls back to the all-jobs list with a plain note when For you fails', async () => {
@@ -507,5 +584,225 @@ describe('Discover: For you and All jobs', () => {
     expect(await screen.findByText(/sharpen these matches/i)).toBeInTheDocument();
     await user.type(screen.getByLabelText('Search jobs'), 'backend');
     await waitFor(() => expect(mockApi.recommendationsForYou).toHaveBeenLastCalledWith('backend', 0), { timeout: 1500 });
+  });
+});
+
+describe('Plan and cover letters in the app', () => {
+  const used = { user_id: '1', display_name: 'Alice Tan', plan: 'free', allowance: { limit: 5, used: 2, remaining: 3, period: '2026-10' }, ai_available: true, letter_available: true };
+  const saved = { id: 'app-3', job_id: 'role-3', status: 'saved', notes: '', applied_at: null, revision: 1, job: { id: 'role-3', title: 'UX Designer', company: 'Harbor', location: null } };
+
+  it('reads the resume defaults once for several new resumes within a minute', async () => {
+    const user = userEvent.setup();
+    mockApi.getSettings.mockResolvedValue({ revision: 1, resume_defaults: { template: 'modern' } });
+    let count = 0;
+    mockApi.createDocument.mockImplementation(async (values: any) => ({ id: `r${++count}`, title: values.title, kind: 'resume', revision: 1, template: values.template, content: values.content, layout: values.layout, reviewed_revision: null }));
+    render(<App />); await screen.findByText('Product Designer');
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'My resumes' }));
+    await user.click(screen.getByRole('button', { name: /create your first resume/i }));
+    await user.click(screen.getByRole('button', { name: /^Blank/ }));
+    await waitFor(() => expect(mockApi.createDocument).toHaveBeenCalledTimes(1));
+    expect(mockApi.createDocument.mock.calls[0][0].template).toBe('modern');
+    await user.click(await screen.findByRole('button', { name: /Library/ }));
+    await user.click(screen.getByRole('button', { name: /Create resume/ }));
+    await user.click(screen.getByRole('button', { name: /^Blank/ }));
+    await waitFor(() => expect(mockApi.createDocument).toHaveBeenCalledTimes(2));
+    expect(mockApi.createDocument.mock.calls[1][0].template).toBe('modern');
+    expect(mockApi.getSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the plan and the AI uses left in the sidebar and opens the plan panel from it', async () => {
+    const user = userEvent.setup();
+    mockApi.me.mockResolvedValue(used);
+    render(<App />); await screen.findByText('Product Designer');
+    const pill = await screen.findByRole('button', { name: /Free plan, 3 of 5 AI uses left/ });
+    await user.click(pill);
+    const panel = screen.getByRole('dialog', { name: 'Your plan' });
+    expect(panel).toHaveTextContent('2 used, 3 left');
+    expect(panel).toHaveTextContent('Resets on 1 November');
+    await user.click(within(panel).getByRole('button', { name: 'Upgrade to Premium' }));
+    await user.click(screen.getByRole('button', { name: 'Upgrade (demo)' }));
+    expect(await screen.findByText(/Demo only: no payment was taken and your plan did not change/)).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Your plan' })).not.toBeInTheDocument();
+    expect(mockApi.me).toHaveBeenCalled();                     // nothing was sent to change the plan
+  });
+
+  it('shows both the resume and the cover letter of an application in the tracker packet column', async () => {
+    const user = userEvent.setup();
+    const packet = (title: string) => ({ export_id: 'e', document_id: 'd', title, revision: 2, download_url: '/v1/exports/e' });
+    const job = (id: string, title: string) => ({ id, title, company: 'Northstar', location: null });
+    mockApi.applications.mockResolvedValue({ items: [
+      { id: 'a1', job_id: 'j1', status: 'saved', notes: '', applied_at: null, revision: 1, job: job('j1', 'Both Role'), resume_packet: packet('R'), cover_letter_packet: packet('C') },
+      { id: 'a2', job_id: 'j2', status: 'saved', notes: '', applied_at: null, revision: 1, job: job('j2', 'Letter Only Role'), cover_letter_packet: packet('C') },
+      { id: 'a3', job_id: 'j3', status: 'saved', notes: '', applied_at: null, revision: 1, job: job('j3', 'Old Text Role'), cover_letter_text: 'Dear team' },
+      { id: 'a4', job_id: 'j4', status: 'saved', notes: '', applied_at: null, revision: 1, job: job('j4', 'Nothing Role') },
+    ] });
+    render(<App />); await screen.findByText('Product Designer');
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Application tracker' }));
+    const rowOf = (title: string) => screen.getAllByText(title)[0].closest('tr') as HTMLElement;
+    expect(within(rowOf('Both Role')).getByText('Resume · rev 2')).toBeInTheDocument();
+    expect(within(rowOf('Both Role')).getByText('Cover letter · rev 2')).toBeInTheDocument();
+    expect(within(rowOf('Letter Only Role')).getByText('No resume')).toBeInTheDocument();
+    expect(within(rowOf('Letter Only Role')).getByText('Cover letter · rev 2')).toBeInTheDocument();
+    expect(within(rowOf('Old Text Role')).getByText('Cover letter (text)')).toBeInTheDocument();
+    expect(within(rowOf('Nothing Role')).getByText('No cover letter')).toBeInTheDocument();
+  });
+
+  const letterDoc = (over: object = {}) => ({ id: 'l1', title: 'Cover letter — UX Designer', kind: 'cover_letter' as const, revision: 2, template: 'classic' as const, content: { name: 'Alice', email: '', phone: '', location: '', date: '', recipient: '', greeting: '', paragraphs: ['Hello.'], closing: '', signature: '' }, layout: { font_size: 11, margin: 22 }, reviewed_revision: 2, updated_at: '2026-10-25T00:00:00Z', job_id: 'role-3', ...over });
+
+  it('attaches a reviewed cover letter from the application window, like a resume, and lists only reviewed letters', async () => {
+    const user = userEvent.setup();
+    mockApi.letters.mockResolvedValue({ items: [letterDoc({ id: 'l2', title: 'Draft letter', reviewed_revision: null }), letterDoc({ id: 'other', title: 'Letter for another job', job_id: 'role-9' }), letterDoc()] });
+    mockApi.applications.mockResolvedValue({ items: [saved] });
+    mockApi.putApplication.mockResolvedValue({ ...saved, revision: 2, cover_letter_packet: { export_id: 'e1', document_id: 'l1', title: 'Cover letter — UX Designer', revision: 2, download_url: '/v1/exports/e1' } });
+    render(<App />); await screen.findByText('Product Designer');
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Application tracker' }));
+    await user.click(screen.getAllByRole('button', { name: 'Edit application: UX Designer' })[0]);
+    const select = await screen.findByRole('combobox', { name: 'Attach reviewed cover letter' });
+    await waitFor(() => expect(within(select).getByRole('option', { name: 'Cover letter — UX Designer · revision 2' })).toBeInTheDocument());
+    expect(within(select).queryByRole('option', { name: /Draft letter/ })).not.toBeInTheDocument();                // not reviewed yet
+    expect(within(select).getAllByRole('option').map((option) => option.textContent)).toEqual(['No cover letter selected', 'Cover letter — UX Designer · revision 2', 'Letter for another job · revision 2']);   // this job's letter first
+    await user.selectOptions(select, 'l1');
+    await user.click(screen.getByRole('button', { name: 'Save application record' }));
+    await waitFor(() => expect(mockApi.putApplication).toHaveBeenCalledWith('role-3', expect.objectContaining({ expected_revision: 1, cover_letter_document_id: 'l1', expected_cover_letter_revision: 2 })));
+    expect(mockApi.putApplication.mock.calls[0][1]).not.toHaveProperty('resume_document_id');
+  });
+
+  it('can replace or remove an attached cover letter, and says when no letter is reviewed yet', async () => {
+    const user = userEvent.setup();
+    mockApi.letters.mockResolvedValue({ items: [letterDoc({ reviewed_revision: null })] });
+    mockApi.applications.mockResolvedValue({ items: [{ ...saved, cover_letter_packet: { export_id: 'e1', document_id: 'l1', title: 'Cover letter — UX Designer', revision: 1, download_url: '/v1/exports/e1' } }] });
+    mockApi.putApplication.mockResolvedValue({ ...saved, revision: 2, cover_letter_packet: null });
+    render(<App />); await screen.findByText('Product Designer');
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Application tracker' }));
+    await user.click(screen.getAllByRole('button', { name: 'Edit application: UX Designer' })[0]);
+    expect(screen.getByText('Replace cover letter snapshot')).toBeInTheDocument();
+    expect(await screen.findByText(/Review a cover letter in the letter editor before attaching it/)).toBeInTheDocument();
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Attach reviewed cover letter' }), '__clear');
+    await user.click(screen.getByRole('button', { name: 'Save application record' }));
+    await waitFor(() => expect(mockApi.putApplication).toHaveBeenCalledWith('role-3', expect.objectContaining({ cover_letter_document_id: null })));
+  });
+
+  it('Prepare resume opens the resumes, even after the Cover letters tab was used', async () => {
+    const user = userEvent.setup();
+    mockApi.letters.mockResolvedValue({ items: [] });
+    mockApi.applications.mockResolvedValue({ items: [saved] });
+    render(<App />); await screen.findByText('Product Designer');
+    const nav = within(screen.getByRole('navigation', { name: 'Main navigation' }));
+    await user.click(nav.getByRole('button', { name: 'My resumes' }));
+    await user.click(screen.getByRole('tab', { name: /Cover letters/ }));
+    expect(await screen.findByText('No cover letters yet.')).toBeInTheDocument();
+    await user.click(nav.getByRole('button', { name: 'Application tracker' }));
+    await user.click(screen.getAllByRole('button', { name: 'Edit application: UX Designer' })[0]);
+    await user.click(screen.getByRole('button', { name: 'Prepare resume' }));
+    // an application with no draft yet gets the window, and the page does not change
+    expect(await screen.findByRole('dialog', { name: 'Prepare a resume' })).toBeInTheDocument();
+    expect(location.pathname).toBe('/tracker');
+    expect(screen.queryByText('No cover letters yet.')).not.toBeInTheDocument();
+  });
+
+  it('opens an existing draft for the job in the resume editor, not the cover letters tab, after the Cover letters tab was used', async () => {
+    const user = userEvent.setup();
+    const draft = { ...letterDoc(), id: 'draft-1', kind: 'resume' as const, title: 'Draft for UX Designer', content: { name: 'Alice', email: '', phone: '', location: '', summary: '', sections: [] }, reviewed_revision: null, job_id: 'role-3' };
+    mockApi.letters.mockResolvedValue({ items: [] });
+    mockApi.applications.mockResolvedValue({ items: [saved] });
+    mockApi.documents.mockResolvedValue({ items: [draft] });
+    render(<App />); await screen.findByText('Product Designer');
+    const nav = within(screen.getByRole('navigation', { name: 'Main navigation' }));
+    await user.click(nav.getByRole('button', { name: 'My resumes' }));
+    await user.click(screen.getByRole('tab', { name: /Cover letters/ }));
+    await user.click(nav.getByRole('button', { name: 'Application tracker' }));
+    await user.click(screen.getAllByRole('button', { name: 'Edit application: UX Designer' })[0]);
+    await user.click(screen.getByRole('button', { name: 'Prepare resume' }));
+    expect(await screen.findByRole('textbox', { name: 'Resume title' })).toHaveValue('Draft for UX Designer');
+    expect(screen.queryByRole('dialog', { name: 'Prepare a resume' })).not.toBeInTheDocument();
+    expect(location.pathname).toBe('/resumes/draft-1');
+  });
+
+  it('creates the tailored copy from the Prepare a resume window and opens it in the editor', async () => {
+    const user = userEvent.setup();
+    const original = { id: 'resume-base', title: 'My resume', kind: 'resume' as const, revision: 2, template: 'classic' as const, content: { name: 'Alice', email: '', phone: '', location: '', summary: '', sections: [] }, layout: { font_size: 11, margin: 18 }, reviewed_revision: 2 };
+    const copy = { ...original, id: 'resume-copy', title: 'My resume — UX Designer', revision: 1, reviewed_revision: null, job_id: 'role-3' };
+    mockApi.applications.mockResolvedValue({ items: [saved] });
+    mockApi.documents.mockResolvedValue({ items: [original] });
+    mockApi.tailorDocument.mockResolvedValue({ document: copy, matched: [], missing: [], ai: { status: 'off', changed: 0, reason: null } });
+    render(<App />); await screen.findByText('Product Designer');
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Application tracker' }));
+    await user.click(screen.getAllByRole('button', { name: 'Edit application: UX Designer' })[0]);
+    await user.click(screen.getByRole('button', { name: 'Prepare resume' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Prepare a resume' }));
+    expect(dialog.getByRole('button', { name: 'Create tailored copy' })).toBeDisabled();           // pick a resume first
+    expect(dialog.getByRole('button', { name: 'Build from my profile' })).toBeEnabled();
+    await user.selectOptions(dialog.getByRole('combobox', { name: 'Choose a resume to tailor' }), original.id);
+    await user.click(dialog.getByRole('button', { name: 'Create tailored copy' }));
+    await waitFor(() => expect(mockApi.tailorDocument).toHaveBeenCalledWith(original.id, 'role-3', 'My resume — UX Designer', 'rules'));
+    expect(await screen.findByRole('textbox', { name: 'Resume title' })).toHaveValue('My resume — UX Designer');
+    expect(screen.queryByRole('dialog', { name: 'Prepare a resume' })).not.toBeInTheDocument();
+  });
+
+  it('closes the Prepare a resume window with Cancel and stays on the tracker', async () => {
+    const user = userEvent.setup();
+    mockApi.applications.mockResolvedValue({ items: [saved] });
+    render(<App />); await screen.findByText('Product Designer');
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Application tracker' }));
+    await user.click(screen.getAllByRole('button', { name: 'Edit application: UX Designer' })[0]);
+    await user.click(screen.getByRole('button', { name: 'Prepare resume' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Prepare a resume' });
+    expect(within(dialog).getByRole('combobox', { name: 'Choose a resume to tailor' })).toBeDisabled();       // no resumes yet
+    expect(dialog).toHaveTextContent('You have no resumes yet');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog', { name: 'Prepare a resume' })).not.toBeInTheDocument();
+    expect(location.pathname).toBe('/tracker');
+  });
+
+  it('opens the same panel from the account block at the bottom of the sidebar', async () => {
+    const user = userEvent.setup();
+    mockApi.me.mockResolvedValue(used);
+    render(<App />); await screen.findByText('Product Designer');
+    await user.click(await screen.findByRole('button', { name: 'Your plan and account' }));
+    expect(screen.getByRole('dialog', { name: 'Your plan' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Your plan' })).not.toBeInTheDocument();
+  });
+
+  it('switches My resumes between resumes and cover letters, each at its own address', async () => {
+    const user = userEvent.setup();
+    mockApi.letters.mockResolvedValue({ items: [{ id: 'l1', title: 'Cover letter — UX Designer', kind: 'cover_letter', revision: 1, template: 'classic', content: { name: 'Alice', email: '', phone: '', location: '', date: '', recipient: '', greeting: '', paragraphs: ['Hello.'], closing: '', signature: '' }, layout: { font_size: 11, margin: 22 }, reviewed_revision: null, updated_at: '2026-10-25T00:00:00Z', job_id: 'role-3' }] });
+    mockApi.applications.mockResolvedValue({ items: [saved] });
+    render(<App />); await screen.findByText('Product Designer');
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'My resumes' }));
+    expect(location.pathname).toBe('/resumes');
+    expect(screen.getByRole('tab', { name: /Resumes/ })).toHaveAttribute('aria-selected', 'true');
+    await user.click(screen.getByRole('tab', { name: /Cover letters/ }));
+    expect(await screen.findByText('Cover letter — UX Designer')).toBeInTheDocument();
+    expect(location.pathname).toBe('/resumes/letters');
+    await user.click(screen.getByRole('button', { name: 'Open Cover letter — UX Designer' }));
+    expect(await screen.findByRole('textbox', { name: 'Letter title' })).toHaveValue('Cover letter — UX Designer');
+    expect(location.pathname).toBe('/resumes/letters/l1');
+    await user.click(screen.getByRole('button', { name: /Cover letters/ }));
+    expect(location.pathname).toBe('/resumes/letters');
+    await user.click(screen.getByRole('tab', { name: /Resumes/ }));
+    expect(location.pathname).toBe('/resumes');
+  });
+
+  it('opens a letter from its address after a refresh or a pasted link', async () => {
+    history.replaceState(null, '', '/resumes/letters');
+    mockApi.letters.mockResolvedValue({ items: [] });
+    render(<App />);
+    expect(await screen.findByText('No cover letters yet.')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Cover letters/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('starts a cover letter from an application in the tracker', async () => {
+    const user = userEvent.setup();
+    mockApi.applications.mockResolvedValue({ items: [saved] });
+    mockApi.letters.mockResolvedValue({ items: [] });
+    mockApi.me.mockResolvedValue(used);
+    render(<App />); await screen.findByText('Product Designer');
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Application tracker' }));
+    await user.click(screen.getAllByRole('button', { name: 'Edit application: UX Designer' })[0]);
+    await user.click(screen.getByRole('button', { name: 'Prepare cover letter' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Write a cover letter' });
+    expect(within(dialog).getByRole('combobox', { name: 'Job for this letter' })).toHaveValue('role-3');
+    expect(location.pathname).toBe('/resumes/letters');
   });
 });

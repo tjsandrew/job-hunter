@@ -92,8 +92,8 @@ def test_unusable_results_are_rejected(bad):
         verify_result(bad, EVIDENCE)
 
 
-def test_the_registry_has_the_fit_and_tailor_tasks():
-    assert set(TASKS) == {"fit", "tailor"}
+def test_the_registry_has_the_fit_tailor_and_cover_letter_tasks():
+    assert set(TASKS) == {"fit", "tailor", "cover_letter"}
 
 
 def test_an_unknown_task_is_refused_by_name():

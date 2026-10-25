@@ -1,0 +1,91 @@
+/* Cover letters: tabs, list, start dialog, editor, preview. Reuses the resume library and editor classes where it can. */
+.doc-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin: 0 0 20px; }
+.doc-tab { background: none; border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px; padding: 10px 16px; font: inherit; font-weight: 600; color: var(--muted); cursor: pointer; }
+.doc-tab.active { color: #2345b2; border-bottom-color: #3157ce; font-weight: 700; }
+.doc-count { margin-left: 6px; font-size: 12px; background: #eceff7; border-radius: 999px; padding: 2px 8px; color: var(--muted); }
+.doc-tab.active .doc-count { background: var(--pale); color: #2345b2; }
+
+/* The cover letter block in the application window: room between its button and the text box below it. */
+.packet-heading.letter-packet { margin-top: 18px; margin-bottom: 18px; }
+.letter-packet + .attached-resume { margin-bottom: 18px; }
+
+/* Tracker packet column: the resume and the cover letter on two lines, the missing one muted. */
+.packet-cell { line-height: 1.55; }
+.packet-cell .packet-missing { color: var(--muted); opacity: .75; }
+
+/* Room between the letter cards and the next heading ("Saved jobs without a letter"). */
+.letters-page > section + section { margin-top: 40px; }
+
+.letter-statuses { display: flex; gap: 12px 8px; flex-wrap: wrap; justify-content: flex-end; }
+.letter-waiting { list-style: none; margin: 0 0 24px; padding: 0; background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.letter-waiting li { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+.letter-waiting li + li { border-top: 1px solid var(--line); }
+.letter-waiting li > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.letter-waiting span { font-size: 12px; color: var(--muted); }
+
+/* Start dialog */
+/* The window's size is the shared one in theme.css; this window scrolls inside it. */
+.modal.letter-start { overflow-y: auto; }
+.letter-start .modal-footer { position: sticky; bottom: -28px; margin: 0 -28px -28px; padding: 14px 28px; background: #fff; border-top: 1px solid var(--line); }
+.letter-start .letter-choices { gap: 10px; }
+.letter-choices { display: flex; flex-direction: column; gap: 8px; margin: 0 0 14px; }
+.letter-choice { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: 11px; padding: 11px 13px; cursor: pointer; background: #fff; }
+.letter-choice.selected { border: 2px solid #3157ce; background: #f3f6ff; padding: 10px 12px; }
+.letter-choice input { margin-top: 3px; }
+.letter-choice b { display: block; font-size: 13px; }
+.letter-choice small { display: block; font-size: 12px; line-height: 1.5; color: #3d4766; margin-top: 2px; }
+.letter-tones { display: inline-flex; border: 1px solid #c9d3ee; border-radius: 9px; overflow: hidden; margin: 0 0 14px; }
+.letter-tones button { border: 0; background: #fff; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.letter-tones button.selected { background: var(--pale); color: #2345b2; }
+.letter-cost { margin: 0 0 12px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.letter-busy { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 13px; color: #2345b2; }
+.letter-error { margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; background: #fdeceb; color: #8a1f17; font-size: 13px; line-height: 1.5; }
+.letters-page .letter-error { margin-bottom: 16px; }
+
+/* Editor */
+.letter-editor .letter-for { margin: 0; padding: 14px 24px 4px; font-size: 13px; color: var(--muted); }
+.letter-main { display: flex; gap: 18px; min-height: 0; padding: 12px 24px 0; }
+.letter-pane { display: flex; flex-direction: column; min-width: 0; flex: 0 1 540px; }
+.letter-pane .editor-scroll { padding: 18px 20px 28px; }
+.letter-preview-pane { flex: 1; min-width: 0; }
+.letter-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.letter-paragraph { display: flex; gap: 6px; align-items: flex-start; }
+.letter-paragraph .field { flex: 1; min-width: 0; }
+.letter-paragraph-tools { display: flex; flex-direction: column; gap: 4px; padding-top: 24px; }
+/* The letter editor's toolbar (style buttons, layout pop-over) is the resume editor's own, so it needs no rules here. */
+.letter-editor .editor-toolbar { padding-inline: 24px; }
+.letter-details { margin: 0 0 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+.letter-details summary { cursor: pointer; font-weight: 600; font-size: 13px; margin-bottom: 10px; }
+.letter-notes { margin: 14px 20px 0; padding: 12px 16px; border: 1px solid #f0dcae; background: #fff8e8; border-radius: 12px; }
+.letter-notes summary { cursor: pointer; font-size: 13px; font-weight: 700; color: #7a4a00; }
+.letter-notes summary span { margin-left: 8px; font-weight: 500; color: #8a6a2c; }
+.letter-notes ul { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; }
+.letter-notes li { display: flex; gap: 8px; font-size: 13px; line-height: 1.45; color: #4a3a14; }
+.letter-notes li .icon { flex-shrink: 0; margin-top: 2px; width: 16px; height: 16px; }
+.letter-notes li.ok .icon { color: #1c7c4d; }
+.letter-notes li.warn .icon { color: #9a5b00; }
+.letter-notes li.info { color: #6b5a2c; font-size: 12px; }
+
+/* Preview paper */
+.letter-preview { width: 100%; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.letter-frame { position: relative; overflow: hidden; box-shadow: 0 6px 24px rgba(24, 37, 61, .16); background: #fff; }
+.letter-paper { position: absolute; top: 0; left: 0; box-sizing: border-box; overflow: hidden; transform-origin: top left; background: #fff; color: #1a1a1a; }
+.letter-paper header { border-bottom: 1px solid #bbb; margin-bottom: 1em; padding-bottom: .5em; }
+.letter-paper h1 { margin: 0; font-size: 1.6em; line-height: 1.2; }
+.letter-paper header p { margin: .25em 0 0; font-size: .9em; color: #555; }
+.letter-paper p { margin: 0 0 .85em; }
+.letter-paper .letter-lines { white-space: pre-wrap; }
+.letter-paper.font-serif, .letter-paper.font-auto.classic { font-family: Georgia, 'Times New Roman', serif; }
+.letter-paper.font-sans, .letter-paper.font-auto.modern { font-family: 'Inter Variable', Arial, sans-serif; }
+.letter-paper.font-mono { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; }
+.letter-paper.font-latex { font-family: 'Latin Modern Roman', Georgia, serif; }
+.letter-overflow { margin: 0; font-size: 12px; color: #8a4b00; text-align: center; }
+
+@media (max-width: 760px) {
+  .letter-start .modal-footer { bottom: -20px; margin: 0 -20px -20px; padding: 12px 20px; }
+}
+@media (max-width: 900px) {
+  .letter-main { flex-direction: column; }
+  .letter-pane { flex-basis: auto; }
+  .letter-two { grid-template-columns: 1fr; }
+}
