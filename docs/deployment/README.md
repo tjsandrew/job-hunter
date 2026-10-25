@@ -107,6 +107,22 @@ The final **Checks passed** job fails if any selected dependency fails or is can
 
 **GitHub → Actions → Pull jobs → Run workflow**, branch `main`, with the number of new jobs to add (default 10). It invokes the Discovery Lambda and prints in the run summary how many jobs were fetched, added, refreshed and left for the next pull. It needs the repository variable `DISCOVERY_FUNCTION` (published by `scripts/configure_github_deploy.py`) and refuses to run while staging is paused. Details and the first-time rollout are in [JOB-PULL-ROLLOUT.md](JOB-PULL-ROLLOUT.md).
 
+## Changing the website's security headers
+
+The Amplify headers are in `aws_amplify_app.web` in `infra/aws/main.tf`. Amplify's UpdateApp accepts them only as YAML with a top-level `customHeaders` key, but stores and returns them as compact JSON. So Terraform would show a change on every plan, and the resource ignores `custom_headers`. Writing the JSON form in Terraform makes plans clean, but UpdateApp rejects it ("top level must be key value pairs"). This was checked on 25 October 2026.
+
+To change the headers:
+
+1. Edit the YAML in `main.tf`, open a PR and merge it. Without the next step, the plan shows no Amplify change.
+2. From `main`, after saying "applying" in the team chat, create a local override file that replaces the ignore list. `ignore_changes = []` does not work, because Terraform keeps the original list. The file name matches `*_override.tf`, which Git ignores.
+   ```sh
+   printf 'resource "aws_amplify_app" "web" {\n  lifecycle { ignore_changes = [tags] }\n}\n' > infra/aws/amplify_override.tf
+   terraform -chdir=infra/aws plan -var-file=staging.tfvars -out=headers.tfplan   # expect the Amplify header change only
+   terraform -chdir=infra/aws apply headers.tfplan
+   rm infra/aws/amplify_override.tf infra/aws/headers.tfplan
+   ```
+3. Check with `curl -sI https://main.d3u7qeowlfzmzj.amplifyapp.com/`. The next normal plan shows no Amplify change.
+
 ## Manual backend pause and resume
 
 After review, deployment-variable configuration and merging the workflow to `main`, open **GitHub → Actions → Pause or resume staging backend → Run workflow**. Select branch `main` and mode `pause` or `resume`.

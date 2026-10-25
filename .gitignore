@@ -49,3 +49,8 @@ crash.log
 **/backend.hcl
 !/infra/aws/backend.hcl
 infra/state/bootstrap_override.tf
+# Terraform local override files (e.g. the one-off Amplify headers apply). Never commit them.
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

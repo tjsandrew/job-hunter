@@ -1,10 +1,4 @@
 locals {
-  security_headers = [
-    { key = "X-Content-Type-Options", value = "nosniff" },
-    { key = "Referrer-Policy", value = "strict-origin-when-cross-origin" },
-    { key = "X-Frame-Options", value = "DENY" },
-    { key = "Strict-Transport-Security", value = "max-age=31536000" },
-  ]
   name   = "jobhunter-staging"
   origin = "https://main.${aws_amplify_app.web.default_domain}"
 }
@@ -18,10 +12,24 @@ resource "aws_amplify_app" "web" {
     target = "/index.html"
     status = "200"
   }
-  # Written exactly as Amplify stores them (compact JSON, "pattern" before "headers"), so plans
-  # compare cleanly and header changes show up in review. jsonencode alone sorts the keys,
-  # which never matches the stored text.
-  custom_headers = "[{\"pattern\":\"**\",\"headers\":${jsonencode(local.security_headers)}}]"
+  custom_headers = <<-HEADERS
+    customHeaders:
+      - pattern: '**'
+        headers:
+          - key: X-Content-Type-Options
+            value: nosniff
+          - key: Referrer-Policy
+            value: strict-origin-when-cross-origin
+          - key: X-Frame-Options
+            value: DENY
+          - key: Strict-Transport-Security
+            value: max-age=31536000
+  HEADERS
+  # Amplify's UpdateApp accepts headers only as YAML with a top-level customHeaders key, but stores
+  # and returns them as compact JSON, so Terraform would report a change on every plan. To change
+  # headers: edit them here, merge, then apply once with a local override file that clears this
+  # ignore (docs/deployment/README.md, "Changing the website's security headers").
+  lifecycle { ignore_changes = [custom_headers] }
 }
 resource "aws_amplify_branch" "main" {
   app_id            = aws_amplify_app.web.id
