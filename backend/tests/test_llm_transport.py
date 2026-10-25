@@ -199,7 +199,7 @@ def test_the_worker_ignores_a_request_whose_key_does_not_match_its_id():
 def test_the_handler_only_reads_llm_requests_from_the_documents_bucket(monkeypatch):
     seen = []
     monkeypatch.setenv("DOCUMENT_BUCKET", "docs")
-    monkeypatch.setattr(llm_worker, "process", lambda s3, bucket, key, client=None: seen.append((bucket, key)) or "ok")
+    monkeypatch.setattr(llm_worker, "process", lambda s3, bucket, key, client=None, waited_ms=None: seen.append((bucket, key)) or "ok")
     monkeypatch.setitem(__import__("sys").modules, "boto3", type("B", (), {"client": staticmethod(lambda *a, **k: object())}))
     event = {"Records": [{"s3": {"bucket": {"name": "docs"}, "object": {"key": "llm-requests/x.json"}}},
                          {"s3": {"bucket": {"name": "docs"}, "object": {"key": "uploads/x.pdf"}}},
@@ -246,3 +246,48 @@ def test_ask_passes_on_a_worker_error():
         raise LlmError("model unavailable")
     answer = llm_transport.ask(WorkingS3(FakeLlm(down)), "bucket", "tailor", TAILOR_INPUT, wait_seconds=5, sleep=lambda _: None)
     assert answer == {"error": "MODEL_UNAVAILABLE"}
+
+
+class UsageLlm(FakeLlm):
+    """A fake model that reports token counts the way HostedClient does, and can fail on chosen calls."""
+    def __init__(self, answers, fail_on=()):
+        super().__init__(answers)
+        self.fail_on, self.last_usage = set(fail_on), {}
+
+    def complete_json(self, system, user, *, max_tokens=1024):
+        if len(self.calls) + 1 in self.fail_on:
+            self.calls.append((system, user))
+            raise LlmError("model unavailable")
+        answer = super().complete_json(system, user, max_tokens=max_tokens)
+        self.last_usage = {"prompt_tokens": 100, "output_tokens": 20}
+        return answer
+
+
+def test_the_worker_logs_one_line_with_the_tasks_model_calls_and_tokens(monkeypatch):
+    lines = []      # the worker's own logger, not caplog: other tests' logging setup can disable existing loggers
+    monkeypatch.setattr(llm_worker, "log", type("Log", (), {"info": staticmethod(lines.append),
+                                                            "exception": staticmethod(lambda *a, **k: None)}))
+    s3, model = FakeS3(), UsageLlm(respond)
+    llm_transport.put_request(s3, "bucket", fit_request("m1"))
+    assert llm_worker.process(s3, "bucket", llm_transport.request_key("m1"), client=model, waited_ms=850) == "ok"
+    [line] = [json.loads(message) for message in lines]
+    calls = len(model.calls)
+    assert calls >= 1
+    assert line | {"task_ms": 0, "model_ms": 0} == {
+        "event": "llm_task", "request_id": "m1", "task": "fit", "outcome": "ok", "waited_ms": 850, "task_ms": 0,
+        "model": "fake", "model_calls": calls, "model_ms": 0, "prompt_tokens": 100 * calls, "output_tokens": 20 * calls}
+
+
+def test_a_failed_model_call_is_counted_but_does_not_repeat_the_previous_calls_tokens():
+    metered = llm_worker._Metered(UsageLlm([{"ok": True}], fail_on={2}))
+    metered.complete_json("s", "u")
+    with pytest.raises(LlmError):
+        metered.complete_json("s", "u")
+    assert (metered.calls, metered.prompt_tokens, metered.output_tokens) == (2, 100, 20)
+    assert metered.name == "fake"          # other attributes pass through to the real client
+
+
+def test_the_wait_is_measured_from_the_s3_event_time(monkeypatch):
+    monkeypatch.setattr(llm_worker.time, "time", lambda: 1_700_000_002.5)
+    assert llm_worker._waited_ms("2023-11-14T22:13:20.000Z") == 2500
+    assert llm_worker._waited_ms(None) is None and llm_worker._waited_ms("not a time") is None
