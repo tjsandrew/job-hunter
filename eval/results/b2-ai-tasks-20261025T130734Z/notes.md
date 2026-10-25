@@ -52,6 +52,9 @@ with a shape check, and leaving out entries that have no bullets (adding them ba
 most of these failures. Benchmark history in the code notes the same model nesting the list too deep before the
 shape rules were added.
 
+**Fixed and re-measured:** PR #33 (leave out empty entries, validate the shape and retry once) was deployed and the
+same 15 rewrites re-run: 15 of 15 accepted, all on the first call. See `../b2-ai-tasks-20261025T184828Z/notes.md`.
+
 ## Cost inputs for B5
 
 Per task, mean tokens: fit 3,253 in / 1,141 out over 4.6 calls; cover letter 1,054 / 516; rewrite 835 / 88. Worker
