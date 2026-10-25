@@ -66,3 +66,38 @@ EVAL_STEPS=1,10,50,100 EVAL_STEP_SECONDS=300 .venv-eval/bin/locust -f eval/locus
 ```
 
 A smoke test on 25 October 2026 (1 baseline user for 45 s, then 2 browsing users for 30 s) passed every endpoint, including the Save/Pass write, with no failures. From those few samples, All jobs and For you took about 1.3–1.5 s at the median and the other reads about 80–120 ms. That is indicative only, not a B1 result.
+
+## Load-test capacity window (A5)
+
+Run B3 twice:
+- **run 1** at the normal staging limits;
+- **run 2** in a short, announced window with the limits raised.
+
+| Limit | Normal | Window | How |
+|---|---|---|---|
+| API Lambda reserved concurrency | 10 | 50 | `put-function-concurrency` (Terraform ignores it after creation) |
+| Gateway rate / burst | 20 / 40 per second | 200 / 400 | `-var gateway_rate_limit=… -var gateway_burst_limit=…` |
+| Aurora maximum capacity | 1 ACU | 4 ACU | `-var aurora_max_acu=4` |
+
+Lambda headroom: the account allows 400 concurrent executions, and AWS keeps at least 100 unreserved. The functions reserve 20 today (API 10, LLM 5, embed 2, discovery 1, import 1, migrate 1), so 50 for the API leaves plenty.
+
+Raising the limits with `-var` makes staging differ from `main` until it is restored, and anyone who applies during the window undoes it. So:
+
+1. Say in the team chat: "load-test window, no applies or deploys, about 2 hours". Check that no Deploy staging or Pull jobs run is in progress.
+2. Record the starting state in `eval/results/<run>/config-before.txt`: `get-function-concurrency` for the API, the stage throttles (`aws apigatewayv2 get-stage`) and the Aurora scaling (`aws rds describe-db-clusters`).
+3. Raise the limits:
+   ```sh
+   aws lambda put-function-concurrency --function-name jobhunter-staging-api --reserved-concurrent-executions 50
+   terraform -chdir=infra/aws apply -var-file=staging.tfvars \
+     -var aurora_max_acu=4 -var gateway_rate_limit=200 -var gateway_burst_limit=400
+   ```
+   The plan must show only the stage throttles and the cluster's `max_capacity`. Aurora capacity changes apply online, with no restart.
+4. Run B3 run 2, and keep the CloudWatch metrics for the window: Lambda `ConcurrentExecutions` and `Throttles`; Aurora `ServerlessDatabaseCapacity` and `DatabaseConnections`.
+5. Restore the same day, then confirm that a normal plan shows **No changes** and that reserved concurrency is back to 10:
+   ```sh
+   terraform -chdir=infra/aws apply -var-file=staging.tfvars
+   aws lambda put-function-concurrency --function-name jobhunter-staging-api --reserved-concurrent-executions 10
+   ```
+6. Record the end state in `config-after.txt` and say in the chat that the window is closed.
+
+At 4 ACU, Aurora costs about USD 0.80 an hour while it is fully used. A 2-hour window costs about USD 1–3 in total.
