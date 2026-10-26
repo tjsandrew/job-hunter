@@ -101,3 +101,31 @@ Raising the limits with `-var` makes staging differ from `main` until it is rest
 6. Record the end state in `config-after.txt` and say in the chat that the window is closed.
 
 At 4 ACU, Aurora costs about USD 0.80 an hour while it is fully used. A 2-hour window costs about USD 1–3 in total.
+
+## Results index (A6, B1–B5)
+
+Each result folder has a `notes.md` with the findings and how they were measured. Scripts that read AWS need an
+operator SSO session (`AWS_PROFILE=...`); all run from the repository root in the evaluation virtualenv.
+
+| Part | What | Script | Results |
+|---|---|---|---|
+| A6 | Isolation and token checks (27/27), expired-token check, Aurora pausing, pause/resume workflow | `acceptance.py` | `results/a6-*` |
+| B1 | Responsiveness of the browse endpoints, one warm user | `locustfile.py BaselineUser`, `analyse_b1.py` | `results/b1-baseline-20261025/` |
+| B2 | AI task timings and token counts; rewrite re-run after the shape fix (PR #33) | `b2_ai_tasks.py`, `analyse_b2.py` | `results/b2-ai-tasks-20261025T130734Z/`, `results/b2-ai-tasks-20261025T184828Z/` |
+| B3 | Step load 1 → 100 users at the normal limits (run 1) and in the raised-capacity window (run 2) | `locustfile.py BrowsingUser`, `analyse_b3.py` | `results/b3-run1-20261026/`, `results/b3-run2-20261026/` |
+| B4 | Job pulls (volume, failures, stage times) and duplicate-removal accuracy on 84 labelled real pairs | `b4_pull.py`, `analyse_b4.py`, `dedup_eval.py` (pairs in `dedup/staging_pairs.json`) | `results/b4-pipeline-20261026/`, `results/b4-dedup-20261026/`, `results/b4-pulls/` |
+| B5 | Actual October spend and the cost model against workload, with the break-even chart | `cost_model.py` | `results/b5-cost-20261026/` |
+
+```sh
+# B2 (spends one AI use per account and job; announce first)
+python eval/b2_ai_tasks.py
+AWS_PROFILE=... python eval/analyse_b2.py eval/results/b2-ai-tasks-<stamp>
+# B4: one more measured pull (run once or twice a day), then re-tally every pull on record
+AWS_PROFILE=... python eval/b4_pull.py 10
+AWS_PROFILE=... python eval/analyse_b4.py
+python eval/dedup_eval.py          # offline, no AWS
+python eval/cost_model.py          # offline; prices and assumptions are parameters at the top
+```
+
+The load tests must run with the laptop awake and its lid open for the whole run (`caffeinate` keeps it from idling
+to sleep, but closing the lid still sleeps it); the first B3 attempt was lost that way.

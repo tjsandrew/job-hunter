@@ -8,7 +8,7 @@
 ECR 0.02, API Gateway, S3 and Amplify under 0.01 each; Lambda, Cognito, SQS and SNS at zero (free tier). The
 database is 83% of the bill, and it bills only while awake: auto-pause kept it paused 51 of 73 measured hours (A6).
 Daily figures by service: `cost-explorer-daily-20261001-20261025.json`. (B1–B3 load tests on 25–26 October will
-appear in Cost Explorer a day later; the raised-capacity window ran 29 minutes at up to 4 ACU, about USD 0.40.)
+appear in Cost Explorer a day later; the raised-capacity window ran 29 minutes at up to 4 ACU, at most about USD 0.40.)
 
 ## Projected monthly cost (`eval/cost_model.py`; USD, AWS incl. 9% GST)
 
