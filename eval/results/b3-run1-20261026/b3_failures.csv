@@ -1,0 +1,17 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+PUT,PUT /jobs/{id}/review,CatchResponseError('429 throttled'),612,2026-10-26T03:22:09Z,2026-10-26T03:28:05Z
+GET,/profile/bank,CatchResponseError('5xx server error'),487,2026-10-26T03:16:13Z,2026-10-26T03:28:03Z
+GET,/jobs/{id},CatchResponseError('5xx server error'),1481,2026-10-26T03:16:09Z,2026-10-26T03:28:04Z
+GET,/me,CatchResponseError('5xx server error'),491,2026-10-26T03:16:11Z,2026-10-26T03:28:02Z
+GET,/jobs/{id},CatchResponseError('429 throttled'),1889,2026-10-26T03:22:07Z,2026-10-26T03:28:05Z
+GET,/recommendations/for-you,CatchResponseError('5xx server error'),1440,2026-10-26T03:16:07Z,2026-10-26T03:28:05Z
+GET,/recommendations,CatchResponseError('429 throttled'),2016,2026-10-26T03:22:06Z,2026-10-26T03:28:04Z
+GET,/applications,CatchResponseError('429 throttled'),636,2026-10-26T03:22:07Z,2026-10-26T03:28:03Z
+GET,/profile/bank,CatchResponseError('429 throttled'),648,2026-10-26T03:22:09Z,2026-10-26T03:28:05Z
+GET,/me,CatchResponseError('429 throttled'),591,2026-10-26T03:22:07Z,2026-10-26T03:28:04Z
+GET,/recommendations,CatchResponseError('5xx server error'),1496,2026-10-26T03:16:06Z,2026-10-26T03:28:05Z
+GET,/jobs/reviewed,CatchResponseError('429 throttled'),627,2026-10-26T03:22:07Z,2026-10-26T03:28:05Z
+GET,/recommendations/for-you,CatchResponseError('429 throttled'),1825,2026-10-26T03:22:06Z,2026-10-26T03:28:05Z
+GET,/applications,CatchResponseError('5xx server error'),472,2026-10-26T03:16:09Z,2026-10-26T03:28:04Z
+GET,/jobs/reviewed,CatchResponseError('5xx server error'),498,2026-10-26T03:16:05Z,2026-10-26T03:28:03Z
+PUT,PUT /jobs/{id}/review,CatchResponseError('5xx server error'),480,2026-10-26T03:16:13Z,2026-10-26T03:28:04Z
