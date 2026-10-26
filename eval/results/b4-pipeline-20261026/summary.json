@@ -1,0 +1,130 @@
+{
+  "pulls": [
+    {
+      "saved_at": "2026-10-24T15:48:40.416761Z",
+      "fetched": 1096,
+      "by_source": {
+        "greenhouse": 57,
+        "lever": 11,
+        "mycareersfuture": 978,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {},
+      "failures": [
+        {
+          "source": "greenhouse",
+          "board": "cloudflare",
+          "kind": "response_too_large",
+          "error": "greenhouse request failed (response_too_large): response exceeded 8 MB"
+        }
+      ],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 29.4,
+      "import_seconds": 6.8,
+      "new": null,
+      "already_stored": null,
+      "deferred": null,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-24T16:28:20.592425Z",
+      "fetched": 1098,
+      "by_source": {
+        "greenhouse": 58,
+        "lever": 11,
+        "mycareersfuture": 979,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {},
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 108.2,
+      "import_seconds": 8.3,
+      "new": null,
+      "already_stored": null,
+      "deferred": null,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-25T08:09:07.918489Z",
+      "fetched": 1084,
+      "by_source": {
+        "greenhouse": 58,
+        "lever": 11,
+        "mycareersfuture": 967,
+        "adzuna": 48
+      },
+      "cross_source_duplicates": {
+        "adzuna": 2
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 38.3,
+      "import_seconds": 9.2,
+      "new": null,
+      "already_stored": null,
+      "deferred": null,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-25T09:20:46.884218Z",
+      "fetched": 2177,
+      "by_source": {
+        "greenhouse": 58,
+        "lever": 11,
+        "mycareersfuture": 2058,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 2
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 93.9,
+      "import_seconds": 20.3,
+      "new": null,
+      "already_stored": null,
+      "deferred": null,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-26T04:20:10.053027Z",
+      "fetched": 2169,
+      "by_source": {
+        "greenhouse": 58,
+        "lever": 11,
+        "mycareersfuture": 2050,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 2
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 166.8,
+      "import_seconds": 12.8,
+      "new": 10,
+      "already_stored": 442,
+      "deferred": 1717,
+      "to_embedding_finished_s": 193.2
+    }
+  ],
+  "failures": {
+    "greenhouse:cloudflare response_too_large": 1
+  }
+}
