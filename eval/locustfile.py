@@ -33,6 +33,7 @@ import cognito_tokens as ct  # noqa: E402
 
 API_PATH = "/v1"
 TOKEN_LIFETIME_SECONDS = 50 * 60     # access tokens last 60 minutes; refresh well before
+# Token age uses the wall clock: the monotonic clock stops while the laptop sleeps, but token expiry does not.
 
 
 class Account:
@@ -43,14 +44,14 @@ class Account:
         self.email = email
         self._refresh = tokens["refresh_token"]
         self._access = tokens["access_token"]
-        self._issued = time.monotonic()
+        self._issued = time.time()
         self._lock = threading.Lock()
 
     def token(self) -> str:
         with self._lock:
-            if time.monotonic() - self._issued > TOKEN_LIFETIME_SECONDS:
+            if time.time() - self._issued > TOKEN_LIFETIME_SECONDS:
                 self._access = ct.refresh(self._refresh)
-                self._issued = time.monotonic()
+                self._issued = time.time()
             return self._access
 
 
