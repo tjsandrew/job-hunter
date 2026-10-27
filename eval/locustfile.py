@@ -161,9 +161,11 @@ class BrowsingUser(ApiUser):
         if not self.job_ids:
             self.all_jobs()
         if self.job_ids:
-            decision = random.choice(("saved", "dismissed"))
-            self._request("PUT", f"/jobs/{random.choice(self.job_ids)}/review", "PUT /jobs/{id}/review",
-                          {"decision": decision})
+            # Undo the decision straight away: saved and passed jobs drop out of the listings, so decisions left in
+            # place would shrink the pool being ranked as the test runs (and lengthen the tracker), biasing later steps.
+            job_id, decision = random.choice(self.job_ids), random.choice(("saved", "dismissed"))
+            self._request("PUT", f"/jobs/{job_id}/review", "PUT /jobs/{id}/review", {"decision": decision})
+            self._request("PUT", f"/jobs/{job_id}/review", "PUT /jobs/{id}/review (undo)", {"decision": "none"})
 
 
 class BaselineUser(ApiUser):
