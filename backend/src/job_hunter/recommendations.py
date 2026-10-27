@@ -6,10 +6,12 @@ ORM/API records without coupling the ranking rules to persistence.
 
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, OrderedDict
 from datetime import datetime, timezone
+import functools
 import math
 import re
+import threading
 from typing import Any, Iterable, Mapping, Sequence
 
 RANKING_VERSION = "local_tfidf_hybrid_v1"
@@ -159,11 +161,33 @@ def _job_document(job: Mapping[str, Any]) -> str:
     return " ".join(parts)
 
 
+# Tokenising every open job's description is the biggest fixed cost of a ranking request, and a job's text only
+# changes when a pull rewrites it. Counts are kept per document text (looked up by the text itself, so a changed
+# description can never be served stale). The cache is per process, bounded, and the counts are never mutated.
+_DOCUMENT_CACHE_SIZE = 2048
+_document_cache: OrderedDict[str, Counter[str]] = OrderedDict()
+_document_cache_lock = threading.Lock()
+
+
+def _document_counts(document: str) -> Counter[str]:
+    with _document_cache_lock:
+        counts = _document_cache.get(document)
+        if counts is not None:
+            _document_cache.move_to_end(document)
+            return counts
+    counts = Counter(_tokenize(document))
+    with _document_cache_lock:
+        _document_cache[document] = counts
+        while len(_document_cache) > _DOCUMENT_CACHE_SIZE:
+            _document_cache.popitem(last=False)
+    return counts
+
+
 def _tfidf_vectors(query: str, documents: Sequence[str]) -> tuple[dict[str, float], list[dict[str, float]]]:
     query_counts = Counter(_tokenize(query))
-    document_counts = [Counter(_tokenize(doc)) for doc in documents]
     if not query_counts:
         return {}, [{} for _ in documents]
+    document_counts = [_document_counts(doc) for doc in documents]
     document_frequency = Counter()
     for counts in document_counts:
         document_frequency.update(counts.keys())
@@ -207,15 +231,24 @@ def _role_overlap(title: str, roles: Sequence[str]) -> tuple[float, list[str]]:
     return best_score, [best_role] if best_score >= 0.25 else []
 
 
+@functools.lru_cache(maxsize=2048)
+def _alias_matcher(alias: str) -> tuple[re.Pattern[str], str | None]:
+    """The whole-word pattern for a skill spelling, and its lower-case form when plain text can pre-check it."""
+    pattern = re.compile(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", re.IGNORECASE)
+    return pattern, alias.lower() if alias.isascii() else None
+
+
 def _find_skill_evidence(profile_skills: Sequence[str], job: Mapping[str, Any]) -> list[dict[str, str]]:
     explicit = _job_skills(job)
     explicit_by_canonical = {_canonical_skill(skill): skill for skill in explicit}
+    # A spelling that is not even a substring of the lower-cased text cannot match the case-insensitive whole-word
+    # pattern, so the (much slower) regex only runs on the few texts that mention it. Only ASCII text and spellings
+    # are pre-checked: for those, lower-casing is exactly what IGNORECASE does.
     searchable_fields = []
     for key in ("title", "description"):
         value = job.get(key)
         if isinstance(value, str) and value:
-            searchable_fields.append((key, value))
-    text = " ".join(value for _, value in searchable_fields)
+            searchable_fields.append((key, value, value.lower() if value.isascii() else None))
     evidence: list[dict[str, str]] = []
     for user_skill in profile_skills:
         canonical = _canonical_skill(user_skill)
@@ -224,9 +257,11 @@ def _find_skill_evidence(profile_skills: Sequence[str], job: Mapping[str, Any]) 
             continue
         aliases = _SKILL_ALIASES.get(canonical, (user_skill,))
         hit = None
-        for field, field_text in searchable_fields:
+        for field, field_text, field_lower in searchable_fields:
             for alias in aliases:
-                pattern = re.compile(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", re.IGNORECASE)
+                pattern, alias_lower = _alias_matcher(alias)
+                if field_lower is not None and alias_lower is not None and alias_lower not in field_lower:
+                    continue
                 match = pattern.search(field_text)
                 if match:
                     hit = {"skill": user_skill, "source": field, "matched_text": match.group(0)}
