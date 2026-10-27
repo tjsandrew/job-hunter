@@ -1,0 +1,10 @@
+B1 rerun after PR #35 (keyword ranking speed-up)
+deployed commit: 17b4365 (main; Deploy staging run 40434371904, 2026-10-27 01:44 UTC)
+api lambda: arm64, 1024 MB, 29 s timeout, reserved concurrency 10
+aurora serverless v2: min 0, max 1 ACU, auto-pause 1800 s
+job pool: 518 (508 at the first B1 + 10 from the measured pull on 26 Oct; no pulls since)
+client: operator laptop (macOS) on home Wi-Fi, lid open, caffeinate; Locust 2.47.0, single user, 0.1 s between requests
+same scenario and analysis as eval/results/b1-baseline-20261025 (BaselineUser cycling nine endpoints)
+accounts reset first (eval/reset_reviews.py): no saved or passed jobs, so the listings rank the whole pool as in the first B1. An earlier attempt the same evening ranked only ~184 jobs because of decisions left by B3; it is not used.
+measured run start: 2026-10-27T14:46:58Z
+measured run end: 2026-10-27T15:06:58Z
