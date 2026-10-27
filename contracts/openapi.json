@@ -2329,7 +2329,7 @@
     },
     "/v1/fit-analyses": {
       "get": {
-        "description": "One small row per job this user has a finished analysis for, so job lists can mark the jobs already checked.",
+        "description": "One small row per job this user has a finished analysis for, so job lists can mark the jobs already checked.\n\n``running`` lists the jobs whose analysis is still going. Each one is refreshed first, so the tracker can poll this\nlist and see an answer arrive without opening every job.",
         "operationId": "finished_v1_fit_analyses_get",
         "parameters": [
           {

@@ -71,7 +71,7 @@ function Result({ result, stale }: { result: FitResult; stale: boolean }) {
   </div>;
 }
 
-export function FitPanel({ jobId, available, remaining, onUsed }: { jobId: string; available: boolean; remaining: number; onUsed: () => void }) {
+export function FitPanel({ jobId, available, remaining, onUsed, onStarted }: { jobId: string; available: boolean; remaining: number; onUsed: () => void; onStarted?: () => void }) {
   const [analysis, setAnalysis] = useState<FitAnalysis | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -113,7 +113,7 @@ export function FitPanel({ jobId, available, remaining, onUsed }: { jobId: strin
 
   const start = async () => {
     setBusy(true); setError('');
-    try { apply(await api.startFit(jobId)); }
+    try { apply(await api.startFit(jobId)); onStarted?.(); }
     catch (cause) { setError(cause instanceof HttpError && cause.status === 409 ? 'Confirm your profile first, then check your fit.' : cause instanceof Error ? cause.message : 'Could not start the analysis.'); }
     finally { setBusy(false); }
   };

@@ -73,3 +73,11 @@
 .fit-chip.high { background: #dcf3e6; color: #1b9a66; }
 .fit-chip.mid { background: #fdf1d8; color: #b7791f; }
 .fit-chip.low { background: #fbe2ea; color: #d2406a; }
+
+/* Tracker FIT column: the chip is a button that opens the job; "-" when there is no finished check. */
+button.fit-chip { border: 0; cursor: pointer; font-family: inherit; white-space: nowrap; }
+button.fit-chip:hover { filter: brightness(0.96); }
+.fit-chip.running { background: #edf2ff; color: #3157ce; }
+.fit-chip.notrun { background: #f0f2f5; color: #687168; }
+.fit-cell-empty { color: #9aa5b5; font-weight: 700; }
+.tracker-fit-line { display: flex; align-items: center; gap: 6px; }

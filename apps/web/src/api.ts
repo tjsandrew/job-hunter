@@ -129,7 +129,7 @@ export const api = {
     if (q.trim()) params.set('q', q.trim());
     return request<{ items: Recommendation[]; total: number; next_offset: number | null }>(`/jobs/reviewed?${params}`);
   },
-  fitSummaries: () => request<{ items: FitSummary[] }>('/fit-analyses'),
+  fitSummaries: () => request<{ items: FitSummary[]; running?: string[] }>('/fit-analyses'),
   reviewJob: (id: string, decision: 'saved' | 'dismissed' | 'none') => request(`/jobs/${encodeURIComponent(id)}/review`, json('PUT', { decision })),
   applications: () => request<{ items: Application[] }>('/applications'),
   putApplication: (jobId: string, values: Partial<Application> & { expected_revision?: number; resume_document_id?: string; expected_resume_revision?: number; resume_export_id?: string | null; cover_letter_text?: string | null; cover_letter_document_id?: string | null; expected_cover_letter_revision?: number }) => request<Application>(`/applications/${encodeURIComponent(jobId)}`, json('PUT', values)),

@@ -125,6 +125,8 @@ button, a { transition: background-color 160ms, color 160ms, border-color 160ms,
 .tracker-table th { background: #edf2f9; color: #52647e; padding: 16px; font-size: 10px; letter-spacing: 1px; }
 .tracker-table td { padding: 19px 16px; color: #58677d; }
 .tracker-table tbody tr:hover { background: #fafbfe; }
+/* STATUS, FIT and APPLIED (columns 2 to 4) are centred; ROLE and PACKET stay left. */
+.tracker-table th:nth-child(n+2):nth-child(-n+4), .tracker-table td:nth-child(n+2):nth-child(-n+4) { text-align: center; }
 .tracker-role strong { color: #203752; font-size: 14px; }
 .tracker-role span { color: #58677d; }
 .tracker-responsive-card { border-color: var(--line); border-radius: 14px; padding: 18px; }
