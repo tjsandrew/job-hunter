@@ -515,6 +515,43 @@ describe('Discover: For you and All jobs', () => {
     expect(await screen.findByText(/Fit checked · 40% · out of date/)).toBeInTheDocument();
   });
 
+  it('shows the saved fit score in the tracker and opens the job from it', async () => {
+    const user = userEvent.setup();
+    const job = { id: 'role-3', title: 'UX Designer', company: 'Harbor', location: null };
+    mockApi.fitSummaries.mockResolvedValue({ items: [{ job_id: 'role-3', percent: 62, stale: false }] });
+    mockApi.applications.mockResolvedValue({ items: [{ id: 'app-3', job_id: 'role-3', status: 'saved', notes: '', applied_at: null, revision: 1, job }] });
+    render(<App />); await screen.findByText('Product Designer');
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Application tracker' }));
+    expect(screen.getByRole('columnheader', { name: 'FIT' })).toBeInTheDocument();
+    await user.click((await screen.findAllByRole('button', { name: /Fit with your profile for UX Designer: 62%/ }))[0]);
+    expect(await screen.findByRole('dialog', { name: /UX Designer/ })).toBeInTheDocument();
+    expect(mockApi.jobFit).toHaveBeenCalledWith('role-3');          // the job window holds the full breakdown
+  });
+
+  it('says Not run in the tracker for a job never checked, and opens the job to run it', async () => {
+    const job = { id: 'role-4', title: 'Data Analyst', company: 'Cedar', location: null };
+    mockApi.fitSummaries.mockResolvedValue({ items: [{ job_id: 'role-1', percent: 75, stale: false }], running: [] });     // a different job
+    mockApi.applications.mockResolvedValue({ items: [{ id: 'app-4', job_id: 'role-4', status: 'saved', notes: '', applied_at: null, revision: 1, job }] });
+    const user = userEvent.setup();
+    render(<App />); await screen.findByText('Product Designer');
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Application tracker' }));
+    const notRun = (await screen.findAllByRole('button', { name: /Fit not run for Data Analyst/ }))[0];
+    expect(notRun).toHaveTextContent('Not run');
+    await user.click(notRun);
+    expect(await screen.findByRole('button', { name: 'Check my fit' })).toBeInTheDocument();       // the same window as on Discover
+  });
+
+  it('says In progress in the tracker while a fit check is running', async () => {
+    const job = { id: 'role-5', title: 'Data Engineer', company: 'Birch', location: null };
+    mockApi.fitSummaries.mockResolvedValue({ items: [], running: ['role-5'] });
+    mockApi.applications.mockResolvedValue({ items: [{ id: 'app-5', job_id: 'role-5', status: 'saved', notes: '', applied_at: null, revision: 1, job }] });
+    const user = userEvent.setup();
+    render(<App />); await screen.findByText('Product Designer');
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Application tracker' }));
+    expect((await screen.findAllByRole('button', { name: /Fit check for Data Engineer is in progress/ }))[0]).toHaveTextContent('In progress');
+    expect(screen.queryByRole('button', { name: /Fit not run for Data Engineer/ })).not.toBeInTheDocument();
+  });
+
   it('lists saved jobs on the Saved tab', async () => {
     const user = userEvent.setup();
     mockApi.reviewedJobs.mockResolvedValue({ items: [{ job: { id: 's1', title: 'Saved Analyst', company: 'Acme', location: 'Singapore', description: 'Analyse things carefully.' }, reasons: [], review: 'saved' }], total: 1, next_offset: null });

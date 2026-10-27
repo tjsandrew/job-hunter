@@ -179,16 +179,22 @@ def build_router(db_dependency, current_user):
 
     @router.get("/fit-analyses")
     def finished(db: Session = Depends(db_dependency, scope="function")):
-        """One small row per job this user has a finished analysis for, so job lists can mark the jobs already checked."""
+        """One small row per job this user has a finished analysis for, so job lists can mark the jobs already checked.
+
+        ``running`` lists the jobs whose analysis is still going. Each one is refreshed first, so the tracker can poll this
+        list and see an answer arrive without opening every job."""
         user = current_user(db)
         profile = db.get(Profile, user.id)
         confirmed = profile.confirmed_revision if profile else None
-        rows = db.scalars(select(FitAnalysis).where(FitAnalysis.user_id == user.id, FitAnalysis.status == "ready")
+        rows = db.scalars(select(FitAnalysis).where(FitAnalysis.user_id == user.id, FitAnalysis.status.in_(("ready", "pending")))
                           .order_by(FitAnalysis.completed_at.desc())).all()
+        for row in rows:
+            refresh(db, row)
         return {"items": [{"job_id": str(row.job_id),
                            "percent": ((row.result or {}).get("coverage") or {}).get("percent"),
                            "stale": bool(confirmed and row.profile_revision and confirmed > row.profile_revision)}
-                          for row in rows]}
+                          for row in rows if row.status == "ready"],
+                "running": [str(row.job_id) for row in rows if row.status == "pending"]}
 
     @router.get("/jobs/{job_id}/fit-analysis")
     def latest(job_id: UUID, db: Session = Depends(db_dependency, scope="function")):

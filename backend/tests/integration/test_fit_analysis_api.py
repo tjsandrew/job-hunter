@@ -187,7 +187,11 @@ def test_the_s3_path_writes_a_request_and_reads_the_workers_answer(world, monkey
     assert started.status_code == 202 and started.json()["status"] == "pending"
     analysis_id = started.json()["id"]
     assert client.get(f"/v1/fit-analyses/{analysis_id}", headers=ALICE).json()["status"] == "pending"   # worker has not answered yet
+    assert client.get("/v1/fit-analyses", headers=ALICE).json() == {"items": [], "running": [jobs[0]]}   # the list shows it as running
+    assert client.get("/v1/fit-analyses", headers=CASEY).json()["running"] == []
     assert llm_worker.process(s3, "docs", llm_transport.request_key(analysis_id), client=fake) == "ok"
+    listed = client.get("/v1/fit-analyses", headers=ALICE).json()           # the list alone picks up the worker's answer
+    assert listed["running"] == [] and [item["job_id"] for item in listed["items"]] == [jobs[0]]
     body = client.get(f"/v1/fit-analyses/{analysis_id}", headers=ALICE).json()
     assert body["status"] == "ready" and body["result"]["coverage"]["percent"] == 50
     assert analyse(jobs[0]).status_code == 202            # the same job again is allowed and costs nothing more
@@ -196,7 +200,7 @@ def test_the_s3_path_writes_a_request_and_reads_the_workers_answer(world, monkey
 
 def test_finished_analyses_are_listed_so_job_lists_can_mark_them(world):
     _, jobs, _ = world
-    assert client.get("/v1/fit-analyses", headers=ALICE).json() == {"items": []}
+    assert client.get("/v1/fit-analyses", headers=ALICE).json() == {"items": [], "running": []}
     analyse(jobs[0])
     assert client.get("/v1/fit-analyses", headers=ALICE).json()["items"] == [{"job_id": jobs[0], "percent": 50, "stale": False}]
     assert client.get("/v1/fit-analyses", headers=CASEY).json()["items"] == []     # one user's analyses never show for another
