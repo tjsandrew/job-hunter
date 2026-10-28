@@ -19,6 +19,7 @@ const mockApi = vi.mocked(api);
 beforeEach(() => {
   vi.clearAllMocks();
   clearLists();   // the Discover lists are remembered in memory between renders; each test starts without them
+  sessionStorage.clear();   // and the Discover filter choice for this session, so every test starts from the profile defaults
   history.replaceState(null, '', '/');   // every test starts at the root address
   mockApi.jobFit.mockRejectedValue(new HttpError('Not found', 404));
   mockApi.me.mockResolvedValue({ user_id: '1', display_name: 'Alice Tan', plan: 'free', allowance: { limit: 5, used: 0, remaining: 5, period: '2026-10' }, ai_available: false });
@@ -416,10 +417,11 @@ describe('Discover: For you and All jobs', () => {
     mockApi.recommendationsForYou.mockResolvedValue(semantic());
     mockApi.getPreferences.mockResolvedValue({ roles: ['Backend Engineer'], locations: [], work_modes: [], seniority: 'Junior', salary_min: null, salary_currency: 'SGD', salary_period: 'year', revision: 1 });
     render(<App />);
-    expect(await screen.findByText('Backend Engineer')).toBeInTheDocument();
-    expect(screen.getByText('Python appears in the listing')).toBeInTheDocument();
+    expect(await screen.findByText('Python appears in the listing')).toBeInTheDocument();   // the Role filter pill also says Backend Engineer
+    expect(screen.getByRole('button', { name: 'Backend Engineer' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'For you' })).toHaveAttribute('aria-pressed', 'true');
     expect(mockApi.recommendations).not.toHaveBeenCalled();
+    expect(mockApi.recommendationsForYou).toHaveBeenCalledWith('', 0);   // the saved defaults: no filters are sent
     expect(screen.queryByText(/is unavailable right now/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/sharpen these matches/i)).not.toBeInTheDocument();
   });
@@ -841,5 +843,62 @@ describe('Plan and cover letters in the app', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Write a cover letter' });
     expect(within(dialog).getByRole('combobox', { name: 'Job for this letter' })).toHaveValue('role-3');
     expect(location.pathname).toBe('/resumes/letters');
+  });
+});
+
+describe('Discover filters', () => {
+  const defaults = { roles: ['Backend Engineer'], locations: ['Singapore'], work_modes: ['hybrid'], seniority: 'mid', salary_min: null, salary_currency: 'SGD', salary_period: 'year', revision: 3 };
+  const list = { items: [{ job: { id: 'f-1', title: 'Platform Engineer', company: 'Northstar', location: 'Singapore', work_mode: 'Hybrid' }, score: null, reasons: ['Same kind of role'], review: null }], total: 1, next_offset: null, degraded_mode: false, ranking_mode: 'semantic' as const };
+  beforeEach(() => {
+    mockApi.getPreferences.mockResolvedValue(defaults);
+    mockApi.recommendationsForYou.mockResolvedValue(list);
+  });
+
+  it('starts from the profile preferences, shows them as pills and tags what a job matches', async () => {
+    render(<App />);
+    expect(await screen.findByRole('button', { name: 'Work mode: Hybrid' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Role: Backend Engineer' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'My preferences' })).toBeInTheDocument();
+    expect(await screen.findByText('Platform Engineer')).toBeInTheDocument();
+    const card = screen.getByText('Platform Engineer').closest('article')!;
+    expect(within(card).getByText('Hybrid', { selector: '.preference-match' })).toBeInTheDocument();
+    expect(mockApi.recommendationsForYou).toHaveBeenLastCalledWith('', 0);
+  });
+
+  it('changing a pill filters this session only, and Reset goes back to the defaults', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Work mode: Hybrid' }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Work mode filter' })).getByRole('button', { name: 'Remote' }));
+    expect(screen.getByRole('button', { name: 'Custom' })).toBeInTheDocument();
+    await waitFor(() => expect(mockApi.recommendationsForYou).toHaveBeenLastCalledWith('', 0, expect.objectContaining({ filters: 'custom', work_mode: ['hybrid', 'remote'], role: ['Backend Engineer'] })));
+    expect(mockApi.putPreferences).not.toHaveBeenCalled();
+    expect(JSON.parse(sessionStorage.getItem('jh-discover-filters:alice')!).mode).toBe('custom');
+    await user.click(screen.getByRole('button', { name: 'Reset to my preferences' }));
+    expect(screen.getByRole('button', { name: 'My preferences' })).toBeInTheDocument();
+    await waitFor(() => expect(mockApi.recommendationsForYou).toHaveBeenLastCalledWith('', 0));
+  });
+
+  it('can show every job without preferences', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'My preferences' }));
+    await user.click(screen.getByRole('menuitemradio', { name: /No filters/ }));
+    await waitFor(() => expect(mockApi.recommendationsForYou).toHaveBeenLastCalledWith('', 0, { filters: 'none' }));
+    expect(screen.getByRole('button', { name: 'Work mode: Any work mode' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Use my preferences' }));
+    await waitFor(() => expect(mockApi.recommendationsForYou).toHaveBeenLastCalledWith('', 0));
+  });
+
+  it('saves the current filters as the new profile default on request', async () => {
+    const user = userEvent.setup();
+    mockApi.putPreferences.mockImplementation(async (values: any) => ({ ...values, revision: 4 }));
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Work mode: Hybrid' }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Work mode filter' })).getByRole('button', { name: 'Remote' }));
+    await user.click(screen.getByRole('button', { name: 'Save to profile' }));
+    await waitFor(() => expect(mockApi.putPreferences).toHaveBeenCalledWith(expect.objectContaining({ work_modes: ['hybrid', 'remote'], roles: ['Backend Engineer'], expected_revision: 3 })));
+    expect(await screen.findByRole('button', { name: 'My preferences' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Work mode: Hybrid, Remote' })).toBeInTheDocument();
   });
 });
