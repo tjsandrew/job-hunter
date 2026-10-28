@@ -1,5 +1,5 @@
 import { downloadFile } from './download';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, getDevUser, setDevUser, HttpError } from './api';
 import { cloudAuth, signOut, signedInEmail } from './auth';
 import { blankContent } from './editor';
@@ -11,6 +11,8 @@ import { PlanPanel, PlanPill } from './plan/PlanPanel';
 import type { Application, CoverLetter, DiscoverMode, FitSummary, Job, Me, Recommendation, Resume, ResumeContent } from './types';
 
 import { FitPanel } from './FitPanel';
+import { FilterBar } from './discover/FilterBar';
+import { activePreferences, cleanPreferences, emptyPreferences, filterQuery, loadChoice, preferenceMatches, storeChoice, type FilterChoice, type JobPreferences } from './discover/filters';
 import { BrandLogo, Field, Icon, Loading, Pill, SelectField, fmtDate } from './ui';
 import { emptyProfile, profileToForm } from './profile/form';
 import { ProfileView } from './profile/ProfileView';
@@ -65,6 +67,13 @@ export default function App() {
   const [profileBusy, setProfileBusy] = useState(false);
   const [preferences, setPreferences] = useState<any>({ roles: [], locations: [], work_modes: [], seniority: '', salary_min: '', salary_currency: 'SGD', salary_period: 'year' });
   const [prefSaving, setPrefSaving] = useState(false);
+  // The last saved preferences (Profile edits stay out of Discover until saved) and Discover's filter choice for this session.
+  const [savedPreferences, setSavedPreferences] = useState<JobPreferences>(emptyPreferences);
+  const [filterChoice, setFilterChoiceState] = useState<FilterChoice>(() => loadChoice(getDevUser()) || { mode: 'profile', custom: emptyPreferences() });
+  const setFilterChoice = (choice: FilterChoice) => { setFilterChoiceState(choice); storeChoice(user, choice); };
+  const jobFilters = useMemo(() => filterQuery(filterChoice), [filterChoice]);
+  const filterKey = JSON.stringify(jobFilters ?? null);
+  const shownPreferences = activePreferences(filterChoice, savedPreferences);
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
   const [extractedResumeText, setExtractedResumeText] = useState('');
@@ -108,6 +117,7 @@ export default function App() {
         setMe(identity);
         setProfile(profileToForm(profileData.draft));
         setPreferences({ ...preferences, ...prefs, salary_min: prefs.salary_min ?? '' });
+        setSavedPreferences(cleanPreferences(prefs));
       }).catch((error: Error) => alive && setFatal(error.message)).finally(() => alive && setBusy(false));
     return () => { alive = false; };
   }, [user, bootstrapAttempt]);
@@ -134,7 +144,7 @@ export default function App() {
       setForYouNote(result.note); setForYouPending(result.pending);
     };
     // A list seen a moment ago (same tab, search and refresh count) is shown at once; an older one is shown while a newer one is fetched.
-    const key = listKey(user, effectiveMode, query.trim(), refresh, bootstrapAttempt, forYouRecheck, forYouAvailable);
+    const key = listKey(user, effectiveMode, query.trim(), refresh, bootstrapAttempt, forYouRecheck, forYouAvailable, filterKey);
     const cached = readList<JobsResult>(key);
     if (cached) show(cached.value);
     setRecommendationLoading(!cached);
@@ -145,7 +155,7 @@ export default function App() {
       }).catch((error: Error) => alive && !cached && setFatal(error.message)).finally(() => alive && setRecommendationLoading(false));
     }, cached ? 0 : 250);
     return () => { alive = false; clearTimeout(timer); if (searchRequestRevision.current === revision) searchRequestRevision.current += 1; };
-  }, [user, query, refresh, bootstrapAttempt, discoverMode, page, forYouRecheck]);
+  }, [user, query, refresh, bootstrapAttempt, discoverMode, page, forYouRecheck, filterKey]);
 
   useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => { setToast(''); setToastAction(null); }, toastAction ? 9000 : Math.min(10000, Math.max(3200, toast.length * 55))); return () => window.clearTimeout(timer); }, [toast, toastAction]);
   const announce = (message: string) => { setToast(message); setToastAction(null); };
@@ -169,6 +179,7 @@ export default function App() {
     setJobs([]); setRecommendationLoading(true); setRecordsLoading(true); setRecommendationTotal(0); setNextJobOffset(null); setRankingStatus(''); setApps([]); setResumes([]);
     setProfile(emptyProfile); setFitMarks({}); setFitRunning([]); setDiscoverMode('for-you');
     setPreferences({ roles: [], locations: [], work_modes: [], seniority: '', salary_min: '', salary_currency: 'SGD', salary_period: 'year', revision: 0 });
+    setSavedPreferences(emptyPreferences()); setFilterChoiceState(loadChoice(next) || { mode: 'profile', custom: emptyPreferences() });
     setUploadMessage(''); setExtractedResumeText(''); setQuery(''); setTrackerQuery(''); setStatusFilter('all');
     setActiveResume(null); setHistory([]); setFuture([]); setSaveLabel('Saved'); setStudioTab('edit'); setTrackerEdit(null); setResumeAttachTarget(null); setJobDetail(null);
     if (previewUrl) URL.revokeObjectURL(previewUrl); setPreviewUrl(''); setToast('');
@@ -177,17 +188,19 @@ export default function App() {
 
   // "For you" first; if it cannot answer (disabled, error) fall back to the original keyword list and say so.
   const fetchJobs = async (mode: DiscoverMode, q: string, offset: number) => {
+    // Discover filters go with For you and All jobs only; nothing is sent while they are the saved profile defaults.
+    const keyword = () => (jobFilters ? api.recommendations(q, offset, jobFilters) : api.recommendations(q, offset));
     if (mode === 'saved' || mode === 'passed') return { ...(await api.reviewedJobs(mode === 'saved' ? 'saved' : 'dismissed', q, offset)), note: '', pending: false };
-    if (mode === 'all' || !forYouAvailable) return { ...(await api.recommendations(q, offset)), note: '', pending: false };
+    if (mode === 'all' || !forYouAvailable) return { ...(await keyword()), note: '', pending: false };
     try {
-      const result = await api.recommendationsForYou(q, offset);
+      const result = await (jobFilters ? api.recommendationsForYou(q, offset, jobFilters) : api.recommendationsForYou(q, offset));
       return { ...result, note: result.ranking_mode === 'keyword_fallback' ? (result.fallback_reason || 'For you is not ready yet, so all jobs are shown.') : '', pending: result.ranking_mode === 'keyword_fallback' && result.fallback_code === 'profile_embedding_pending' };
     } catch (error) {
       if (error instanceof HttpError && error.code === 'FOR_YOU_DISABLED') {   // switched off on this deployment: not an error, so no note and no further tries
         setForYouAvailable(false);
-        return { ...(await api.recommendations(q, offset)), note: '', pending: false };
+        return { ...(await keyword()), note: '', pending: false };
       }
-      return { ...(await api.recommendations(q, offset)), note: 'For you is unavailable right now, so all jobs are shown.', pending: false };
+      return { ...(await keyword()), note: 'For you is unavailable right now, so all jobs are shown.', pending: false };
     }
   };
 
@@ -226,18 +239,24 @@ export default function App() {
     catch (error) { setUploadMessage(''); announce((error as Error).message); }
     finally { setUploading(false); }
   };
-  const savePreferences = async () => {
+  // Saves job preferences as the profile default (Profile's form, or Discover's "Save to profile"). Returns whether it saved.
+  const persistPreferences = async (values: any): Promise<boolean> => {
     setPrefSaving(true);
     const list = (value: unknown): string[] => (Array.isArray(value) ? value.map((x) => String(x).trim()).filter(Boolean) : []);
-    const payload = { ...preferences, roles: list(preferences.roles), locations: list(preferences.locations), work_modes: list(preferences.work_modes), salary_min: preferences.salary_min === '' ? null : Number(preferences.salary_min), expected_revision: preferences.revision || 0 };
-    try { const updated: any = await api.putPreferences(payload); setPreferences({ ...preferences, ...updated }); setRefresh((x) => x + 1); announce('Preferences saved.'); }
+    const payload = { ...values, roles: list(values.roles), locations: list(values.locations), work_modes: list(values.work_modes), salary_min: values.salary_min === '' || values.salary_min === null ? null : Number(values.salary_min), expected_revision: preferences.revision || 0 };
+    try { const updated: any = await api.putPreferences(payload); setPreferences({ ...preferences, ...updated, salary_min: updated.salary_min ?? '' }); setSavedPreferences(cleanPreferences(updated)); setRefresh((x) => x + 1); announce('Preferences saved.'); return true; }
     catch (error) {
       if (error instanceof HttpError && error.status === 409) {
-        try { const latest = await api.getPreferences(); setPreferences({ ...latest, salary_min: latest.salary_min ?? '' }); announce('This changed elsewhere, reloaded'); }
+        try { const latest = await api.getPreferences(); setPreferences({ ...latest, salary_min: latest.salary_min ?? '' }); setSavedPreferences(cleanPreferences(latest)); announce('This changed elsewhere, reloaded'); }
         catch (reloadError) { announce((reloadError as Error).message); }
       } else announce((error as Error).message);
+      return false;
     }
     finally { setPrefSaving(false); }
+  };
+  const savePreferences = () => { void persistPreferences(preferences); };
+  const saveFiltersAsDefault = async (values: JobPreferences) => {
+    if (await persistPreferences(values)) setFilterChoice({ mode: 'profile', custom: cleanPreferences(values) });
   };
 
   const createResume = async (jobId?: string) => {
@@ -520,7 +539,7 @@ export default function App() {
         {fatal && <div className="fatal"><div className="fatal-icon">!</div><div><strong>Could not load your workspace</strong><p>{fatal}</p><button className="button secondary small-button" onClick={() => { setFatal(''); setBootstrapAttempt((x) => x + 1); setRefresh((x) => x + 1); }}>Try again</button></div></div>}
         {!fatal && busy && <Loading label="Connecting to your workspace…" />}
         {!fatal && !busy && <>
-          {page === 'discover' && <Discover jobs={jobs} loading={recommendationLoading} total={recommendationTotal} hasMore={nextJobOffset !== null} loadingMore={loadingMoreJobs} onLoadMore={loadMoreJobs} query={query} setQuery={setQuery} busyJob={busyJob} onReview={review} onDetails={setJobDetail} degraded={recommendationsDegraded} rankingStatus={rankingStatus} mode={effectiveMode} forYouAvailable={forYouAvailable} setMode={setDiscoverMode} fitMarks={fitMarks} forYouNote={forYouNote} forYouPending={forYouPending} onRecheck={() => setForYouRecheck((x) => x + 1)} thinProfile={!(preferences.roles || []).length || !preferences.seniority} aiReady={!!(me?.ai_available || me?.fit_available)} />}
+          {page === 'discover' && <Discover jobs={jobs} loading={recommendationLoading} total={recommendationTotal} hasMore={nextJobOffset !== null} loadingMore={loadingMoreJobs} onLoadMore={loadMoreJobs} query={query} setQuery={setQuery} busyJob={busyJob} onReview={review} onDetails={setJobDetail} degraded={recommendationsDegraded} rankingStatus={rankingStatus} mode={effectiveMode} forYouAvailable={forYouAvailable} setMode={setDiscoverMode} fitMarks={fitMarks} forYouNote={forYouNote} forYouPending={forYouPending} onRecheck={() => setForYouRecheck((x) => x + 1)} thinProfile={!shownPreferences.roles.length || !shownPreferences.seniority} aiReady={!!(me?.ai_available || me?.fit_available)} filterBar={<FilterBar choice={filterChoice} setChoice={setFilterChoice} saved={savedPreferences} saving={prefSaving} onSaveDefault={(values) => void saveFiltersAsDefault(values)} onEditDefaults={() => setPage('profile')} />} matchPreferences={shownPreferences} />}
           {page === 'profile' && <ProfileView key={user} userKey={user} onChanged={() => setRefresh(value => value + 1)} onBasicsSaved={draft => setProfile(profileToForm(draft))} onOpenResume={openResume} onOpenLibrary={openResumeLibrary} preferences={preferences} setPreferences={setPreferences} savePreferences={savePreferences} savingPreferences={prefSaving} uploading={uploading} uploadMessage={uploadMessage} extractedResumeText={extractedResumeText} onUpload={uploadProfileResume} resumes={resumes} onBusyChange={setProfileBusy} />}
           {page === 'tracker' && <Tracker apps={filteredApps} loading={recordsLoading} query={trackerQuery} setQuery={setTrackerQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onEdit={setTrackerEdit} fitMarks={fitMarks} fitRunning={fitRunning} onOpenJob={setJobDetail} />}
           {page === 'studio' && section === 'letters' && <Letters me={me} apps={apps} resumeCount={resumes.length} activeId={activeLetterId} target={letterTarget} refresh={refresh} onOpen={openLetter} onTargetDone={letterTargetDone} onSection={switchSection} onMeChanged={refreshMe} onApplicationSaved={applicationSaved} announce={announce} />}
@@ -538,15 +557,16 @@ export default function App() {
   </div>;
 }
 
-function Discover({ jobs, loading, total, hasMore, loadingMore, onLoadMore, query, setQuery, busyJob, onReview, onDetails, degraded, rankingStatus, mode, setMode, forYouNote, forYouPending, onRecheck, thinProfile, forYouAvailable, aiReady, fitMarks }: { jobs: Recommendation[]; loading: boolean; total: number; hasMore: boolean; loadingMore: boolean; onLoadMore: () => void; query: string; setQuery: (v: string) => void; busyJob: string; onReview: (job: Job, decision: 'saved' | 'dismissed' | 'none') => void; onDetails: (job: Job) => void; degraded: boolean; rankingStatus: string; mode: DiscoverMode; setMode: (mode: DiscoverMode) => void; forYouNote: string; forYouPending: boolean; onRecheck: () => void; thinProfile: boolean; forYouAvailable: boolean; aiReady: boolean; fitMarks: Record<string, FitSummary> }) {
+function Discover({ jobs, loading, total, hasMore, loadingMore, onLoadMore, query, setQuery, busyJob, onReview, onDetails, degraded, rankingStatus, mode, setMode, forYouNote, forYouPending, onRecheck, thinProfile, forYouAvailable, aiReady, fitMarks, filterBar, matchPreferences }: { filterBar: ReactNode; matchPreferences: JobPreferences; jobs: Recommendation[]; loading: boolean; total: number; hasMore: boolean; loadingMore: boolean; onLoadMore: () => void; query: string; setQuery: (v: string) => void; busyJob: string; onReview: (job: Job, decision: 'saved' | 'dismissed' | 'none') => void; onDetails: (job: Job) => void; degraded: boolean; rankingStatus: string; mode: DiscoverMode; setMode: (mode: DiscoverMode) => void; forYouNote: string; forYouPending: boolean; onRecheck: () => void; thinProfile: boolean; forYouAvailable: boolean; aiReady: boolean; fitMarks: Record<string, FitSummary> }) {
   return <div className="page-wrap"><div className="page-heading"><div><div className="eyebrow">YOUR NEXT OPPORTUNITY</div><h1>Find your next move.</h1><p>Explore roles matched to your experience and preferences.</p></div>{!aiReady && <span className="ai-unavailable-badge">AI unavailable</span>}</div>
     <div className="discovery-summary"><div className="discovery-icon"><Icon name="search" /></div><div><strong>Opportunities from your sources</strong><p>{mode === 'saved' ? `${total} roles you saved. They are also in your tracker.` : mode === 'passed' ? `${total} roles you passed on. Restore one to see it in Discover again.` : `${total} roles match your current filters. Review each one and save what feels right.`}</p></div></div>
     <div className="mode-toggle" role="group" aria-label="Job list">{([['for-you', 'For you'], ['all', 'All jobs'], ['saved', 'Saved'], ['passed', 'Passed']] as const).filter(([key]) => key !== 'for-you' || forYouAvailable).map(([key, label]) => <button key={key} type="button" aria-pressed={mode === key} className={mode === key ? 'on' : ''} onClick={() => setMode(key)}>{label}</button>)}</div>
     <div className="toolbar"><label className="search-field"><Icon name="search" /><input aria-label="Search jobs" placeholder="Search title, company, location..." value={query} onChange={(e) => setQuery(e.target.value)} /></label><span className="result-count">{total} results</span></div>
+    {(mode === 'for-you' || mode === 'all') && filterBar}
     {mode === 'for-you' && forYouNote && <div className="degraded-note" role="status"><span className="note-dot" /> {forYouNote}{forYouPending && <button type="button" className="button secondary small-button recheck-button" disabled={loading} onClick={onRecheck}>Check again</button>}</div>}
-    {mode === 'for-you' && !forYouNote && thinProfile && <div className="degraded-note"><span className="note-dot" /> Add your target roles and seniority in Job preferences to sharpen these matches.</div>}
+    {mode === 'for-you' && !forYouNote && thinProfile && <div className="degraded-note"><span className="note-dot" /> Add target roles and a level in your filters to sharpen these matches.</div>}
     {(mode === 'all' || (forYouNote && !forYouPending)) && degraded && <div className="degraded-note"><span className="note-dot" /> {rankingStatus || 'Local text and skill matching is active.'}</div>}
-    {jobs.length ? <><div className="job-list">{jobs.map(({ job, reasons, review }) => { const sourceUrl = safeHttpUrl(job.url || job.source_url); return <article className="job-card" key={job.id}><div className="company-logo">{initials(job.company || 'Company')}</div><div className="job-main"><div className="job-title-row"><h2><button className="job-title-button" onClick={() => onDetails(job)}>{job.title}</button></h2></div><div className="company-line"><strong>{job.company}</strong><span>·</span><span>{job.location || 'Location not specified'}</span>{job.work_mode && job.work_mode !== 'Not stated' && <><span>·</span><span>{job.work_mode}</span></>}</div><div className="job-tags">{fitMarks[job.id] && <span className={`fit-chip ${fitMarks[job.id].percent === null ? 'none' : fitMarks[job.id].percent! >= 70 ? 'high' : fitMarks[job.id].percent! >= 40 ? 'mid' : 'low'}`} title={fitMarks[job.id].stale ? 'You checked this job before your profile changed. Open it and run the check again.' : 'You have already checked your fit for this job.'}><Icon name="check" /> Fit checked{fitMarks[job.id].percent !== null ? ` · ${fitMarks[job.id].percent}%` : ''}{fitMarks[job.id].stale ? ' · out of date' : ''}</span>}{job.employment_type && <Pill>{job.employment_type}</Pill>}{job.salary_min != null && <Pill>{job.salary_currency || ''} {Number(job.salary_min).toLocaleString()}{job.salary_max != null ? `–${Number(job.salary_max).toLocaleString()}` : '+'} {job.salary_period ? `/ ${salaryPeriod(job.salary_period)}` : ''}</Pill>}{job.source && <Pill>{sourceLabel(job)}</Pill>}{otherSources(job).length > 0 && <span className="pill blue" title="The same posting is listed on more than one site; we show it once.">Also on {otherSources(job).join(', ')}</span>}</div>{reasons?.length ? <div className="match-reasons"><span>WHY IT MATCHES</span>{reasons.slice(0, 2).map((reason) => <span key={reason} className="reason"><Icon name="check" />{reason}</span>)}</div> : null}<p className="job-description">{job.description || 'The source did not provide a description.'}</p><button type="button" className="job-details-button" onClick={() => onDetails(job)}>Read full description</button><div className="job-foot">{job.posted_at && <span>Posted {fmtDay(job.posted_at)}</span>}{job.fetched_at && <span>Source checked {fmtDay(job.fetched_at)}</span>}{sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer">View source listing ↗</a>}</div></div>{mode === 'passed' ? <div className="job-actions"><button className="button ghost" disabled={busyJob === job.id} onClick={() => onReview(job, 'none')}><Icon name="undo" /> Restore</button><button className="button primary" disabled={busyJob === job.id} onClick={() => onReview(job, 'saved')}><Icon name="save" /> Save job</button></div> : mode === 'saved' ? <div className="job-actions"><button className="button primary" disabled><Icon name="save" /> Saved</button></div> : <div className="job-actions"><button className="button ghost" disabled={busyJob === job.id} onClick={() => onReview(job, 'dismissed')}><Icon name="close" /> Pass</button><button className="button primary" disabled={busyJob === job.id || review === 'saved'} onClick={() => onReview(job, 'saved')}><Icon name="save" /> {review === 'saved' ? 'Saved' : 'Save job'}</button></div>}</article>; })}</div>{hasMore && <div className="load-more-row"><span>Showing {jobs.length} of {total}</span><button className="button secondary" onClick={onLoadMore} disabled={loadingMore}>{loadingMore ? 'Loading…' : 'Load more roles'}</button></div>}</> : loading ? <Loading label="Loading matching roles…" /> : <div className="empty-state"><div className="empty-art">⌕</div><h2>{mode === 'saved' ? 'No saved roles yet' : mode === 'passed' ? 'No passed roles' : 'No roles found'}</h2><p>{mode === 'saved' ? 'Roles you save from Discover appear here, and in your tracker.' : mode === 'passed' ? 'Roles you pass on appear here, so you can bring one back.' : 'Try a different search or come back after new listings arrive.'}</p></div>}
+    {jobs.length ? <><div className="job-list">{jobs.map(({ job, reasons, review }) => { const sourceUrl = safeHttpUrl(job.url || job.source_url); return <article className="job-card" key={job.id}><div className="company-logo">{initials(job.company || 'Company')}</div><div className="job-main"><div className="job-title-row"><h2><button className="job-title-button" onClick={() => onDetails(job)}>{job.title}</button></h2></div><div className="company-line"><strong>{job.company}</strong><span>·</span><span>{job.location || 'Location not specified'}</span>{job.work_mode && job.work_mode !== 'Not stated' && <><span>·</span><span>{job.work_mode}</span></>}</div><div className="job-tags">{mode !== 'saved' && mode !== 'passed' && preferenceMatches(job, matchPreferences).map((tag) => <span className="preference-match" key={tag}><Icon name="check" />{tag}</span>)}{fitMarks[job.id] && <span className={`fit-chip ${fitMarks[job.id].percent === null ? 'none' : fitMarks[job.id].percent! >= 70 ? 'high' : fitMarks[job.id].percent! >= 40 ? 'mid' : 'low'}`} title={fitMarks[job.id].stale ? 'You checked this job before your profile changed. Open it and run the check again.' : 'You have already checked your fit for this job.'}><Icon name="check" /> Fit checked{fitMarks[job.id].percent !== null ? ` · ${fitMarks[job.id].percent}%` : ''}{fitMarks[job.id].stale ? ' · out of date' : ''}</span>}{job.employment_type && <Pill>{job.employment_type}</Pill>}{job.salary_min != null && <Pill>{job.salary_currency || ''} {Number(job.salary_min).toLocaleString()}{job.salary_max != null ? `–${Number(job.salary_max).toLocaleString()}` : '+'} {job.salary_period ? `/ ${salaryPeriod(job.salary_period)}` : ''}</Pill>}{job.source && <Pill>{sourceLabel(job)}</Pill>}{otherSources(job).length > 0 && <span className="pill blue" title="The same posting is listed on more than one site; we show it once.">Also on {otherSources(job).join(', ')}</span>}</div>{reasons?.length ? <div className="match-reasons"><span>WHY IT MATCHES</span>{reasons.slice(0, 2).map((reason) => <span key={reason} className="reason"><Icon name="check" />{reason}</span>)}</div> : null}<p className="job-description">{job.description || 'The source did not provide a description.'}</p><button type="button" className="job-details-button" onClick={() => onDetails(job)}>Read full description</button><div className="job-foot">{job.posted_at && <span>Posted {fmtDay(job.posted_at)}</span>}{job.fetched_at && <span>Source checked {fmtDay(job.fetched_at)}</span>}{sourceUrl && <a href={sourceUrl} target="_blank" rel="noreferrer">View source listing ↗</a>}</div></div>{mode === 'passed' ? <div className="job-actions"><button className="button ghost" disabled={busyJob === job.id} onClick={() => onReview(job, 'none')}><Icon name="undo" /> Restore</button><button className="button primary" disabled={busyJob === job.id} onClick={() => onReview(job, 'saved')}><Icon name="save" /> Save job</button></div> : mode === 'saved' ? <div className="job-actions"><button className="button primary" disabled><Icon name="save" /> Saved</button></div> : <div className="job-actions"><button className="button ghost" disabled={busyJob === job.id} onClick={() => onReview(job, 'dismissed')}><Icon name="close" /> Pass</button><button className="button primary" disabled={busyJob === job.id || review === 'saved'} onClick={() => onReview(job, 'saved')}><Icon name="save" /> {review === 'saved' ? 'Saved' : 'Save job'}</button></div>}</article>; })}</div>{hasMore && <div className="load-more-row"><span>Showing {jobs.length} of {total}</span><button className="button secondary" onClick={onLoadMore} disabled={loadingMore}>{loadingMore ? 'Loading…' : 'Load more roles'}</button></div>}</> : loading ? <Loading label="Loading matching roles…" /> : <div className="empty-state"><div className="empty-art">⌕</div><h2>{mode === 'saved' ? 'No saved roles yet' : mode === 'passed' ? 'No passed roles' : 'No roles found'}</h2><p>{mode === 'saved' ? 'Roles you save from Discover appear here, and in your tracker.' : mode === 'passed' ? 'Roles you pass on appear here, so you can bring one back.' : 'Try a different search or come back after new listings arrive.'}</p></div>}
   </div>;
 }
 

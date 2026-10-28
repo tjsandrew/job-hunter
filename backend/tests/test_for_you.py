@@ -110,12 +110,34 @@ def test_for_you_fallback_says_whether_the_profile_is_still_being_prepared(monke
     try:
         client = _wire_for_you(monkeypatch, None)
         monkeypatch.setattr(main.semantic, "semantic_for_you", lambda *a, **k: (None, getattr(main.semantic, reason)))
-        monkeypatch.setattr(main, "recommendations", lambda **k: {"items": [], "total": 0, "next_offset": None, "degraded_mode": True})
+        monkeypatch.setattr(main, "keyword_recommendations", lambda *a, **k: {"items": [], "total": 0, "next_offset": None, "degraded_mode": True})
         body = client.get("/v1/recommendations/for-you").json()
     finally:
         app.dependency_overrides.pop(db_for, None)
     assert body["ranking_mode"] == "keyword_fallback" and body["fallback_code"] == code
     assert body["fallback_reason"] == getattr(main.semantic, reason)
+
+
+def test_for_you_ranks_with_discover_filters_instead_of_saved_preferences(monkeypatch):
+    from job_hunter.api import main
+
+    seen = {}
+    try:
+        client = _wire_for_you(monkeypatch, "0")
+        monkeypatch.setattr(main, "effective_preferences", lambda db, chosen: chosen if chosen is not None else {"saved": True})
+        original = main.semantic.semantic_for_you
+        def capture(db, confirmed, preferences, skipped):
+            seen["preferences"] = preferences
+            return original(db, confirmed, preferences, skipped)
+        monkeypatch.setattr(main.semantic, "semantic_for_you", capture)
+        client.get("/v1/recommendations/for-you", params={"filters": "custom", "work_mode": "remote", "seniority": "junior"})
+        assert seen["preferences"]["work_modes"] == ["remote"] and seen["preferences"]["seniority"] == "junior"
+        client.get("/v1/recommendations/for-you", params={"filters": "none"})
+        assert seen["preferences"] == {}
+        client.get("/v1/recommendations/for-you")
+        assert seen["preferences"] == {"saved": True}
+    finally:
+        app.dependency_overrides.pop(db_for, None)
 
 
 def test_the_preparing_message_is_user_facing():

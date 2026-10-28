@@ -104,15 +104,23 @@ class ProfileWrite(BaseModel):
 class ConfirmWrite(BaseModel):
     expected_bank_revision: int = Field(ge=0)
 
-class PreferencesWrite(BaseModel):
-    roles: list[str] = []
-    locations: list[str] = []
-    work_modes: list[str] = []
+class PreferencesFilter(BaseModel):
+    """Job preferences as a filter: saved as the profile default, or sent with one Discover request."""
+    roles: list[str] = Field(default=[], max_length=20)
+    locations: list[str] = Field(default=[], max_length=20)
+    work_modes: list[str] = Field(default=[], max_length=3)
     seniority: str | None = None
-    salary_min: float | None = None
+    salary_min: float | None = Field(default=None, ge=0)
     salary_currency: str | None = "SGD"
     salary_period: str | None = "year"
-    expected_revision: int
+
+    @field_validator("roles", "locations", "work_modes")
+    @classmethod
+    def tidy_labels(cls, values: list[str]) -> list[str]:
+        cleaned = [value.strip() for value in values if value and value.strip()]
+        if any(len(value) > 100 for value in cleaned):
+            raise ValueError("each value must be at most 100 characters")
+        return cleaned
 
     @field_validator("seniority")
     @classmethod
@@ -124,6 +132,36 @@ class PreferencesWrite(BaseModel):
                                      value.strip().casefold() in {"entry", "mid-level"}):
             return normalized[0]
         raise ValueError("seniority must be one of the supported levels")
+
+class PreferencesWrite(PreferencesFilter):
+    expected_revision: int
+
+def discover_filters(filters: Literal["saved", "none", "custom"] = Query("saved"),
+                     role: list[str] = Query([]), location: list[str] = Query([]),
+                     work_mode: list[str] = Query([]), seniority: str | None = Query(None, max_length=40),
+                     salary_min: float | None = Query(None, ge=0),
+                     salary_currency: str | None = Query(None, max_length=8),
+                     salary_period: str | None = Query(None, max_length=10)) -> dict | None:
+    """Which preferences a Discover request ranks with. None means the user's saved preferences.
+
+    ``custom`` filters apply to this one request and are never saved; ``none`` ranks with no preferences at all."""
+    if filters == "saved":
+        return None
+    if filters == "none":
+        return {}
+    try:
+        return PreferencesFilter(roles=role, locations=location, work_modes=work_mode, seniority=seniority,
+                                 salary_min=salary_min, salary_currency=salary_currency or "SGD",
+                                 salary_period=salary_period or "year").model_dump()
+    except ValidationError as exc:
+        raise HTTPException(422, detail={"code": "INVALID_FILTERS", "message": "These filters are not valid",
+                                         "errors": [error["msg"] for error in exc.errors()]}) from exc
+
+def effective_preferences(db: Session, chosen: dict | None) -> dict:
+    if chosen is not None:
+        return chosen
+    saved = db.get(Preference, current_user(db).id)
+    return saved.data if saved else {}
 
 class ReviewWrite(BaseModel):
     decision: str
@@ -341,12 +379,15 @@ def update_preferences(body: PreferencesWrite, db: Session = Depends(db_for, sco
 @app.get("/v1/recommendations")
 def recommendations(db: Session = Depends(db_for, scope="function"), limit: int = Query(20, ge=1, le=100),
                      offset: int = Query(0, ge=0, le=1000000),
-                     q: str | None = Query(None, max_length=200)):
+                     q: str | None = Query(None, max_length=200),
+                     chosen: dict | None = Depends(discover_filters)):
+    return keyword_recommendations(db, limit, offset, q, effective_preferences(db, chosen))
+
+def keyword_recommendations(db: Session, limit: int, offset: int, q: str | None, prefs: dict) -> dict:
     jobs = db.scalars(select(Job).where(Job.status == "open", Job.canonical_job_id.is_(None))).all()
     skipped = skipped_job_ids(db)
-    prefs = db.get(Preference, current_user(db).id)
     candidates = [job_out(job) for job in jobs if str(job.id) not in skipped]
-    ranked = rank_jobs(candidates, bank_services.build_profile_snapshot(db), prefs.data if prefs else {})
+    ranked = rank_jobs(candidates, bank_services.build_profile_snapshot(db), prefs)
     query = q.strip().casefold() if q else ""
     if query:
         ranked = [row for row in ranked if query in " ".join(str(row["job"].get(field) or "")
@@ -364,20 +405,22 @@ def recommendations(db: Session = Depends(db_for, scope="function"), limit: int 
 @app.get("/v1/recommendations/for-you")
 def recommendations_for_you(db: Session = Depends(db_for, scope="function"), limit: int = Query(20, ge=1, le=100),
                             offset: int = Query(0, ge=0, le=1000000),
-                            q: str | None = Query(None, max_length=200)):
+                            q: str | None = Query(None, max_length=200),
+                            chosen: dict | None = Depends(discover_filters)):
     """Semantic recommendations (eligibility, role/seniority checks, then similarity), behind FOR_YOU_ENABLED.
 
     Falls back to the keyword ranker, and says so in ``ranking_mode`` / ``fallback_reason``, whenever the
-    profile has no confirmed version or no vector. The existing /v1/recommendations is unchanged."""
+    profile has no confirmed version or no vector. The existing /v1/recommendations is unchanged.
+    Discover filters (``filters=custom|none``) replace the saved preferences for this request only; the profile's
+    vector still comes from what was saved."""
     if not embedding_settings.for_you_enabled():
         raise HTTPException(404, detail={"code": "FOR_YOU_DISABLED", "message": "Semantic recommendations are not enabled"})
-    user_id = current_user(db).id
-    prefs = db.get(Preference, user_id)
+    prefs = effective_preferences(db, chosen)
     skipped = sorted(skipped_job_ids(db))
     confirmed = bank_services.get_confirmed_snapshot(db)
-    result, reason = semantic.semantic_for_you(db, confirmed, prefs.data if prefs else {}, skipped)
+    result, reason = semantic.semantic_for_you(db, confirmed, prefs, skipped)
     if result is None:
-        base = recommendations(db=db, limit=limit, offset=offset, q=q)
+        base = keyword_recommendations(db, limit, offset, q, prefs)
         code = "profile_embedding_pending" if reason == semantic.NO_VECTOR else "no_profile"   # the page offers "Check again" only for the first
         return {**base, "ranking_mode": "keyword_fallback", "fallback_reason": reason, "fallback_code": code}
     ordered, fused = result.ranked, False
@@ -385,14 +428,14 @@ def recommendations_for_you(db: Session = Depends(db_for, scope="function"), lim
         try:   # merge the keyword ranking in; if it cannot be computed, keep the semantic order rather than fail the page
             open_jobs = db.scalars(select(Job).where(Job.status == "open", Job.canonical_job_id.is_(None))).all()
             keyword_ranked = rank_jobs([job_out(job) for job in open_jobs if str(job.id) not in set(skipped)],
-                                       bank_services.build_profile_snapshot(db), prefs.data if prefs else {})
+                                       bank_services.build_profile_snapshot(db), prefs)
             ordered, fused = semantic.fuse_with_keyword(result.ranked, keyword_ranked), True
         except Exception:
             logging.getLogger(__name__).exception("For you: keyword fusion failed; serving the semantic order")
     ranked = semantic.matching(db, ordered, q, job_out)
     total = len(ranked)
     return {"items": semantic.page_items(db, ranked, offset, limit, job_out, snapshot=confirmed[2],
-                                         preferences=prefs.data if prefs else {}), "total": total,
+                                         preferences=prefs), "total": total,
             "next_offset": offset + limit if offset + limit < total else None,
             "degraded_mode": False, "ranking_mode": "semantic", "ranking_fusion": FUSION_VERSION if fused else None,
             "ranking_version": semantic.FUSED_RANKING_VERSION if fused else semantic.RANKING_VERSION,

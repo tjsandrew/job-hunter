@@ -37,6 +37,15 @@ async function fetchApi(url: string, init: RequestInit): Promise<Response> {
   return (await task).clone();
 }
 
+export type JobFilterQuery = Record<string, string | string[]>;
+
+function listParams(q: string, offset: number, limit: number, filters?: JobFilterQuery) {
+  const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
+  if (q.trim()) params.set('q', q.trim());
+  for (const [name, value] of Object.entries(filters || {})) for (const item of Array.isArray(value) ? value : [value]) params.append(name, item);
+  return params;
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (cloudAuth) headers.set('Authorization', `Bearer ${await accessToken()}`);
@@ -114,14 +123,13 @@ export const api = {
   getPreferences: () => request<any>('/preferences'),
   getSeniorityOptions: () => request<{items: {value: string; label: string}[]}>('/preferences/seniority-options'),
   putPreferences: (values: unknown) => request('/preferences', json('PUT', values)),
-  recommendations: (q = '', offset = 0, limit = 20) => {
-    const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
-    if (q.trim()) params.set('q', q.trim());
+  // `filters` (from discover/filters.ts) replaces the saved preferences for this one list; leave it out to use them.
+  recommendations: (q = '', offset = 0, filters?: JobFilterQuery, limit = 20) => {
+    const params = listParams(q, offset, limit, filters);
     return request<{ items: Recommendation[]; total: number; next_offset: number | null; degraded_mode?: boolean; ranking_status?: string; ranking_mode?: string }>(`/recommendations?${params}`);
   },
-  recommendationsForYou: (q = '', offset = 0, limit = 20) => {
-    const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
-    if (q.trim()) params.set('q', q.trim());
+  recommendationsForYou: (q = '', offset = 0, filters?: JobFilterQuery, limit = 20) => {
+    const params = listParams(q, offset, limit, filters);
     return request<{ items: Recommendation[]; total: number; next_offset: number | null; degraded_mode?: boolean; ranking_status?: string; ranking_mode?: 'semantic' | 'keyword_fallback'; fallback_reason?: string | null; fallback_code?: 'no_profile' | 'profile_embedding_pending' | null; blocked_by_checks?: number }>(`/recommendations/for-you?${params}`);
   },
   reviewedJobs: (decision: 'saved' | 'dismissed', q = '', offset = 0, limit = 20) => {
