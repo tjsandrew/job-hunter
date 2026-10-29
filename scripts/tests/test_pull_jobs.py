@@ -40,6 +40,7 @@ class PullJobs(unittest.TestCase):
         text = pull_jobs.summary(RESULT)
         self.assertIn("New jobs added: **10**", text)
         self.assertIn("Left for the next pull: 9", text)
+        self.assertIn("Closed: 0 past their closing date, 0 not listed by their source for 21 days", text)
         self.assertIn("Source problem", text)
         self.assertIn("embedding worker", text)
 

@@ -25,7 +25,7 @@ from job_hunter.adapters.database import get_db
 from job_hunter.domain.identity import DEV_USERS
 from job_hunter.domain.models import (User, Profile, Preference, Job, JobReview, Application,
                                       ProfileVersion, Document, DocumentExport, Upload, AiTailorUse, now_utc)
-from job_hunter.domain.models import Base
+from job_hunter.domain.models import Base, listed_jobs
 from job_hunter.adapters.database import engine
 from job_hunter.preparation.rendering import pdf_bytes
 from job_hunter.preparation import ai_tailoring, allowance
@@ -384,7 +384,7 @@ def recommendations(db: Session = Depends(db_for, scope="function"), limit: int 
     return keyword_recommendations(db, limit, offset, q, effective_preferences(db, chosen))
 
 def keyword_recommendations(db: Session, limit: int, offset: int, q: str | None, prefs: dict) -> dict:
-    jobs = db.scalars(select(Job).where(Job.status == "open", Job.canonical_job_id.is_(None))).all()
+    jobs = db.scalars(select(Job).where(listed_jobs())).all()
     skipped = skipped_job_ids(db)
     candidates = [job_out(job) for job in jobs if str(job.id) not in skipped]
     ranked = rank_jobs(candidates, bank_services.build_profile_snapshot(db), prefs)
@@ -426,7 +426,7 @@ def recommendations_for_you(db: Session = Depends(db_for, scope="function"), lim
     ordered, fused = result.ranked, False
     if embedding_settings.for_you_fusion_enabled():
         try:   # merge the keyword ranking in; if it cannot be computed, keep the semantic order rather than fail the page
-            open_jobs = db.scalars(select(Job).where(Job.status == "open", Job.canonical_job_id.is_(None))).all()
+            open_jobs = db.scalars(select(Job).where(listed_jobs())).all()
             keyword_ranked = rank_jobs([job_out(job) for job in open_jobs if str(job.id) not in set(skipped)],
                                        bank_services.build_profile_snapshot(db), prefs)
             ordered, fused = semantic.fuse_with_keyword(result.ranked, keyword_ranked), True

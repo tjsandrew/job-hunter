@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import logging
 import os
@@ -36,6 +36,9 @@ class ImportStats:
     deferred: int = 0       # new records left for a later run because max_new was reached
     linked: int = 0         # rows whose duplicate links changed (cross-source de-duplication)
     errors: int = 0
+    reopened: int = 0       # closed jobs that a source lists again
+    closed_expired: int = 0  # open jobs past their closing date
+    closed_unseen: int = 0  # open jobs their source has not listed for STALE_AFTER (close_unseen)
     source_failures: list[dict[str, str]] = field(default_factory=list)
     truncated_boards: list[str] = field(default_factory=list)
     record_errors: list[dict[str, str]] = field(default_factory=list)
@@ -64,6 +67,9 @@ class SQLAlchemyJobRepository:
     def add(self, job: Any) -> None:
         self.session.add(job)
 
+    def open_jobs(self) -> list[Any]:
+        return list(self.session.scalars(select(self.job_model).where(self.job_model.status == "open")))
+
     def find_by_match_key(self, key: str) -> list[Any]:
         # The query flushes a job added in this transaction first, so the group includes it.
         return list(self.session.scalars(select(self.job_model).where(self.job_model.match_key == key)))
@@ -90,8 +96,14 @@ CONTENT_FIELDS = (
     "seniority_source",
     "seniority_evidence",
     "dedup_key",
-    "status",
-)
+)   # status is not content: closing or reopening a job changes no text, so it never queues a re-embedding
+
+# A job its source has not listed for this long is closed (close_unseen); it reopens if the source lists it again.
+STALE_AFTER = timedelta(days=21)
+# Employer boards: one fetch lists every open posting of the board, so a posting missing from it for a while is gone.
+# MyCareersFuture and Adzuna are keyword searches over one national board; a search returns a slice, so their jobs are
+# judged per source instead, and only when every search of that source ran without an error.
+BOARD_SOURCES = frozenset({"greenhouse", "lever", "smartrecruiters"})
 
 
 def _load_job_model() -> type:
@@ -170,7 +182,7 @@ def _job_values(record: Mapping[str, Any], job_model: type) -> dict[str, Any]:
         "work_mode": str(record["work_mode"]).strip() if record.get("work_mode") else None,
         "description": record.get("description"),
         "url": str(record["source_url"]),
-        "status": "open",
+        "status": "open",       # set below: "closed" once the closing date has passed
         "salary_min": record.get("salary_min"),
         "salary_max": record.get("salary_max"),
         "salary_currency": record.get("salary_currency"),
@@ -178,6 +190,8 @@ def _job_values(record: Mapping[str, Any], job_model: type) -> dict[str, Any]:
         "posted_at": _parse_datetime(record.get("posted_at")),
         "expires_at": _parse_datetime(record.get("expires_at")),
     }
+    if values["expires_at"] is not None and values["expires_at"] <= _now_utc():
+        values["status"] = "closed"
     values.update(classify_job(values["title"], stated_seniority=record.get("stated_seniority")))
     values["match_key"] = dedup.match_key(values["company"], values["title"], values["location"])
     available = set(job_model.__mapper__.attrs.keys())
@@ -247,6 +261,7 @@ def upsert_records(
                 continue
 
             old_key = getattr(existing, "match_key", None)
+            old_status = existing.status
             changed = any(getattr(existing, key) != values[key] for key in CONTENT_FIELDS)
             if changed:
                 for key, value in values.items():
@@ -260,8 +275,14 @@ def upsert_records(
                     existing.fetched_at = values["fetched_at"]
                 # The link key is derived data: set it without touching updated_at, which would queue a re-embedding.
                 existing.match_key = values["match_key"]
+                existing.status = values["status"]
                 stats.unchanged += 1
-            if changed or old_key != values["match_key"]:
+            if old_status != values["status"]:
+                if values["status"] == "open":
+                    stats.reopened += 1
+                else:
+                    stats.closed_expired += 1
+            if changed or old_key != values["match_key"] or old_status != values["status"]:
                 relink(old_key, values["match_key"])
         except (ValueError, TypeError, OverflowError) as exc:
             stats.errors += 1
@@ -285,10 +306,59 @@ def import_report(
             if wanted in str(record.get("location") or "").casefold()
         ]
     stats = upsert_records(repository, records, job_model=job_model, max_new=max_new)
+    if hasattr(repository, "open_jobs"):
+        expired, unseen = close_unseen(repository, report)
+        stats.closed_expired += expired
+        stats.closed_unseen += unseen
     stats.source_failures = list(report.failures)
     stats.truncated_boards = list(report.truncated_boards)
     stats.errors += len(report.failures)
     return stats
+
+
+def closing_scopes(report: DiscoveryReport) -> set[tuple[str, str | None]]:
+    """(source, source_board) pairs this pull read completely enough to close the jobs it did not see; a None board is every
+    board of a search source. A board that failed is not in ``checked_boards``; a truncated board is skipped."""
+    truncated = set(report.truncated_boards)
+    failed_sources = {str(item.get("source")) for item in report.failures}
+    scopes: set[tuple[str, str | None]] = set()
+    for item in report.checked_boards:
+        source, _, board = item.partition(":")
+        if source in BOARD_SOURCES:
+            if item not in truncated:
+                scopes.add((source, board))
+        elif source not in failed_sources:
+            scopes.add((source, None))
+    return scopes
+
+
+def close_unseen(repository: Any, report: DiscoveryReport, *, now: datetime | None = None,
+                 stale_after: timedelta = STALE_AFTER) -> tuple[int, int]:
+    """Close open jobs past their closing date, and open jobs of a fully read source not seen for ``stale_after``.
+
+    Runs after ``upsert_records`` in the same transaction, so every job this pull saw already has a fresh ``fetched_at``.
+    Returns (expired, unseen). Closed rows are relinked, so an open copy from another source becomes the one users see."""
+    now = now or _now_utc()
+    cutoff = now - stale_after
+    scopes = closing_scopes(report)
+    expired = unseen = 0
+    keys: list[str] = []
+    for job in repository.open_jobs():
+        if job.expires_at is not None and job.expires_at <= now:
+            expired += 1
+        elif (job.fetched_at is not None and job.fetched_at < cutoff
+              and ((job.source, job.source_board) in scopes or (job.source, None) in scopes)):
+            unseen += 1
+        else:
+            continue
+        job.status = "closed"
+        if getattr(job, "match_key", None):
+            keys.append(job.match_key)
+    find_group = getattr(repository, "find_by_match_key", None)
+    if find_group is not None:
+        for key in dict.fromkeys(keys):
+            dedup.relink(find_group(key))
+    return expired, unseen
 
 
 def snapshot_payload(report: DiscoveryReport) -> dict[str, Any]:
@@ -299,6 +369,7 @@ def snapshot_payload(report: DiscoveryReport) -> dict[str, Any]:
         "jobs": report.jobs,
         "failures": report.failures,
         "truncated_boards": report.truncated_boards,
+        "checked_boards": report.checked_boards,
     }
 
 
@@ -318,14 +389,16 @@ def report_from_payload(payload: Any) -> DiscoveryReport:
     jobs = payload.get("jobs")
     failures = payload.get("failures", [])
     truncated = payload.get("truncated_boards", [])
+    checked = payload.get("checked_boards", [])     # absent from older snapshots: then nothing is closed as unseen
     if not isinstance(jobs, list) or not all(isinstance(job, Mapping) for job in jobs):
         raise ValueError("snapshot jobs must be an array of records")
-    if not isinstance(failures, list) or not isinstance(truncated, list):
+    if not isinstance(failures, list) or not isinstance(truncated, list) or not isinstance(checked, list):
         raise ValueError("snapshot failures and truncation state must be arrays")
     return DiscoveryReport(
         jobs=[dict(job) for job in jobs],
         failures=[dict(item) for item in failures if isinstance(item, Mapping)],
         truncated_boards=[str(item) for item in truncated],
+        checked_boards=[str(item) for item in checked],
     )
 
 
@@ -446,6 +519,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "updated": stats.updated,
         "unchanged": stats.unchanged,
         "duplicate_links_changed": stats.linked,
+        "reopened": stats.reopened,
+        "closed_expired": stats.closed_expired,
+        "closed_unseen": stats.closed_unseen,
         "errors": stats.errors,
         "source_failures": stats.source_failures,
         "truncated_boards": stats.truncated_boards,

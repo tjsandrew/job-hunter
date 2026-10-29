@@ -10,8 +10,8 @@ orphaned); this module links the rows that are the same posting:
 
 Two rows from DIFFERENT sources are the same posting only on exact evidence: the same listing URL, or the same ``match_key`` AND
 a description that is nearly the same text. Similar titles alone never merge, and two rows of one source never merge.
-The canonical row is chosen by authority (employer ATS, then government portal, then aggregator), then the earlier posting
-date, then the id, so the result does not depend on the order the sources were polled in.
+The canonical row is an open one if any is open, then chosen by authority (employer ATS, then government portal, then aggregator),
+then the earlier posting date, then the id, so the result does not depend on the order the sources were polled in.
 
 All functions here are pure: they read attributes of the row objects they are given and set the three link fields.
 """
@@ -111,7 +111,8 @@ def same_posting(left: Any, right: Any, threshold: float = SIMILARITY_THRESHOLD)
 def _preference(row: Any) -> tuple:
     posted = getattr(row, "posted_at", None)
     stamp = posted.timestamp() if isinstance(posted, datetime) else 0.0
-    return (authority(row.source), 0 if posted else 1, stamp, str(row.id))
+    closed = 0 if (getattr(row, "status", None) or "open") == "open" else 1   # a closed row never hides an open copy
+    return (closed, authority(row.source), 0 if posted else 1, stamp, str(row.id))
 
 
 def clusters(rows: Sequence[Any], threshold: float = SIMILARITY_THRESHOLD) -> list[list[Any]]:

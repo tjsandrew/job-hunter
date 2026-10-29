@@ -85,6 +85,9 @@ class DiscoveryReport:
     jobs: list[dict[str, Any]] = field(default_factory=list)
     failures: list[dict[str, str]] = field(default_factory=list)
     truncated_boards: list[str] = field(default_factory=list)
+    # "source:board" of every board or search read without an error (truncated ones included). The import closes a job
+    # that has not been seen for a while only within these, so a source that was down or not polled never loses jobs.
+    checked_boards: list[str] = field(default_factory=list)
 
 
 class ProviderHTTPError(RuntimeError):
@@ -634,6 +637,7 @@ def discover_report(config: DiscoveryConfig) -> DiscoveryReport:
                     report.jobs.append(job)
                 if truncated:
                     report.truncated_boards.append(f"{source}:{board}")
+                report.checked_boards.append(f"{source}:{board}")
             except (ProviderHTTPError, ProviderRequestError) as exc:
                 item = {"source": source, "board": board, "kind": exc.kind, "error": str(exc)}
                 report.failures.append(item)

@@ -19,7 +19,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from job_hunter.domain.models import Job, ProfileVersion
+from job_hunter.domain.models import Job, ProfileVersion, listed_jobs
 from job_hunter.role_family import classify_engineering_subrole
 
 from .db_tables import job_embeddings, profile_embeddings
@@ -57,7 +57,8 @@ def load_job_candidates(session: Session, *, model: str, text_version: str = JOB
                         ) -> list[tuple[dict[str, Any], RetrievalCandidate]]:
     """Every job with a ready vector for this model and text version, with its eligibility fields.
 
-    A duplicate of another source's posting (``jobs.canonical_job_id`` set) is left out: users see the canonical row.
+    Only jobs Discover lists are loaded (``listed_jobs``): a closed or expired job, or a duplicate of another source's posting
+    (``jobs.canonical_job_id`` set), is left out; users see the canonical row.
 
     A job's role family and seniority are read from the job row (``jobs.category``, ``jobs.seniority``), where
     ingestion put them. An empty, unknown or not-yet-classified value counts as unknown / open to all levels, so
@@ -68,7 +69,7 @@ def load_job_candidates(session: Session, *, model: str, text_version: str = JOB
                job_embeddings.c.embedding)
         .join(job_embeddings, job_embeddings.c.job_id == Job.id)
         .where(job_embeddings.c.text_version == text_version, job_embeddings.c.status == STATUS_READY,
-               job_embeddings.c.model == model, Job.canonical_job_id.is_(None))).all()
+               job_embeddings.c.model == model, listed_jobs())).all()
     loaded = []
     for (job_id, title, company, location, work_mode, status, category, seniority, salary_min, salary_max,
          salary_currency, salary_period, embedding) in rows:
