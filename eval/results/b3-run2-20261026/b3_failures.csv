@@ -1,0 +1,9 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+GET,/profile/bank,CatchResponseError('5xx server error'),13,2026-10-26T03:58:47Z,2026-10-26T04:04:12Z
+GET,/jobs/{id},CatchResponseError('5xx server error'),59,2026-10-26T03:58:49Z,2026-10-26T04:04:34Z
+GET,/me,CatchResponseError('5xx server error'),16,2026-10-26T03:59:20Z,2026-10-26T04:04:19Z
+GET,/recommendations/for-you,CatchResponseError('5xx server error'),48,2026-10-26T03:58:49Z,2026-10-26T04:04:34Z
+GET,/recommendations,CatchResponseError('5xx server error'),66,2026-10-26T03:58:44Z,2026-10-26T04:04:18Z
+GET,/applications,CatchResponseError('5xx server error'),20,2026-10-26T03:59:33Z,2026-10-26T04:04:24Z
+GET,/jobs/reviewed,CatchResponseError('5xx server error'),19,2026-10-26T03:58:47Z,2026-10-26T04:03:33Z
+PUT,PUT /jobs/{id}/review,CatchResponseError('5xx server error'),21,2026-10-26T03:58:57Z,2026-10-26T04:04:12Z

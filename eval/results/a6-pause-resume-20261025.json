@@ -1,0 +1,34 @@
+{
+  "check": "A6 pause/resume workflow, real run on staging",
+  "date": "2026-10-25",
+  "window_utc": [
+    "09:50:33",
+    "09:52:29"
+  ],
+  "runs": {
+    "pause": "https://github.com/tjsandrew/job-hunter/actions/runs/40182324458",
+    "pull_jobs_while_paused": "https://github.com/tjsandrew/job-hunter/actions/runs/40182369644",
+    "resume": "https://github.com/tjsandrew/job-hunter/actions/runs/40182411858"
+  },
+  "before": {
+    "api_reserved": 10,
+    "embed_reserved": 2
+  },
+  "paused": {
+    "api_reserved": 0,
+    "embed_reserved": 0,
+    "GET /me": 503,
+    "GET /health": 503,
+    "pull_jobs": "refused: 'Staging is manually paused' (discovery not invoked)"
+  },
+  "after": {
+    "api_reserved": 10,
+    "embed_reserved": 2,
+    "GET /me": "200 in 2.3 s (cold start)"
+  },
+  "result": "PASS",
+  "notes": [
+    "Pause stops the API and embedding worker only; Aurora then auto-pauses on its own after 30 idle minutes.",
+    "The discovery and import functions are not paused, but Pull jobs refuses to start while the API is paused."
+  ]
+}

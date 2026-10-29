@@ -1,0 +1,12 @@
+B3 run 2: scalability in the raised-capacity window (A5)
+deployed commit: 5be97cd (main)
+api lambda: arm64, 1024 MB, 29 s timeout, reserved concurrency 50 (window)
+api gateway: default route throttling 200 req/s, burst 400 (window)
+aurora serverless v2: min 0, max 4 ACU (window), auto-pause 1800 s
+job pool: 508 jobs (B1 count; pulls since may have added a few)
+client: operator laptop (macOS, battery, lid open, caffeinate) on home Wi-Fi, Locust 2.47.0, one process (not CloudShell: see notes)
+scenario: BrowsingUser (weighted browsing, Save/Pass writes, no AI), 1-3 s between tasks, accounts jh-eval-01..06 shared
+shape: 1 -> 10 -> 50 -> 100 users, 360 s per step, spawn rate 5/s; analysis uses the last 300 s of each step
+warm-up (discarded): same shape, 1 -> 2 users, 30 s each
+measured run start: 2026-10-26T03:40:33Z
+measured run end: 2026-10-26T04:04:37Z

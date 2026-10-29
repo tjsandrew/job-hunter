@@ -1,0 +1,164 @@
+{
+  "steady_seconds": 300,
+  "steps": [
+    {
+      "users": 1,
+      "start": 1792983905,
+      "end": 1792984205,
+      "seconds": 300,
+      "requests": 99,
+      "throughput_rps": 0.33,
+      "ok_rps": 0.33,
+      "status_counts": {
+        "200": 99
+      },
+      "throttled_429": 0,
+      "errors_5xx": 0,
+      "ok_p50_ms": 131.0,
+      "ok_p95_ms": 2001.0,
+      "ok_p99_ms": 2039.0,
+      "endpoint_p95_ms": {
+        "GET /recommendations": 1725.0,
+        "GET /recommendations/for-you": 2023.0,
+        "GET /jobs/{id}": 131.0,
+        "PUT /jobs/{id}/review": 96.0,
+        "GET /me": 78.0
+      },
+      "endpoint_ok_counts": {
+        "GET /recommendations": 19,
+        "GET /recommendations/for-you": 29,
+        "GET /jobs/{id}": 16,
+        "PUT /jobs/{id}/review": 5,
+        "GET /me": 5
+      },
+      "lambda_concurrency_max": 1.0,
+      "lambda_throttles": 0.0,
+      "lambda_errors": 0.0,
+      "aurora_acu_max": 1.0,
+      "aurora_connections_max": 1.0,
+      "aurora_cpu_max": 100.0,
+      "aurora_cpu_avg": 64.79378304016345,
+      "lambda_duration_avg_ms": 943.370690267335
+    },
+    {
+      "users": 10,
+      "start": 1792984265,
+      "end": 1792984565,
+      "seconds": 300,
+      "requests": 1030,
+      "throughput_rps": 3.433333333333333,
+      "ok_rps": 3.433333333333333,
+      "status_counts": {
+        "200": 1030
+      },
+      "throttled_429": 0,
+      "errors_5xx": 0,
+      "ok_p50_ms": 88.0,
+      "ok_p95_ms": 2229.0,
+      "ok_p99_ms": 2401.0,
+      "endpoint_p95_ms": {
+        "GET /recommendations": 2003.0,
+        "GET /recommendations/for-you": 2401.0,
+        "GET /jobs/{id}": 105.0,
+        "PUT /jobs/{id}/review": 93.0,
+        "GET /me": 90.0
+      },
+      "endpoint_ok_counts": {
+        "GET /recommendations": 243,
+        "GET /recommendations/for-you": 214,
+        "GET /jobs/{id}": 204,
+        "PUT /jobs/{id}/review": 73,
+        "GET /me": 65
+      },
+      "lambda_concurrency_max": 9.0,
+      "lambda_throttles": 0.0,
+      "lambda_errors": 0.0,
+      "aurora_acu_max": 1.0,
+      "aurora_connections_max": 4.0,
+      "aurora_cpu_max": 100.0,
+      "aurora_cpu_avg": 95.71971969976373,
+      "lambda_duration_avg_ms": 857.8188750864445
+    },
+    {
+      "users": 50,
+      "start": 1792984625,
+      "end": 1792984925,
+      "seconds": 300,
+      "requests": 6035,
+      "throughput_rps": 20.116666666666667,
+      "ok_rps": 10.59,
+      "status_counts": {
+        "200": 3177,
+        "503": 2858
+      },
+      "throttled_429": 0,
+      "errors_5xx": 2858,
+      "ok_p50_ms": 130.0,
+      "ok_p95_ms": 2170.0,
+      "ok_p99_ms": 2309.0,
+      "endpoint_p95_ms": {
+        "GET /recommendations": 1967.0,
+        "GET /recommendations/for-you": 2300.0,
+        "GET /jobs/{id}": 159.0,
+        "PUT /jobs/{id}/review": 185.0,
+        "GET /me": 148.0
+      },
+      "endpoint_ok_counts": {
+        "GET /recommendations": 680,
+        "GET /recommendations/for-you": 726,
+        "GET /jobs/{id}": 639,
+        "PUT /jobs/{id}/review": 225,
+        "GET /me": 231
+      },
+      "lambda_concurrency_max": 10.0,
+      "lambda_throttles": 2246.0,
+      "lambda_errors": 0.0,
+      "aurora_acu_max": 1.0,
+      "aurora_connections_max": 10.0,
+      "aurora_cpu_max": 100.0,
+      "aurora_cpu_avg": 100.0,
+      "lambda_duration_avg_ms": 829.581129951852
+    },
+    {
+      "users": 100,
+      "start": 1792984985,
+      "end": 1792985285,
+      "seconds": 300,
+      "requests": 13438,
+      "throughput_rps": 44.79333333333334,
+      "ok_rps": 10.83,
+      "status_counts": {
+        "200": 3249,
+        "429": 7431,
+        "503": 2758
+      },
+      "throttled_429": 7431,
+      "errors_5xx": 2758,
+      "ok_p50_ms": 145.0,
+      "ok_p95_ms": 2036.0,
+      "ok_p99_ms": 2218.0,
+      "endpoint_p95_ms": {
+        "GET /recommendations": 1853.0,
+        "GET /recommendations/for-you": 2205.0,
+        "GET /jobs/{id}": 187.0,
+        "PUT /jobs/{id}/review": 202.0,
+        "GET /me": 179.0
+      },
+      "endpoint_ok_counts": {
+        "GET /recommendations": 687,
+        "GET /recommendations/for-you": 681,
+        "GET /jobs/{id}": 692,
+        "PUT /jobs/{id}/review": 245,
+        "GET /me": 227
+      },
+      "lambda_concurrency_max": 10.0,
+      "lambda_throttles": 2190.0,
+      "lambda_errors": 0.0,
+      "aurora_acu_max": 1.0,
+      "aurora_connections_max": 10.0,
+      "aurora_cpu_max": 100.0,
+      "aurora_cpu_avg": 99.9716279961934,
+      "lambda_duration_avg_ms": 770.4785557446951
+    }
+  ]
+}

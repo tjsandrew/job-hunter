@@ -1,0 +1,227 @@
+{
+  "window_utc": [
+    "2026-10-25T09:55:55Z",
+    "2026-10-25T10:15:55Z"
+  ],
+  "access_log_status_counts": {
+    "200": 1676
+  },
+  "endpoints": [
+    {
+      "endpoint": "/applications",
+      "group": "browse",
+      "target_p95_ms": 500,
+      "client": {
+        "requests": 186,
+        "failures": 0,
+        "p50": 78.0,
+        "p95": 250.0,
+        "p99": 250.0
+      },
+      "server_gateway": {
+        "p50": 63.0,
+        "p95": 71.0,
+        "p99": 100.0,
+        "n": 186
+      },
+      "server_lambda": {
+        "p50": 61.0,
+        "p95": 70.0,
+        "p99": 90.0
+      },
+      "meets_target": true
+    },
+    {
+      "endpoint": "/documents",
+      "group": "browse",
+      "target_p95_ms": 500,
+      "client": {
+        "requests": 186,
+        "failures": 0,
+        "p50": 76.0,
+        "p95": 250.0,
+        "p99": 310.0
+      },
+      "server_gateway": {
+        "p50": 61.0,
+        "p95": 71.0,
+        "p99": 111.0,
+        "n": 186
+      },
+      "server_lambda": {
+        "p50": 60.0,
+        "p95": 69.0,
+        "p99": 80.0
+      },
+      "meets_target": true
+    },
+    {
+      "endpoint": "/jobs/reviewed",
+      "group": "browse",
+      "target_p95_ms": 500,
+      "client": {
+        "requests": 186,
+        "failures": 0,
+        "p50": 78.0,
+        "p95": 250.0,
+        "p99": 260.0
+      },
+      "server_gateway": {
+        "p50": 63.0,
+        "p95": 78.0,
+        "p99": 144.0,
+        "n": 186
+      },
+      "server_lambda": {
+        "p50": 62.0,
+        "p95": 73.0,
+        "p99": 143.0
+      },
+      "meets_target": true
+    },
+    {
+      "endpoint": "/jobs/{id}",
+      "group": "browse",
+      "target_p95_ms": 500,
+      "client": {
+        "requests": 186,
+        "failures": 0,
+        "p50": 85.0,
+        "p95": 250.0,
+        "p99": 250.0
+      },
+      "server_gateway": {
+        "p50": 64.0,
+        "p95": 78.0,
+        "p99": 112.0,
+        "n": 186
+      },
+      "server_lambda": {
+        "p50": 63.0,
+        "p95": 72.0,
+        "p99": 79.0
+      },
+      "meets_target": true
+    },
+    {
+      "endpoint": "/me",
+      "group": "browse",
+      "target_p95_ms": 500,
+      "client": {
+        "requests": 187,
+        "failures": 0,
+        "p50": 76.0,
+        "p95": 250.0,
+        "p99": 250.0
+      },
+      "server_gateway": {
+        "p50": 61.0,
+        "p95": 71.0,
+        "p99": 120.0,
+        "n": 187
+      },
+      "server_lambda": {
+        "p50": 59.0,
+        "p95": 67.0,
+        "p99": 106.0
+      },
+      "meets_target": true
+    },
+    {
+      "endpoint": "/profile",
+      "group": "browse",
+      "target_p95_ms": 500,
+      "client": {
+        "requests": 186,
+        "failures": 0,
+        "p50": 76.0,
+        "p95": 250.0,
+        "p99": 270.0
+      },
+      "server_gateway": {
+        "p50": 60.0,
+        "p95": 71.0,
+        "p99": 123.0,
+        "n": 186
+      },
+      "server_lambda": {
+        "p50": 59.0,
+        "p95": 68.0,
+        "p99": 121.0
+      },
+      "meets_target": true
+    },
+    {
+      "endpoint": "/profile/bank",
+      "group": "browse",
+      "target_p95_ms": 500,
+      "client": {
+        "requests": 186,
+        "failures": 0,
+        "p50": 83.0,
+        "p95": 250.0,
+        "p99": 260.0
+      },
+      "server_gateway": {
+        "p50": 65.0,
+        "p95": 73.0,
+        "p99": 118.0,
+        "n": 186
+      },
+      "server_lambda": {
+        "p50": 64.0,
+        "p95": 72.0,
+        "p99": 116.0
+      },
+      "meets_target": true
+    },
+    {
+      "endpoint": "/recommendations",
+      "group": "browse",
+      "target_p95_ms": 500,
+      "client": {
+        "requests": 186,
+        "failures": 0,
+        "p50": 2100.0,
+        "p95": 2300.0,
+        "p99": 2400.0
+      },
+      "server_gateway": {
+        "p50": 2069.0,
+        "p95": 2212.0,
+        "p99": 2235.0,
+        "n": 187
+      },
+      "server_lambda": {
+        "p50": 2066.0,
+        "p95": 2211.0,
+        "p99": 2232.0
+      },
+      "meets_target": false
+    },
+    {
+      "endpoint": "/recommendations/for-you",
+      "group": "ranking",
+      "target_p95_ms": 2000,
+      "client": {
+        "requests": 186,
+        "failures": 0,
+        "p50": 2500.0,
+        "p95": 2600.0,
+        "p99": 2700.0
+      },
+      "server_gateway": {
+        "p50": 2377.0,
+        "p95": 2521.0,
+        "p99": 2569.0,
+        "n": 186
+      },
+      "server_lambda": {
+        "p50": 2376.0,
+        "p95": 2517.0,
+        "p99": 2567.0
+      },
+      "meets_target": false
+    }
+  ]
+}

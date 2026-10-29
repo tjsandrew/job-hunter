@@ -1,0 +1,8 @@
+{
+  "check": "expired access token is rejected",
+  "group": "tokens",
+  "result": "PASS",
+  "detail": "An access token issued to jh-eval-01 was kept unused and sent to GET /v1/me at 62.2 minutes old: 401. Cognito access tokens last 60 minutes and API Gateway's JWT authorizer enforces the exp claim.",
+  "related": "a6-acceptance-20261025T094435Z.json: a revoked session's access token still returned 200 while unexpired; this run bounds that window at 60 minutes.",
+  "token_stored": "scratchpad only, deleted after the check"
+}

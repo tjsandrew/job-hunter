@@ -1,0 +1,33 @@
+{
+  "started_at": "2026-10-26T04:17:36.035Z",
+  "discovery_returned_at": "2026-10-26T04:20:23.766Z",
+  "import_finished_at": "2026-10-26T04:20:23.926Z",
+  "embedding_finished_at": "2026-10-26T04:20:49.211Z",
+  "max_new": 10,
+  "seconds": {
+    "discovery_and_import": 167.7,
+    "to_import_finished": 167.9,
+    "to_embedding_finished": 193.2
+  },
+  "result": {
+    "fetched": 2169,
+    "failures": [],
+    "truncated_boards": [
+      "mycareersfuture:software engineer",
+      "adzuna:data engineer"
+    ],
+    "max_new": 10,
+    "snapshot": "imports/21846a19-6092-4cc2-bfd6-f0bd26336b3c.json",
+    "import": {
+      "snapshot_records": 2169,
+      "new": 10,
+      "updated": 1,
+      "unchanged": 441,
+      "deferred": 1717,
+      "duplicate_links_changed": 0,
+      "errors": 0,
+      "record_errors": [],
+      "embed_flag_written": true
+    }
+  }
+}

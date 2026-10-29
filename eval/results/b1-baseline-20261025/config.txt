@@ -1,0 +1,12 @@
+B1 responsiveness baseline - configuration snapshot
+captured: 2026-10-25T09:54:36Z
+deployed commit: 0f5f371
+api lambda (memory, timeout, arch): arm64	1024	29
+api reserved concurrency: 10
+aurora scaling (max, min, autopause s): 1.0	0.0	1800
+job pool seen by jh-eval-01 (eligible + blocked): 508
+client: operator laptop (macOS), Locust 2.47.0, single user, 0.1 s between requests
+tcp connect to API (5 samples): median 9 ms
+measured run start: 2026-10-25T09:55:55Z
+measured run end: 2026-10-25T10:15:55Z
+wi-fi check after the run: ping to local router 192.168.1.1 (30 samples): min/avg/max/stddev 2.6/35.6/124.3/39.3 ms
