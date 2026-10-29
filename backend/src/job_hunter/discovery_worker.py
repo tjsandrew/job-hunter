@@ -10,6 +10,9 @@ It runs OUTSIDE the VPC (the job feeds are on the internet) and never touches th
 Start it from the "Pull jobs" GitHub workflow (``scripts/pull_jobs.py``) or, when enabled, from the EventBridge schedule.
 Event: optional ``{"max_new": 10}``; any other content (an EventBridge scheduled event, for example) is ignored.
 
+Each pull logs one JSON line (``"event": "pull_finished"``) with what started it and the counts, so scheduled pulls,
+whose answer nobody reads, can still be tallied (``eval/analyse_b4.py``).
+
 Environment: DOCUMENT_BUCKET, IMPORT_FUNCTION, GREENHOUSE_BOARDS, LEVER_BOARDS, SMARTRECRUITERS_BOARDS,
 MYCAREERSFUTURE_SEARCHES, ADZUNA_SEARCHES (comma separated), ADZUNA_APP_ID and ADZUNA_APP_KEY (only with ADZUNA_SEARCHES), optional DISCOVERY_MAX_NEW, DISCOVERY_MAX_PAGES, DISCOVERY_TIMEOUT_SECONDS.
 Settings are read straight from the environment: ``job_hunter.config`` would reject a Lambda that has no Cognito settings.
@@ -66,8 +69,20 @@ def pull(s3, lambda_client, *, bucket: str, import_function: str, max_new: int, 
     return result
 
 
+def summary_line(result: dict, trigger: str) -> str:
+    """The per-pull log line: counts only, never job text."""
+    imported = result.get("import") or {}
+    return json.dumps({"event": "pull_finished", "trigger": trigger, "fetched": result.get("fetched", 0),
+                       "max_new": result.get("max_new"), "new": imported.get("new"), "updated": imported.get("updated"),
+                       "unchanged": imported.get("unchanged"), "deferred": imported.get("deferred"),
+                       "errors": imported.get("errors"), "failures": len(result.get("failures") or []),
+                       "truncated_boards": result.get("truncated_boards") or [], "snapshot": result.get("snapshot")})
+
+
 def handler(event, context=None):
     import boto3
+    logging.getLogger().setLevel(logging.INFO)
+    trigger = "schedule" if isinstance(event, dict) and event.get("source") == "aws.events" else "manual"
     region = os.getenv("AWS_REGION") or "ap-southeast-1"
     bucket = os.environ["DOCUMENT_BUCKET"]
     import_function = os.environ["IMPORT_FUNCTION"]
@@ -80,5 +95,5 @@ def handler(event, context=None):
                                                                              retries={"total_max_attempts": 1}))
     result = pull(boto3.client("s3", region_name=region), lambda_client,
                   bucket=bucket, import_function=import_function, max_new=max_new)
-    log.info("pull finished: %s", {key: value for key, value in result.items() if key != "failures"})
+    log.info(summary_line(result, trigger))
     return result

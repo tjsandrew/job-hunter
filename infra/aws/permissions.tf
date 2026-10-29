@@ -24,6 +24,6 @@ resource "aws_iam_role_policy" "release_backend" {
     { Effect = "Allow", Action = ["secretsmanager:GetSecretValue"], Resource = module.backend[0].database_credentials_arn },
     # The Pull jobs workflow starts a job pull; the discovery function invokes the import function itself.
     { Effect = "Allow", Action = ["lambda:InvokeFunction"], Resource = compact([module.backend[0].migration_arn, module.backend[0].discovery_arn]) },
-    { Effect = "Allow", Action = ["lambda:PutFunctionConcurrency"], Resource = compact([module.backend[0].api_arn, module.backend[0].embed_arn]) }
+    { Effect = "Allow", Action = ["lambda:PutFunctionConcurrency"], Resource = compact([module.backend[0].api_arn, module.backend[0].embed_arn, module.backend[0].discovery_arn]) }
   ] })
 }

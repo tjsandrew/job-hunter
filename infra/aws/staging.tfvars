@@ -21,9 +21,13 @@ for_you_enabled = "1"
 # secret LLM_API_KEY at release time. Never apply without this line: the worker would be removed.
 llm_worker_enabled = true
 
-# Job pull (docs/design/04-JOB-INGESTION.md): two Lambdas that load a few new public job postings into Aurora when the Pull jobs
-# GitHub workflow runs. No schedule (each run wakes Aurora). Never apply without this line: the functions would be removed.
+# Job pull (docs/design/04-JOB-INGESTION.md): two Lambdas that load a few new public job postings into Aurora, started by the
+# Pull jobs GitHub workflow and by an EventBridge schedule. Never apply without this line: the functions would be removed.
 discovery_enabled = true
+# Twice a day, 08:00 and 20:00 Singapore time (00:00 and 12:00 UTC). Each pull wakes Aurora for about 30 minutes
+# (about USD 0.10), roughly USD 6 a month; the pause workflow also stops scheduled pulls.
+discovery_schedule_enabled    = true
+discovery_schedule_expression = "cron(0 0,12 * * ? *)"
 # Searches cover the evaluation personas and a broader market. A pull rotates between searches, so each batch is
 # mixed. Nine searches fetched 2,363 unique Singapore listings in about 3 minutes (dry run, 25 October 2026);
 # the discovery function's timeout is 300 seconds.

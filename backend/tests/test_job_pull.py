@@ -175,6 +175,29 @@ def test_the_handler_takes_the_batch_size_from_the_event_or_the_environment(monk
     assert seen == [6, 4, 10]
 
 
+
+def test_each_pull_logs_one_counts_line_that_says_what_started_it(monkeypatch):
+    lines = []
+    monkeypatch.setenv("DOCUMENT_BUCKET", "docs")
+    monkeypatch.setenv("IMPORT_FUNCTION", "imp")
+    result = {"fetched": 2169, "max_new": 10, "failures": [{"source": "greenhouse"}], "truncated_boards": ["adzuna:data engineer"],
+              "snapshot": "imports/x.json", "import": {"new": 10, "updated": 1, "unchanged": 441, "deferred": 1717, "errors": 0}}
+    monkeypatch.setattr(discovery_worker, "pull", lambda s3, lam, **kw: result)
+    monkeypatch.setattr(discovery_worker, "log", SimpleNamespace(info=lines.append))
+    monkeypatch.setitem(__import__("sys").modules, "boto3", SimpleNamespace(client=lambda *a, **k: object()))
+    discovery_worker.handler({"version": "0", "source": "aws.events", "detail-type": "Scheduled Event"})
+    discovery_worker.handler({"max_new": 10})
+    scheduled, manual = (json.loads(line) for line in lines)
+    assert scheduled == {"event": "pull_finished", "trigger": "schedule", "fetched": 2169, "max_new": 10, "new": 10, "updated": 1,
+                         "unchanged": 441, "deferred": 1717, "errors": 0, "failures": 1,
+                         "truncated_boards": ["adzuna:data engineer"], "snapshot": "imports/x.json"}
+    assert manual["trigger"] == "manual"
+
+
+def test_the_counts_line_survives_a_pull_where_nothing_was_imported():
+    line = json.loads(discovery_worker.summary_line({"fetched": 0, "failures": [{}, {}]}, "schedule"))
+    assert line["new"] is None and line["failures"] == 2 and line["truncated_boards"] == []
+
 # --- import worker (inside the VPC) -----------------------------------------------------------------------------
 
 def put_snapshot(s3, items, key="imports/12345678-1234-5678-1234-567812345678.json", bucket="docs"):

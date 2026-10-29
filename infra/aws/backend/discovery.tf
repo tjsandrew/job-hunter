@@ -15,7 +15,9 @@
 #   discovery_enabled = false: nothing below exists except unused roles and log groups.
 #   discovery_enabled = true:  both functions exist. Start a pull with the "Pull jobs" GitHub workflow (scripts/pull_jobs.py).
 #   discovery_schedule_enabled = true additionally creates an EventBridge rule that starts a pull on a schedule. Every pull wakes
-#   Aurora (it auto-pauses when idle), which costs money and sends the Aurora activity alarm, so keep it off unless wanted.
+#   Aurora (it auto-pauses when idle) for about 30 minutes, about USD 0.10 at 1 ACU. A scheduled pull is an asynchronous invoke:
+#   it is never retried (a retry would pull twice) and is dropped if it cannot start within an hour, which is what happens
+#   while staging is paused (the pause workflow sets this function's concurrency to 0). Errors alarm to the activity topic.
 
 variable "discovery_enabled" {
   description = "Create the job-pull functions (discovery outside the VPC, import inside it)."
@@ -66,8 +68,9 @@ variable "discovery_schedule_expression" {
 }
 
 locals {
-  discovery_enabled = var.discovery_enabled
-  import_prefix     = "imports/"
+  discovery_enabled    = var.discovery_enabled
+  import_prefix        = "imports/"
+  discovery_alarm_arns = ["arn:aws:cloudwatch:ap-southeast-1:${var.account_id}:alarm:${var.name}-discovery-errors"]
   # Built from the name so the discovery role's policy does not depend on a function that only exists when enabled.
   import_function_arn = "arn:aws:lambda:ap-southeast-1:${var.account_id}:function:${var.name}-import"
 }
@@ -196,6 +199,31 @@ resource "aws_lambda_permission" "discovery_from_schedule" {
   function_name = aws_lambda_function.discovery[0].function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.discovery[0].arn
+}
+
+# Asynchronous invokes (the schedule) only; the Pull jobs workflow invokes synchronously and is not affected.
+resource "aws_lambda_function_event_invoke_config" "discovery" {
+  count                        = local.discovery_enabled ? 1 : 0
+  function_name                = aws_lambda_function.discovery[0].function_name
+  maximum_retry_attempts       = 0
+  maximum_event_age_in_seconds = 3600
+}
+
+resource "aws_cloudwatch_metric_alarm" "discovery_errors" {
+  count               = local.discovery_enabled ? 1 : 0
+  alarm_name          = "${var.name}-discovery-errors"
+  alarm_description   = "A job pull failed (discovery or its import step). Scheduled pulls are not retried; check the discovery and import logs."
+  namespace           = "AWS/Lambda"
+  metric_name         = "Errors"
+  dimensions          = { FunctionName = aws_lambda_function.discovery[0].function_name }
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.activity.arn]
+  depends_on          = [aws_sns_topic_policy.activity]
 }
 
 output "discovery_function" { value = local.discovery_enabled ? aws_lambda_function.discovery[0].function_name : "" }

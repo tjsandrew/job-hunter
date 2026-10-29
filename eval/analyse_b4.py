@@ -4,8 +4,10 @@ Usage (from the repository root, evaluation virtualenv, operator SSO session):
     AWS_PROFILE=<operator profile> python eval/analyse_b4.py
 
 Reads every pull snapshot in the documents bucket (imports/*.json: what discovery fetched, its failures and truncated
-searches), the measured pulls in eval/results/b4-pulls/*.json (new / already stored / deferred, stage times), and the
-discovery and import functions' REPORT lines for the duration of every pull. Cross-source duplicates per pull are found
+searches), the discovery function's "pull_finished" log lines (new / already stored / deferred and whether the
+schedule or a person started it; logged since the EventBridge schedule was added), the measured pulls in
+eval/results/b4-pulls/*.json (the same counts plus the time until embedding finished), and the discovery and import
+functions' REPORT lines for the duration of every pull. Cross-source duplicates per pull are found
 with the production rules (dedup.clusters within each match key, as the import's relink does).
 Writes eval/results/b4-pipeline-<date>/summary.md and summary.json.
 """
@@ -39,7 +41,7 @@ def snapshots() -> list[dict]:
     name = bucket()
     keys = [item["Key"] for page in s3.get_paginator("list_objects_v2").paginate(Bucket=name, Prefix="imports/")
             for item in page.get("Contents", []) if item["Key"].endswith(".json")]
-    found = [json.loads(s3.get_object(Bucket=name, Key=key)["Body"].read()) for key in keys]
+    found = [{**json.loads(s3.get_object(Bucket=name, Key=key)["Body"].read()), "key": key} for key in keys]
     return sorted(found, key=lambda snapshot: snapshot["saved_at"])
 
 
@@ -73,6 +75,23 @@ def reports(function: str, start_ms: int) -> list[dict]:
     return out
 
 
+def pull_lines(start_ms: int) -> list[dict]:
+    """The discovery function's per-pull counts lines ({"event": "pull_finished", ...})."""
+    logs = boto3.client("logs", region_name=REGION)
+    out = []
+    for page in logs.get_paginator("filter_log_events").paginate(
+            logGroupName=f"/aws/lambda/{PREFIX}-discovery", startTime=start_ms, filterPattern='"pull_finished"'):
+        for event in page["events"]:
+            text = event["message"]
+            try:
+                line = json.loads(text[text.index("{"):])
+            except ValueError:
+                continue
+            if line.get("event") == "pull_finished":
+                out.append({**line, "at": event["timestamp"]})
+    return out
+
+
 def nearest(items: list[dict], at_ms: int, window_ms: int = 600_000) -> dict | None:
     close = [item for item in items if abs(item["at"] - at_ms) <= window_ms]
     return min(close, key=lambda item: abs(item["at"] - at_ms)) if close else None
@@ -81,7 +100,7 @@ def nearest(items: list[dict], at_ms: int, window_ms: int = 600_000) -> dict | N
 def main() -> None:
     snaps = snapshots()
     first_ms = int(datetime.fromisoformat(snaps[0]["saved_at"].replace("Z", "+00:00")).timestamp() * 1000) - 3_600_000
-    discovery, imports = reports("discovery", first_ms), reports("import", first_ms)
+    discovery, imports, counts = reports("discovery", first_ms), reports("import", first_ms), pull_lines(first_ms)
     measured = {json.loads(path.read_text())["started_at"]: json.loads(path.read_text()) for path in sorted(PULLS.glob("*.json"))}
     rows = []
     for snap in snaps:
@@ -92,13 +111,27 @@ def main() -> None:
         record = next((m for m in measured.values() if abs(int(datetime.fromisoformat(m["started_at"].replace("Z", "+00:00"))
                                                                .timestamp() * 1000) - saved_ms) < 600_000), None)
         imported = (record or {}).get("result", {}).get("import") or {}
-        rows.append({"saved_at": snap["saved_at"], "fetched": len(snap["jobs"]), "by_source": dict(by_source),
+        logged = next((line for line in counts if line.get("snapshot") and snap.get("key") == line["snapshot"]), None) \
+            or nearest(counts, saved_ms)
+        if not imported and logged:
+            imported = {key: logged.get(key) for key in ("new", "updated", "unchanged", "deferred")}
+        trigger = (logged or {}).get("trigger") or ("manual (eval/b4_pull.py)" if record else "manual")
+        rows.append({"saved_at": snap["saved_at"], "trigger": trigger, "fetched": len(snap["jobs"]), "by_source": dict(by_source),
                      "cross_source_duplicates": dict(dup), "failures": snap.get("failures") or [],
                      "truncated": snap.get("truncated_boards") or [],
                      "discovery_seconds": disc and round(disc["seconds"], 1), "import_seconds": imp and round(imp["seconds"], 1),
-                     "new": imported.get("new"), "already_stored": (imported.get("updated", 0) + imported.get("unchanged", 0)) if imported else None,
+                     "new": imported.get("new"),
+                     "already_stored": ((imported.get("updated") or 0) + (imported.get("unchanged") or 0)) if imported else None,
                      "deferred": imported.get("deferred"),
                      "to_embedding_finished_s": (record or {}).get("seconds", {}).get("to_embedding_finished")})
+    # Snapshots expire after 7 days (bucket lifecycle), so keep pulls that earlier summaries recorded.
+    seen = {row["saved_at"] for row in rows}
+    for older in sorted((ROOT / "eval" / "results").glob("b4-pipeline-*/summary.json")):
+        for row in json.loads(older.read_text()).get("pulls", []):
+            if row["saved_at"] not in seen:
+                rows.append({"trigger": "manual", **row})
+                seen.add(row["saved_at"])
+    rows.sort(key=lambda row: row["saved_at"])
     failures = Counter(f"{failure['source']}:{failure.get('board')} {failure['kind']}" for row in rows for failure in row["failures"])
     out_dir = ROOT / "eval" / "results" / f"b4-pipeline-{datetime.now(timezone.utc):%Y%m%d}"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -106,19 +139,19 @@ def main() -> None:
 
     dash = lambda value: "–" if value is None else str(value)   # noqa: E731
     lines = ["# B4 job pipeline: every pull on staging", "",
-             "| Pull (UTC) | Fetched | " + " | ".join(SOURCES) + " | Cross-source duplicates | New / already stored / deferred | "
+             "| Pull (UTC) | Started by | Fetched | " + " | ".join(SOURCES) + " | Cross-source duplicates | New / already stored / deferred | "
              "Discovery s | Import s | To embedded s | Failures | Truncated searches |",
-             "|---|---|" + "---|" * len(SOURCES) + "---|---|---|---|---|---|---|"]
+             "|---|---|---|" + "---|" * len(SOURCES) + "---|---|---|---|---|---|---|"]
     for row in rows:
-        lines.append(f"| {row['saved_at'][:16]} | {row['fetched']} | " + " | ".join(str(row["by_source"].get(s, 0)) for s in SOURCES)
+        lines.append(f"| {row['saved_at'][:16]} | {row['trigger']} | {row['fetched']} | " + " | ".join(str(row["by_source"].get(s, 0)) for s in SOURCES)
                      + f" | {sum(row['cross_source_duplicates'].values())} | {dash(row['new'])} / {dash(row['already_stored'])} / "
                      f"{dash(row['deferred'])} | {dash(row['discovery_seconds'])} | {dash(row['import_seconds'])} | "
                      f"{dash(row['to_embedding_finished_s'])} | {len(row['failures'])} | {len(row['truncated'])} |")
     lines += ["", f"Pulls: {len(rows)}. Failures by kind: {dict(failures) or 'none'}.",
               "Truncated searches (more postings than one pull reads): "
               + ", ".join(sorted({board for row in rows for board in row["truncated"]})) + ".",
-              "New / already stored / deferred are known only for pulls run with eval/b4_pull.py (the workflow writes them to "
-              "its job summary, which is not kept)."]
+              "New / already stored / deferred come from the discovery log (pulls since the schedule was added) or from "
+              "eval/b4_pull.py; earlier workflow pulls wrote them only to the job summary, which is not kept."]
     (out_dir / "summary.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
 

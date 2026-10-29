@@ -17,7 +17,10 @@ A pull adds at most N new jobs (default 10); jobs already stored are refreshed, 
 
 - Each pull wakes Aurora (0 to 1 ACU, auto-pause), which costs a little and triggers the Aurora activity alarm email. Tell the team before the first one.
 - Reserved concurrency: discovery 1, import 1. With the API (10), migrate (1), embed (2) and LLM (5) that is 20 reserved: check `aws lambda get-account-settings` still leaves at least 10 unreserved.
-- The EventBridge schedule (`discovery_schedule_enabled`, `rate(1 day)`) is off. Turn it on only when daily fresh jobs are worth the wake-ups.
+- **Scheduled pulls (EventBridge):** staging pulls twice a day, at 08:00 and 20:00 Singapore time (`discovery_schedule_enabled = true`, `discovery_schedule_expression = "cron(0 0,12 * * ? *)"` in `staging.tfvars`). Each pull wakes Aurora for about 30 minutes, about USD 0.10, so roughly USD 6 a month. To stop it, set `discovery_schedule_enabled = false` and apply.
+  - A scheduled pull is never retried (a retry would pull twice). If it cannot start within an hour it is dropped.
+  - **Pausing staging stops scheduled pulls too:** the pause workflow sets the discovery function's concurrency to 0 (resume sets it back to 1), so a scheduled pull during a pause is throttled and then dropped instead of waking Aurora.
+  - Any failed pull, scheduled or manual, sets off the `jobhunter-staging-discovery-errors` alarm (the same email list as the activity alarm).
 - Adzuna keys are GitHub secrets, written into the discovery function by Deploy staging. They are never in Terraform, a snapshot, a log or a failure report.
 
 ## First-time rollout (in this order)
@@ -32,8 +35,9 @@ A pull adds at most N new jobs (default 10); jobs already stored are refreshed, 
 
 ## Checking and troubleshooting
 
-- Logs: `/aws/lambda/jobhunter-staging-discovery` and `/aws/lambda/jobhunter-staging-import`.
+- Logs: `/aws/lambda/jobhunter-staging-discovery` and `/aws/lambda/jobhunter-staging-import`. Every pull logs one JSON line with `"event": "pull_finished"`, what started it (`"trigger": "schedule"` or `"manual"`) and its counts (fetched, new, updated, unchanged, deferred, errors, source failures, truncated searches). It is the only record of a scheduled pull's counts.
+- Scheduled pulls: `aws events describe-rule --name jobhunter-staging-discovery` shows the schedule and whether it is enabled.
 - `Nothing was loaded`: every source failed or returned no Singapore jobs; the summary lists each source problem.
 - `import step failed`: read the import function log (database password missing means Deploy staging has not run since the apply).
 - `missing_credentials` for adzuna: the two secrets are not set, or Deploy staging has not run since they were added.
-- Staging paused: the workflow refuses; resume first.
+- Staging paused: the workflow refuses, and scheduled pulls are throttled and dropped; resume first.

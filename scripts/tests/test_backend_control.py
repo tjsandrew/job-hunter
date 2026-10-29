@@ -16,6 +16,7 @@ class BackendControls(unittest.TestCase):
         environment.start()
         self.addCleanup(environment.stop)
         control.os.environ.pop("EMBED_FUNCTION", None)
+        control.os.environ.pop("DISCOVERY_FUNCTION", None)
 
     def test_pause_and_resume_use_only_the_configured_api_and_bounded_values(self):
         for mode, concurrency in [("pause", 0), ("resume", 10)]:
@@ -39,6 +40,21 @@ class BackendControls(unittest.TestCase):
                 self.assertEqual(client.put_function_concurrency.call_args_list, [
                     call(FunctionName="staging-api", ReservedConcurrentExecutions=api),
                     call(FunctionName="staging-embed", ReservedConcurrentExecutions=embed)])
+
+    def test_the_job_pull_pauses_and_resumes_with_the_api_so_a_schedule_cannot_wake_aurora(self):
+        for mode, api, embed, discovery in [("pause", 0, 0, 0), ("resume", 10, 2, 1)]:
+            with self.subTest(mode=mode):
+                client = Mock()
+                reserved = {"staging-api": api, "staging-embed": embed, "staging-discovery": discovery}
+                client.get_function.side_effect = lambda FunctionName: {"Concurrency": {"ReservedConcurrentExecutions": reserved[FunctionName]}}
+                with patch.dict(control.os.environ, {"API_FUNCTION": "staging-api", "EMBED_FUNCTION": "staging-embed",
+                                                     "DISCOVERY_FUNCTION": "staging-discovery"}), \
+                        patch.object(control.boto3, "client", return_value=client), patch("builtins.print"):
+                    control.set_mode(mode)
+                self.assertEqual(client.put_function_concurrency.call_args_list, [
+                    call(FunctionName="staging-api", ReservedConcurrentExecutions=api),
+                    call(FunctionName="staging-embed", ReservedConcurrentExecutions=embed),
+                    call(FunctionName="staging-discovery", ReservedConcurrentExecutions=discovery)])
 
     def test_the_embedding_worker_is_left_alone_when_it_is_not_configured(self):
         client = Mock()
