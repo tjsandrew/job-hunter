@@ -14,7 +14,7 @@ from uuid import UUID
 IMPORT_PREFIX = "imports/"
 DEFAULT_MAX_NEW = 10         # new jobs one pull may add
 MAX_NEW_LIMIT = 200          # upper bound an operator can ask for
-MAX_SNAPSHOT_BYTES = 20_000_000
+MAX_SNAPSHOT_BYTES = 60_000_000   # 21 searches give ~22 MB (about 4 KB a job); room to grow
 
 
 def import_key(pull_id: str) -> str:

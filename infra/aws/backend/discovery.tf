@@ -106,7 +106,7 @@ resource "aws_lambda_function" "discovery" {
   image_uri     = var.image_uri # the API image; later releases update it (see ignore_changes)
   architectures = ["arm64"]
   image_config { command = ["job_hunter.discovery_worker.handler"] }
-  memory_size = 512
+  memory_size = 1024 # holds the whole snapshot (~22 MB of JSON with 21 searches) while it is built
   # Reading the feeds (MyCareersFuture waits a second between pages; 21 searches take about 5-6 minutes) plus the import
   # step, which may wait minutes for Aurora to resume after a long pause (the import function's own limit is 240 s).
   timeout                        = 600
@@ -158,7 +158,7 @@ resource "aws_lambda_function" "pull_import" {
   image_uri     = var.image_uri
   architectures = ["arm64"]
   image_config { command = ["job_hunter.import_worker.handler"] }
-  memory_size                    = 512
+  memory_size                    = 1024 # parses the snapshot: a 9 MB one used ~230 MB, and it is now ~22 MB
   timeout                        = 240
   reserved_concurrent_executions = 1 # one writer at a time
   vpc_config {
