@@ -164,7 +164,7 @@ def _job_document(job: Mapping[str, Any]) -> str:
 # Tokenising every open job's description is the biggest fixed cost of a ranking request, and a job's text only
 # changes when a pull rewrites it. Counts are kept per document text (looked up by the text itself, so a changed
 # description can never be served stale). The cache is per process, bounded, and the counts are never mutated.
-_DOCUMENT_CACHE_SIZE = 8192   # two texts per job (ranking document, title + description): room for ~4,000 jobs
+_DOCUMENT_CACHE_SIZE = 32768   # two texts per job (ranking document, title + description): room for ~16,000 jobs
 _document_cache: OrderedDict[str, Counter[str]] = OrderedDict()
 _document_cache_lock = threading.Lock()
 
@@ -244,6 +244,7 @@ def _alias_matcher(alias: str) -> tuple[re.Pattern[str], str | None]:
 _ASCII_CASE_FIXES = (("\u0307", ""), ("\u0131", "i"), ("\u017f", "s"))
 
 
+@functools.lru_cache(maxsize=16384)   # a job's title and description repeat on every request; ~2 entries per job
 def _searchable_lower(text: str) -> str:
     """Lower-cased text in which an ASCII spelling appears whenever the case-insensitive whole-word pattern could match."""
     lowered = text.lower()

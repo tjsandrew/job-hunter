@@ -25,7 +25,8 @@ from job_hunter.adapters.database import get_db
 from job_hunter.domain.identity import DEV_USERS
 from job_hunter.domain.models import (User, Profile, Preference, Job, JobReview, Application,
                                       ProfileVersion, Document, DocumentExport, Upload, AiTailorUse, now_utc)
-from job_hunter.domain.models import Base, listed_jobs
+from job_hunter.domain.models import Base
+from job_hunter import job_pool
 from job_hunter.adapters.database import engine
 from job_hunter.preparation.rendering import pdf_bytes
 from job_hunter.preparation import ai_tailoring, allowance
@@ -404,9 +405,9 @@ def recommendations(db: Session = Depends(db_for, scope="function"), limit: int 
 def keyword_recommendations(db: Session, limit: int, offset: int, q: str | None, prefs: dict,
                             scope: ListScope | None = None) -> dict:
     scope = scope or ListScope(since=now_utc() - timedelta(days=365))
-    jobs = db.scalars(select(Job).where(listed_jobs(posted_after=scope.since, include_closed=scope.include_expired))).all()
     skipped = skipped_job_ids(db)
-    candidates = [job_out(job) for job in jobs if str(job.id) not in skipped]
+    candidates = [job for job in job_pool.listed_job_rows(db, job_out, posted_after=scope.since, include_closed=scope.include_expired)
+                  if job["id"] not in skipped]
     ranked = rank_jobs(candidates, bank_services.build_profile_snapshot(db), prefs, include_closed=scope.include_expired)
     query = q.strip().casefold() if q else ""
     if query:
@@ -447,8 +448,8 @@ def recommendations_for_you(db: Session = Depends(db_for, scope="function"), lim
     ordered, fused = result.ranked, False
     if embedding_settings.for_you_fusion_enabled():
         try:   # merge the keyword ranking in; if it cannot be computed, keep the semantic order rather than fail the page
-            open_jobs = db.scalars(select(Job).where(listed_jobs(posted_after=scope.since, include_closed=scope.include_expired))).all()
-            keyword_ranked = rank_jobs([job_out(job) for job in open_jobs if str(job.id) not in set(skipped)],
+            listed = job_pool.listed_job_rows(db, job_out, posted_after=scope.since, include_closed=scope.include_expired)
+            keyword_ranked = rank_jobs([job for job in listed if job["id"] not in set(skipped)],
                                        bank_services.build_profile_snapshot(db), prefs, include_closed=scope.include_expired)
             ordered, fused = semantic.fuse_with_keyword(result.ranked, keyword_ranked), True
         except Exception:
