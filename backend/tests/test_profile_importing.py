@@ -179,3 +179,31 @@ def test_evidence_scales_to_large_sources():
     started=time.monotonic()
     for index in range(200): evidence_for(f'Point {index} that never appears in the source text at all',source)
     assert time.monotonic()-started < 5
+
+
+def test_stacked_entries_stay_separate_and_keep_their_own_dates():
+    # role / employer / dates / points, one block per job, the second with no dates at all
+    source = from_text("""Alex Tan
+EXPERIENCE
+Software Engineer
+Acme Pte Ltd
+Jan 2021 – Dec 2023
+- Built payment APIs in Python
+- Cut checkout latency
+Data Analyst
+Beta Corp
+- Built dashboards in Tableau
+Backend Engineer
+Gamma Labs
+Mar 2024 – Present
+- Run the platform team and the on-call
+  rotation for the payments services
+""")
+    work = heuristic_to_json_resume(source)['work']
+    assert [(job['position'], job['name']) for job in work] == [
+        ('Software Engineer', 'Acme Pte Ltd'), ('Data Analyst', 'Beta Corp'), ('Backend Engineer', 'Gamma Labs')]
+    assert (work[0].get('startDate'), work[0].get('endDate')) == ('2021-01', '2023-12')
+    assert 'startDate' not in work[1] and 'endDate' not in work[1]           # undated: stays undated, never borrows dates
+    assert work[2].get('startDate') == '2024-03'
+    assert work[0]['highlights'] == ['Built payment APIs in Python', 'Cut checkout latency']
+    assert work[2]['highlights'][-1] == 'rotation for the payments services'   # a lower-case wrap stays a point

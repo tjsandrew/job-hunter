@@ -29,6 +29,13 @@ def _date_fields(text):
     return {key: parsed[field] for key, field in [('startDate','start'),('endDate','end')] if parsed.get(field)}
 
 
+def _looks_like_heading(text):
+    """A short line in title case with no sentence ending: a role, employer or school rather than a wrapped point."""
+    words = text.split()
+    return (bool(words) and len(words) <= 8 and (text[0].isupper() or text[0].isdigit())
+            and not text.endswith(('.', ',', ';', ':')) and not re.match(r'^[◦•▪●*-]\s', text))
+
+
 def _section_kind(title):
     key = title.casefold().strip().rstrip(':')
     if key in HEADINGS:
@@ -93,6 +100,9 @@ def heuristic_to_json_resume(source: ExtractedText):
               'meta': {'jobHunterUnsorted': [], 'jobHunterDates': {}}}
     section, current = None, None
     header_first, details_started = False, False
+    # True once the current entry has a bullet point. A heading-like line after its points starts the next entry: in the
+    # common stacked layout (role, employer, dates, points) nothing else marks where one job ends and the next begins.
+    has_points = False
     seen_skills = set()
     outer_indent = min((line.x0 for line in source.lines if line.text.strip().startswith('• ')), default=0)
     nested = any(re.match(r'^[◦•▪●*-]\s+', line.text.strip())
@@ -102,7 +112,7 @@ def heuristic_to_json_resume(source: ExtractedText):
         heading = _section_kind(text)
         if heading:
             section, current = heading, None
-            header_first, details_started = False, False
+            header_first, details_started, has_points = False, False, False
             continue
         if re.search(r'(?i)ignore previous instructions|system prompt|assistant:|execute command', text):
             result['meta']['jobHunterUnsorted'].append({'title':'Unclassified source text','summary':text,'bullets':[]})
@@ -135,7 +145,7 @@ def heuristic_to_json_resume(source: ExtractedText):
             elif section == 'education': current = {'area':'', 'institution':title, 'courses':[]}
             else: current = {'name':title, 'description':'', 'highlights':[]}
             result[section].append(current)
-            header_first, details_started = True, False
+            header_first, details_started, has_points = True, False, False
             continue
         date_match = DATE_RANGE.search(text)
         date_only = bool((date_match and text == date_match[0]) or re.fullmatch(r'(?:19|20)\d{2}', text))
@@ -154,7 +164,7 @@ def heuristic_to_json_resume(source: ExtractedText):
         if bullet:
             if current is not None:
                 current.setdefault('courses' if section == 'education' else 'highlights',[]).append(bullet[1])
-                details_started = True
+                details_started, has_points = True, True
             else:
                 result['meta']['jobHunterUnsorted'].append({'title':section,'summary':text,'bullets':[]})
             continue
@@ -173,7 +183,8 @@ def heuristic_to_json_resume(source: ExtractedText):
             continue
         without_dates = text[:date_match.start()].strip(' |·,–') if date_match else text
         parts = re.split(r'\s+[|·]\s+|\s+at\s+|\s+—\s+',without_dates,maxsplit=1)
-        if current is not None and len(parts) == 1 and not date_match:
+        starts_next = has_points and not header_first and _looks_like_heading(text)
+        if current is not None and len(parts) == 1 and not date_match and not starts_next:
             key = 'name' if section == 'work' else 'institution' if section == 'education' else 'description'
             if not current.get(key): current[key] = text
             else: current.setdefault('courses' if section == 'education' else 'highlights',[]).append(text)
@@ -185,4 +196,5 @@ def heuristic_to_json_resume(source: ExtractedText):
             current.update(_date_fields(date_match[0]))
             result['meta']['jobHunterDates'].setdefault(section,{})[str(len(result[section]))]=normalize_dates(date_match[0])
         result[section].append(current)
+        has_points = False
     return result
