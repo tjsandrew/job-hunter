@@ -30,6 +30,8 @@ from .profile_text import PROFILE_TEXT_VERSION, ProfileTextInput
 from .retrieval import ProfileQuery, RetrievalCandidate, RetrievalResult, eligible_jobs, retrieve
 from .stores import STATUS_READY
 from .db_store import _uuid
+from . import vector_pool
+from job_hunter import job_pool
 
 
 def _floats(value: Any) -> tuple[float, ...]:
@@ -108,8 +110,15 @@ def recommend_for_profile(session: Session, profile_version_id: str, preferences
     if loaded is None:
         return None
     query, model = loaded
-    candidates = load_job_candidates(session, model=model, text_version=job_text_version, posted_after=posted_after,
-                                     include_closed=include_closed)
+    similarities = None
+    if job_pool.enabled():   # the vectors in memory, compared in one matrix product (vector_pool)
+        candidates, similarities = vector_pool.listed_candidates(session, model=model, text_version=job_text_version,
+                                                                 query_vector=query.vector, posted_after=posted_after,
+                                                                 include_closed=include_closed)
+    else:
+        candidates = load_job_candidates(session, model=model, text_version=job_text_version, posted_after=posted_after,
+                                         include_closed=include_closed)
     by_id = {job["id"]: candidate for job, candidate in candidates}
     eligible = eligible_jobs((job for job, _ in candidates), preferences, exclude_job_ids, include_closed)
-    return retrieve(query, (by_id[job["id"]] for job in eligible), limit=limit, apply_checks=apply_checks)
+    return retrieve(query, (by_id[job["id"]] for job in eligible), limit=limit, apply_checks=apply_checks,
+                    similarities=similarities)
