@@ -38,6 +38,8 @@ def summary(result: dict) -> str:
             f"- New jobs added: **{imported.get('new', 0)}** (batch size {result.get('max_new')})",
             f"- Already stored and refreshed or unchanged: {imported.get('updated', 0)} updated, {imported.get('unchanged', 0)} unchanged",
             f"- Left for the next pull: {imported.get('deferred', 0)}",
+            f"- Closed: {imported.get('closed_expired', 0)} past their closing date, {imported.get('closed_unseen', 0)} not "
+            f"listed by their source for 21 days; reopened (listed again): {imported.get('reopened', 0)}",
             f"- Records that could not be imported: {imported.get('errors', 0)}",
             f"- Embedding requested for the new jobs: {'yes' if imported.get('embed_flag_written') else 'no'}",
         ]

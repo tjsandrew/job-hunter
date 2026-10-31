@@ -1,14 +1,18 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
 
 from job_hunter.import_jobs import (
+    STALE_AFTER,
     classify_title,
+    close_unseen,
+    closing_scopes,
     import_report,
     load_snapshot,
+    report_from_payload,
     reclassify_jobs,
     save_snapshot,
     upsert_records,
@@ -275,6 +279,7 @@ def test_snapshot_round_trip_preserves_records_and_partial_state(tmp_path):
         jobs=[record()],
         failures=[{"source": "lever", "board": "bad", "kind": "rate_limited", "error": "429"}],
         truncated_boards=["greenhouse:board"],
+        checked_boards=["greenhouse:board"],
     )
     path = tmp_path / "cache" / "snapshot.json"
     save_snapshot(path, original)
@@ -282,6 +287,7 @@ def test_snapshot_round_trip_preserves_records_and_partial_state(tmp_path):
     assert loaded.jobs == original.jobs
     assert loaded.failures == original.failures
     assert loaded.truncated_boards == original.truncated_boards
+    assert loaded.checked_boards == original.checked_boards
 
 
 def test_snapshot_rejects_unknown_format(tmp_path):
@@ -289,3 +295,105 @@ def test_snapshot_rejects_unknown_format(tmp_path):
     path.write_text('{"snapshot_version": 2, "jobs": []}', encoding="utf-8")
     with pytest.raises(ValueError, match="unsupported"):
         load_snapshot(path)
+
+
+# --- closing listings ------------------------------------------------------------------------------------
+
+NOW = datetime(2026, 10, 29, tzinfo=timezone.utc)
+STALE = NOW - STALE_AFTER - timedelta(days=1)
+FRESH = NOW - timedelta(days=2)
+
+
+class ClosingRepository(MemoryRepository):
+    def open_jobs(self):
+        return [job for job in self.jobs.values() if job.status == "open"]
+
+
+def stored(repo, source="greenhouse", board="sample-board", external_id="1", *, fetched=STALE, expires=None, status="open"):
+    job = FakeJob(source=source, source_board=board, external_id=external_id, status=status, fetched_at=fetched, expires_at=expires)
+    repo.add(job)
+    return job
+
+
+def test_a_listing_already_past_its_closing_date_is_stored_closed():
+    repo = MemoryRepository()
+    upsert_records(repo, [record(expires_at="2020-01-01T00:00:00Z")], job_model=FakeJob)
+    assert repo.jobs[("greenhouse", "sample-board", "100")].status == "closed"
+
+
+def test_a_stored_job_whose_closing_date_passed_closes_without_a_re_embedding():
+    repo = MemoryRepository()
+    upsert_records(repo, [record(expires_at="2020-01-01T00:00:00Z")], job_model=FakeJob)
+    job = repo.jobs[("greenhouse", "sample-board", "100")]
+    job.status, before = "open", job.updated_at
+    stats = upsert_records(repo, [record(expires_at="2020-01-01T00:00:00Z")], job_model=FakeJob)
+    assert (stats.unchanged, stats.closed_expired) == (1, 1)
+    assert job.status == "closed" and job.updated_at == before        # status is not content: nothing to re-embed
+
+
+def test_a_closed_job_listed_again_reopens():
+    repo = MemoryRepository()
+    upsert_records(repo, [record()], job_model=FakeJob)
+    job = repo.jobs[("greenhouse", "sample-board", "100")]
+    job.status, before = "closed", job.updated_at
+    stats = upsert_records(repo, [record(fetched_at="2026-10-28T00:00:00Z")], job_model=FakeJob)
+    assert (stats.unchanged, stats.reopened) == (1, 1)
+    assert job.status == "open" and job.updated_at == before
+
+
+def test_closing_scopes_follow_what_the_pull_read_in_full():
+    report = DiscoveryReport(
+        checked_boards=["greenhouse:ok", "greenhouse:big", "lever:fine", "mycareersfuture:analyst", "adzuna:data"],
+        truncated_boards=["greenhouse:big", "mycareersfuture:analyst"],
+        failures=[{"source": "greenhouse", "board": "down"}, {"source": "adzuna", "board": "engineer"}])
+    assert closing_scopes(report) == {("greenhouse", "ok"), ("lever", "fine"), ("mycareersfuture", None)}
+
+
+def test_close_unseen_closes_only_stale_jobs_of_boards_read_in_full():
+    repo = ClosingRepository()
+    gone = stored(repo, board="ok", external_id="gone")
+    recent = stored(repo, board="ok", external_id="recent", fetched=FRESH)
+    big = stored(repo, board="big", external_id="big")               # truncated: an unseen job may just be past the cap
+    down = stored(repo, board="down", external_id="down")            # failed: the board was not read
+    unknown = stored(repo, board="ok", external_id="never-fetched", fetched=None)
+    report = DiscoveryReport(checked_boards=["greenhouse:ok", "greenhouse:big"], truncated_boards=["greenhouse:big"],
+                             failures=[{"source": "greenhouse", "board": "down"}])
+    assert close_unseen(repo, report, now=NOW) == (0, 1)
+    assert gone.status == "closed"
+    assert [job.status for job in (recent, big, down, unknown)] == ["open"] * 4
+
+
+def test_search_sources_close_only_when_every_search_ran():
+    repo = ClosingRepository()
+    mcf = stored(repo, "mycareersfuture", "sg", "m")
+    adzuna = stored(repo, "adzuna", "sg", "a")
+    report = DiscoveryReport(checked_boards=["mycareersfuture:analyst", "adzuna:data"], truncated_boards=["mycareersfuture:analyst"],
+                             failures=[{"source": "adzuna", "board": "engineer"}])
+    assert close_unseen(repo, report, now=NOW) == (0, 1)
+    assert mcf.status == "closed" and adzuna.status == "open"
+
+
+def test_expired_jobs_close_whatever_the_pull_read():
+    repo = ClosingRepository()
+    expired = stored(repo, "adzuna", "sg", "e", fetched=FRESH, expires=NOW - timedelta(hours=1))
+    later = stored(repo, "adzuna", "sg", "l", fetched=FRESH, expires=NOW + timedelta(days=3))
+    assert close_unseen(repo, DiscoveryReport(), now=NOW) == (1, 0)
+    assert expired.status == "closed" and later.status == "open"
+
+
+def test_a_snapshot_without_checked_boards_closes_nothing_as_unseen():
+    repo = ClosingRepository()
+    job = stored(repo)
+    report = report_from_payload({"snapshot_version": 1, "jobs": [], "failures": [], "truncated_boards": []})
+    assert report.checked_boards == []
+    assert close_unseen(repo, report, now=NOW) == (0, 0) and job.status == "open"
+
+
+def test_import_report_counts_closed_jobs():
+    repo = ClosingRepository()
+    stored(repo, board="sample-board", external_id="old")
+    seen_now = datetime.now(timezone.utc).isoformat()
+    report = DiscoveryReport(jobs=[record(fetched_at=seen_now)], checked_boards=["greenhouse:sample-board"])
+    stats = import_report(repo, report, job_model=FakeJob)
+    assert (stats.new, stats.closed_unseen) == (1, 1)
+    assert repo.jobs[("greenhouse", "sample-board", "100")].status == "open"     # just seen: stays open

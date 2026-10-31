@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
-    Boolean, CheckConstraint, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, JSON, String, Text, UniqueConstraint, text,
+    Boolean, CheckConstraint, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, JSON, String, Text, UniqueConstraint, and_, or_, text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID as PGUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -101,6 +101,15 @@ class Job(Base):
     canonical_job_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("jobs.id", ondelete="SET NULL"), index=True)
     match_key: Mapped[str | None] = mapped_column(String(500), index=True)
     also_seen_on: Mapped[list | None] = mapped_column(JSON)
+
+
+def listed_jobs(now: datetime | None = None):
+    """The jobs Discover shows: open, not past their closing date, and not a duplicate of another source's row.
+
+    A pull closes expired and long-unseen jobs (import_jobs.close_unseen), but pulls are occasional, so the closing date is also
+    checked here: a listing disappears on the day it expires, not at the next pull."""
+    return and_(Job.status == "open", or_(Job.expires_at.is_(None), Job.expires_at > (now or now_utc())),
+                Job.canonical_job_id.is_(None))
 
 
 class JobReview(Base):

@@ -141,6 +141,16 @@ def test_a_row_that_stops_matching_is_unlinked():
     assert second.canonical_job_id is None and first.also_seen_on == []
 
 
+def test_a_closed_row_never_hides_an_open_copy():
+    greenhouse, mcf = make("greenhouse", 1, description=LONG), make("mycareersfuture", 2, description=LONG)
+    greenhouse.status = "closed"
+    dedup.relink([greenhouse, mcf])
+    assert mcf.canonical_job_id is None and greenhouse.canonical_job_id == mcf.id
+    greenhouse.status = "open"          # listed again: the employer's own board is the canonical row again
+    dedup.relink([greenhouse, mcf])
+    assert greenhouse.canonical_job_id is None and mcf.canonical_job_id == greenhouse.id
+
+
 def test_rows_of_one_source_are_never_linked():
     a, b = make("greenhouse", 1, description=LONG), make("greenhouse", 2, description=LONG)
     dedup.relink([a, b])

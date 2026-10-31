@@ -252,7 +252,8 @@ def test_the_flag_is_written_after_the_commit_and_only_when_jobs_were_added(monk
     monkeypatch.setattr("sqlalchemy.orm.Session", Session)
     new = {"value": 2}
     monkeypatch.setattr(import_worker, "load", lambda session, report, max_new: SimpleNamespace(
-        new=new["value"], updated=0, unchanged=0, deferred=0, linked=0, errors=0, record_errors=[]))
+        new=new["value"], updated=0, unchanged=0, deferred=0, linked=0, reopened=0, closed_expired=0, closed_unseen=0,
+        errors=0, record_errors=[]))
     from job_hunter.embedding import flag
     monkeypatch.setattr(flag, "write_flag", lambda: events.append("flag") or True)
 

@@ -46,7 +46,8 @@ def load(session, report, max_new: int):
 
 def summary(stats, *, fetched: int, flagged: bool) -> dict:
     return {"snapshot_records": fetched, "new": stats.new, "updated": stats.updated, "unchanged": stats.unchanged,
-            "deferred": stats.deferred, "duplicate_links_changed": stats.linked, "errors": stats.errors, "record_errors": stats.record_errors[:5],
+            "deferred": stats.deferred, "duplicate_links_changed": stats.linked, "reopened": stats.reopened,
+            "closed_expired": stats.closed_expired, "closed_unseen": stats.closed_unseen, "errors": stats.errors, "record_errors": stats.record_errors[:5],
             "embed_flag_written": flagged}
 
 

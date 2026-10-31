@@ -296,6 +296,13 @@ def test_rate_limit_and_partial_source_failure_are_reported(monkeypatch):
     report = discover_report(DiscoveryConfig(greenhouse_boards=["bad"], lever_boards=["good"]))
     assert report.jobs == [{"title": "ok", "discovered_by": "lever:good"}]
     assert report.failures[0]["kind"] == "rate_limited"
+    assert report.checked_boards == ["lever:good"]      # a failed board was not read, so none of its jobs can close
+
+
+def test_a_truncated_board_still_counts_as_checked(monkeypatch):
+    monkeypatch.setattr(discovery, "_discover_greenhouse", lambda *a: ([{"title": "ok"}], True))
+    report = discover_report(DiscoveryConfig(greenhouse_boards=["big"]))
+    assert report.checked_boards == ["greenhouse:big"] and report.truncated_boards == ["greenhouse:big"]
 
 
 def test_http_error_classification():
