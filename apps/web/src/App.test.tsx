@@ -148,11 +148,11 @@ describe('Job Hunter user journey', () => {
     mockApi.recommendations.mockResolvedValueOnce({ items: [{ job: { id: 'role-2', title: 'Data Engineer', company: 'Northstar', location: 'Singapore' }, reasons: [] }], total: 21, next_offset: 20, degraded_mode: true });
     const search = screen.getByRole('textbox', { name: 'Search jobs' });
     await user.type(search, 'engineer');
-    await waitFor(() => expect(mockApi.recommendations).toHaveBeenLastCalledWith('engineer', 0), { timeout: 1500 });
+    await waitFor(() => expect(mockApi.recommendations).toHaveBeenLastCalledWith('engineer', 0, { posted_within: '14' }), { timeout: 1500 });
     expect(await screen.findByText('Data Engineer')).toBeInTheDocument();
     mockApi.recommendations.mockResolvedValueOnce({ items: [{ job: { id: 'role-3', title: 'Platform Engineer', company: 'Northstar', location: 'Singapore' }, reasons: [] }], total: 21, next_offset: null, degraded_mode: true });
     await user.click(screen.getByRole('button', { name: 'Load more roles' }));
-    await waitFor(() => expect(mockApi.recommendations).toHaveBeenLastCalledWith('engineer', 20));
+    await waitFor(() => expect(mockApi.recommendations).toHaveBeenLastCalledWith('engineer', 20, { posted_within: '14' }));
     expect(await screen.findByText('Platform Engineer')).toBeInTheDocument();
   });
 
@@ -421,7 +421,7 @@ describe('Discover: For you and All jobs', () => {
     expect(screen.getByRole('button', { name: 'Backend Engineer' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'For you' })).toHaveAttribute('aria-pressed', 'true');
     expect(mockApi.recommendations).not.toHaveBeenCalled();
-    expect(mockApi.recommendationsForYou).toHaveBeenCalledWith('', 0);   // the saved defaults: no filters are sent
+    expect(mockApi.recommendationsForYou).toHaveBeenCalledWith('', 0, { posted_within: '14' });   // the saved defaults: only the Posted filter is sent
     expect(screen.queryByText(/is unavailable right now/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/sharpen these matches/i)).not.toBeInTheDocument();
   });
@@ -500,7 +500,7 @@ describe('Discover: For you and All jobs', () => {
     expect(screen.getByRole('button', { name: 'All jobs' })).toBeInTheDocument();
     expect(mockApi.recommendationsForYou).toHaveBeenCalledTimes(1);
     await user.type(screen.getByLabelText('Search jobs'), 'design');
-    await waitFor(() => expect(mockApi.recommendations).toHaveBeenLastCalledWith('design', 0), { timeout: 1500 });
+    await waitFor(() => expect(mockApi.recommendations).toHaveBeenLastCalledWith('design', 0, { posted_within: '14' }), { timeout: 1500 });
     expect(mockApi.recommendationsForYou).toHaveBeenCalledTimes(1);          // never asked again this session
   });
 
@@ -622,7 +622,7 @@ describe('Discover: For you and All jobs', () => {
     render(<App />);   // default preferences: no roles, no seniority
     expect(await screen.findByText(/sharpen these matches/i)).toBeInTheDocument();
     await user.type(screen.getByLabelText('Search jobs'), 'backend');
-    await waitFor(() => expect(mockApi.recommendationsForYou).toHaveBeenLastCalledWith('backend', 0), { timeout: 1500 });
+    await waitFor(() => expect(mockApi.recommendationsForYou).toHaveBeenLastCalledWith('backend', 0, { posted_within: '14' }), { timeout: 1500 });
   });
 });
 
@@ -862,7 +862,7 @@ describe('Discover filters', () => {
     expect(await screen.findByText('Platform Engineer')).toBeInTheDocument();
     const card = screen.getByText('Platform Engineer').closest('article')!;
     expect(within(card).getByText('Hybrid', { selector: '.preference-match' })).toBeInTheDocument();
-    expect(mockApi.recommendationsForYou).toHaveBeenLastCalledWith('', 0);
+    expect(mockApi.recommendationsForYou).toHaveBeenLastCalledWith('', 0, { posted_within: '14' });
   });
 
   it('changing a pill filters this session only, and Reset goes back to the defaults', async () => {
@@ -876,7 +876,7 @@ describe('Discover filters', () => {
     expect(JSON.parse(sessionStorage.getItem('jh-discover-filters:alice')!).mode).toBe('custom');
     await user.click(screen.getByRole('button', { name: 'Reset to my preferences' }));
     expect(screen.getByRole('button', { name: 'My preferences' })).toBeInTheDocument();
-    await waitFor(() => expect(mockApi.recommendationsForYou).toHaveBeenLastCalledWith('', 0));
+    await waitFor(() => expect(mockApi.recommendationsForYou).toHaveBeenLastCalledWith('', 0, { posted_within: '14' }));
   });
 
   it('can show every job without preferences', async () => {
@@ -884,10 +884,21 @@ describe('Discover filters', () => {
     render(<App />);
     await user.click(await screen.findByRole('button', { name: 'My preferences' }));
     await user.click(screen.getByRole('menuitemradio', { name: /No filters/ }));
-    await waitFor(() => expect(mockApi.recommendationsForYou).toHaveBeenLastCalledWith('', 0, { filters: 'none' }));
+    await waitFor(() => expect(mockApi.recommendationsForYou).toHaveBeenLastCalledWith('', 0, { filters: 'none', posted_within: '14' }));
     expect(screen.getByRole('button', { name: 'Work mode: Any work mode' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Use my preferences' }));
-    await waitFor(() => expect(mockApi.recommendationsForYou).toHaveBeenLastCalledWith('', 0));
+    await waitFor(() => expect(mockApi.recommendationsForYou).toHaveBeenLastCalledWith('', 0, { posted_within: '14' }));
+  });
+
+  it('shows jobs from the last 14 days by default, and the Posted pill widens it to the past year', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Posted: Last 14 days' }));
+    await user.click(screen.getByRole('menuitemradio', { name: /Past year/ }));
+    await waitFor(() => expect(mockApi.recommendationsForYou).toHaveBeenLastCalledWith('', 0, { posted_within: '365' }));
+    expect(screen.getByRole('button', { name: 'My preferences' })).toBeInTheDocument();      // not a preference change
+    expect(JSON.parse(sessionStorage.getItem('jh-discover-filters:alice')!).posted).toBe(365);
+    expect(mockApi.putPreferences).not.toHaveBeenCalled();
   });
 
   it('saves the current filters as the new profile default on request', async () => {

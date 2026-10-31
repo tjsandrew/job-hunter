@@ -42,7 +42,7 @@ def handler(event, context):
             raise ValueError("Bootstrap requires administrator credentials")
         engine = bootstrap_engine(host, database, "jobhunter_admin", credentials["password"])
     else:
-        engine = password_engine(host, database, username, attempts=12)
+        engine = password_engine(host, database, username, attempts=30)   # ~3 minutes: after days paused, Aurora took 81 s to resume
     try:
         if action == "check":
             with engine.connect() as connection:

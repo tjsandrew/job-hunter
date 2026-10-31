@@ -8,7 +8,18 @@ export type JobPreferences = {
 
 /** Discover starts from the saved profile preferences ("profile") at every sign-in; "custom" lasts until sign-out. */
 export type FilterMode = 'profile' | 'none' | 'custom';
-export type FilterChoice = { mode: FilterMode; custom: JobPreferences };
+/** ``posted`` is the "Posted" filter in days. It is separate from the preferences: it is never saved to the profile. */
+export type FilterChoice = { mode: FilterMode; custom: JobPreferences; posted: number };
+
+/** The "Posted" choices; the server accepts exactly these. A year is the widest, so a list never reaches back further. */
+export const POSTED_OPTIONS = [
+  { days: 3, label: 'Last 3 days' }, { days: 7, label: 'Last 7 days' }, { days: 14, label: 'Last 14 days' },
+  { days: 30, label: 'Last 30 days' }, { days: 365, label: 'Past year' },
+];
+export const DEFAULT_POSTED = 14;
+export const postedLabel = (days: number) => POSTED_OPTIONS.find((option) => option.days === days)?.label || 'Past year';
+const postedDays = (value: unknown) => (POSTED_OPTIONS.some((option) => option.days === value) ? Number(value) : DEFAULT_POSTED);
+export const defaultChoice = (): FilterChoice => ({ mode: 'profile', custom: emptyPreferences(), posted: DEFAULT_POSTED });
 
 export const WORK_MODES = [{ value: 'remote', label: 'Remote' }, { value: 'hybrid', label: 'Hybrid' }, { value: 'onsite', label: 'On-site' }];
 
@@ -37,12 +48,13 @@ export function activeCount(prefs: JobPreferences): number {
     .filter(Boolean).length;
 }
 
-/** Query parameters for a job list. Nothing is sent for the profile defaults, so the server reads the saved ones. */
-export function filterQuery(choice: FilterChoice): Record<string, string | string[]> | undefined {
-  if (choice.mode === 'profile') return undefined;
-  if (choice.mode === 'none') return { filters: 'none' };
+/** Query parameters for a job list. No preferences are sent for the profile defaults, so the server reads the saved ones. */
+export function filterQuery(choice: FilterChoice): Record<string, string | string[]> {
+  const posted = { posted_within: String(postedDays(choice.posted)) };
+  if (choice.mode === 'profile') return posted;
+  if (choice.mode === 'none') return { filters: 'none', ...posted };
   const prefs = cleanPreferences(choice.custom);
-  const query: Record<string, string | string[]> = { filters: 'custom', role: prefs.roles, location: prefs.locations, work_mode: prefs.work_modes };
+  const query: Record<string, string | string[]> = { filters: 'custom', role: prefs.roles, location: prefs.locations, work_mode: prefs.work_modes, ...posted };
   if (prefs.seniority) query.seniority = prefs.seniority;
   if (prefs.salary_min !== '' && prefs.salary_min !== null && Number.isFinite(Number(prefs.salary_min))) {
     query.salary_min = String(Number(prefs.salary_min)); query.salary_currency = prefs.salary_currency; query.salary_period = prefs.salary_period;
@@ -62,7 +74,7 @@ export function loadChoice(user: string): FilterChoice | null {
   try {
     const raw = JSON.parse(sessionStorage.getItem(storageKey(user)) || 'null');
     if (!raw || !['profile', 'none', 'custom'].includes(raw.mode)) return null;
-    return { mode: raw.mode, custom: cleanPreferences(raw.custom) };
+    return { mode: raw.mode, custom: cleanPreferences(raw.custom), posted: postedDays(raw.posted) };
   } catch { return null; }
 }
 

@@ -7,6 +7,7 @@ database. Keeping the names here lets both sides and their tests agree on them.
 from __future__ import annotations
 
 from collections import defaultdict, deque
+from datetime import datetime, timezone
 from typing import Any, Iterable, Mapping
 from uuid import UUID
 
@@ -30,19 +31,32 @@ def clamp_max_new(value: Any, default: int = DEFAULT_MAX_NEW) -> int:
     return max(1, min(number, MAX_NEW_LIMIT))
 
 
+def _posted_timestamp(record: Mapping[str, Any]) -> float:
+    """When the record was posted, for sorting; a record with no (readable) date sorts after every dated one."""
+    value = record.get("posted_at")
+    try:
+        posted = datetime.fromisoformat(str(value).replace("Z", "+00:00")) if value else None
+    except ValueError:
+        posted = None
+    if posted is None:
+        return float("-inf")
+    return (posted if posted.tzinfo else posted.replace(tzinfo=timezone.utc)).timestamp()
+
+
 def interleave(records: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
-    """Round-robin the records over the board or search that found them, keeping each one's own order.
+    """Round-robin the records over the board or search that found them, newest posting first within each.
 
     A small batch therefore mixes employers, sources and keyword searches instead of being filled by the first
-    board in the list. Keyword searches share one board (all MyCareersFuture results are board "sg"), so the
-    group is ``discovered_by`` when discovery set it, and (source, board) for records from older snapshots."""
-    groups: dict[tuple[str, str], deque] = defaultdict(deque)
+    board in the list, and when a batch cannot take everything it takes the newest postings. Keyword searches share
+    one board (all MyCareersFuture results are board "sg"), so the group is ``discovered_by`` when discovery set it,
+    and (source, board) for records from older snapshots. Records posted at the same time keep their source order."""
+    groups: dict[tuple[str, str], list] = defaultdict(list)
     for record in records:
         found_by = record.get("discovered_by")
         key = ("search", str(found_by)) if found_by else (str(record.get("source") or ""), str(record.get("source_board") or ""))
         groups[key].append(record)
     ordered: list[Mapping[str, Any]] = []
-    queues = list(groups.values())
+    queues = [deque(sorted(group, key=_posted_timestamp, reverse=True)) for group in groups.values()]
     while queues:
         for queue in queues:
             ordered.append(queue.popleft())

@@ -12,7 +12,7 @@ import type { Application, CoverLetter, DiscoverMode, FitSummary, Job, Me, Recom
 
 import { FitPanel } from './FitPanel';
 import { FilterBar } from './discover/FilterBar';
-import { activePreferences, cleanPreferences, emptyPreferences, filterQuery, loadChoice, preferenceMatches, storeChoice, type FilterChoice, type JobPreferences } from './discover/filters';
+import { activePreferences, cleanPreferences, defaultChoice, emptyPreferences, filterQuery, loadChoice, preferenceMatches, storeChoice, type FilterChoice, type JobPreferences } from './discover/filters';
 import { BrandLogo, Field, Icon, Loading, Pill, SelectField, fmtDate } from './ui';
 import { emptyProfile, profileToForm } from './profile/form';
 import { ProfileView } from './profile/ProfileView';
@@ -69,10 +69,10 @@ export default function App() {
   const [prefSaving, setPrefSaving] = useState(false);
   // The last saved preferences (Profile edits stay out of Discover until saved) and Discover's filter choice for this session.
   const [savedPreferences, setSavedPreferences] = useState<JobPreferences>(emptyPreferences);
-  const [filterChoice, setFilterChoiceState] = useState<FilterChoice>(() => loadChoice(getDevUser()) || { mode: 'profile', custom: emptyPreferences() });
+  const [filterChoice, setFilterChoiceState] = useState<FilterChoice>(() => loadChoice(getDevUser()) || defaultChoice());
   const setFilterChoice = (choice: FilterChoice) => { setFilterChoiceState(choice); storeChoice(user, choice); };
   const jobFilters = useMemo(() => filterQuery(filterChoice), [filterChoice]);
-  const filterKey = JSON.stringify(jobFilters ?? null);
+  const filterKey = JSON.stringify(jobFilters);
   const shownPreferences = activePreferences(filterChoice, savedPreferences);
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
@@ -179,7 +179,7 @@ export default function App() {
     setJobs([]); setRecommendationLoading(true); setRecordsLoading(true); setRecommendationTotal(0); setNextJobOffset(null); setRankingStatus(''); setApps([]); setResumes([]);
     setProfile(emptyProfile); setFitMarks({}); setFitRunning([]); setDiscoverMode('for-you');
     setPreferences({ roles: [], locations: [], work_modes: [], seniority: '', salary_min: '', salary_currency: 'SGD', salary_period: 'year', revision: 0 });
-    setSavedPreferences(emptyPreferences()); setFilterChoiceState(loadChoice(next) || { mode: 'profile', custom: emptyPreferences() });
+    setSavedPreferences(emptyPreferences()); setFilterChoiceState(loadChoice(next) || defaultChoice());
     setUploadMessage(''); setExtractedResumeText(''); setQuery(''); setTrackerQuery(''); setStatusFilter('all');
     setActiveResume(null); setHistory([]); setFuture([]); setSaveLabel('Saved'); setStudioTab('edit'); setTrackerEdit(null); setResumeAttachTarget(null); setJobDetail(null);
     if (previewUrl) URL.revokeObjectURL(previewUrl); setPreviewUrl(''); setToast('');
@@ -189,11 +189,11 @@ export default function App() {
   // "For you" first; if it cannot answer (disabled, error) fall back to the original keyword list and say so.
   const fetchJobs = async (mode: DiscoverMode, q: string, offset: number) => {
     // Discover filters go with For you and All jobs only; nothing is sent while they are the saved profile defaults.
-    const keyword = () => (jobFilters ? api.recommendations(q, offset, jobFilters) : api.recommendations(q, offset));
+    const keyword = () => api.recommendations(q, offset, jobFilters);
     if (mode === 'saved' || mode === 'passed') return { ...(await api.reviewedJobs(mode === 'saved' ? 'saved' : 'dismissed', q, offset)), note: '', pending: false };
     if (mode === 'all' || !forYouAvailable) return { ...(await keyword()), note: '', pending: false };
     try {
-      const result = await (jobFilters ? api.recommendationsForYou(q, offset, jobFilters) : api.recommendationsForYou(q, offset));
+      const result = await api.recommendationsForYou(q, offset, jobFilters);
       return { ...result, note: result.ranking_mode === 'keyword_fallback' ? (result.fallback_reason || 'For you is not ready yet, so all jobs are shown.') : '', pending: result.ranking_mode === 'keyword_fallback' && result.fallback_code === 'profile_embedding_pending' };
     } catch (error) {
       if (error instanceof HttpError && error.code === 'FOR_YOU_DISABLED') {   // switched off on this deployment: not an error, so no note and no further tries
@@ -256,7 +256,7 @@ export default function App() {
   };
   const savePreferences = () => { void persistPreferences(preferences); };
   const saveFiltersAsDefault = async (values: JobPreferences) => {
-    if (await persistPreferences(values)) setFilterChoice({ mode: 'profile', custom: cleanPreferences(values) });
+    if (await persistPreferences(values)) setFilterChoice({ ...filterChoice, mode: 'profile', custom: cleanPreferences(values) });
   };
 
   const createResume = async (jobId?: string) => {

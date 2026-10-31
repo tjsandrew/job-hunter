@@ -126,8 +126,8 @@ def test_for_you_ranks_with_discover_filters_instead_of_saved_preferences(monkey
         client = _wire_for_you(monkeypatch, "0")
         monkeypatch.setattr(main, "effective_preferences", lambda db, chosen: chosen if chosen is not None else {"saved": True})
         original = main.semantic.semantic_for_you
-        def capture(db, confirmed, preferences, skipped):
-            seen["preferences"] = preferences
+        def capture(db, confirmed, preferences, skipped, posted_after=None):
+            seen["preferences"], seen["posted_after"] = preferences, posted_after
             return original(db, confirmed, preferences, skipped)
         monkeypatch.setattr(main.semantic, "semantic_for_you", capture)
         client.get("/v1/recommendations/for-you", params={"filters": "custom", "work_mode": "remote", "seniority": "junior"})
@@ -144,3 +144,25 @@ def test_the_preparing_message_is_user_facing():
     from job_hunter.embedding.for_you import NO_VECTOR
 
     assert "preparing your matches" in NO_VECTOR and "backfill" not in NO_VECTOR and "keyword ranker" not in NO_VECTOR
+
+
+def test_for_you_passes_the_posted_filter_to_the_semantic_candidates(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from job_hunter.api import main
+
+    seen = {}
+    try:
+        client = _wire_for_you(monkeypatch, "0")
+        original = main.semantic.semantic_for_you
+        def capture(db, confirmed, preferences, skipped, posted_after=None):
+            seen["posted_after"] = posted_after
+            return original(db, confirmed, preferences, skipped)
+        monkeypatch.setattr(main.semantic, "semantic_for_you", capture)
+        client.get("/v1/recommendations/for-you", params={"posted_within": 7})
+        assert abs(datetime.now(timezone.utc) - timedelta(days=7) - seen["posted_after"]) < timedelta(minutes=1)
+        client.get("/v1/recommendations/for-you")             # no choice: the past year
+        assert abs(datetime.now(timezone.utc) - timedelta(days=365) - seen["posted_after"]) < timedelta(minutes=1)
+        response = client.get("/v1/recommendations/for-you", params={"posted_within": 90})
+        assert response.status_code == 422 and response.json()["error"]["code"] == "INVALID_FILTERS"
+    finally:
+        app.dependency_overrides.pop(db_for, None)

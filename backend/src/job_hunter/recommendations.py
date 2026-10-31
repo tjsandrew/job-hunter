@@ -164,7 +164,7 @@ def _job_document(job: Mapping[str, Any]) -> str:
 # Tokenising every open job's description is the biggest fixed cost of a ranking request, and a job's text only
 # changes when a pull rewrites it. Counts are kept per document text (looked up by the text itself, so a changed
 # description can never be served stale). The cache is per process, bounded, and the counts are never mutated.
-_DOCUMENT_CACHE_SIZE = 2048
+_DOCUMENT_CACHE_SIZE = 8192   # two texts per job (ranking document, title + description): room for ~4,000 jobs
 _document_cache: OrderedDict[str, Counter[str]] = OrderedDict()
 _document_cache_lock = threading.Lock()
 
@@ -436,6 +436,7 @@ def rank_jobs(
         active_weights["role_alignment"] = 0.15
     total_weight = sum(active_weights.values())
     cold_start = not active_weights
+    query_terms = set(_tokenize(query))
 
     results = []
     for (original_index, job), document_vector in zip(eligible, doc_vectors):
@@ -475,9 +476,8 @@ def rank_jobs(
             })
         has_relevance_evidence = any(item["kind"] in {"skill_match", "target_role", "term_overlap"} for item in evidence)
         if not has_relevance_evidence and not cold_start and text_score > 0:
-            job_terms = set(_tokenize(" ".join((str(job.get("title") or ""), str(job.get("description") or "")))))
-            query_terms = set(_tokenize(query))
-            overlap = sorted(query_terms & job_terms)[:5]
+            job_terms = _document_counts(" ".join((str(job.get("title") or ""), str(job.get("description") or ""))))
+            overlap = sorted(query_terms & job_terms.keys())[:5]
             if overlap:
                 evidence.append({"kind": "term_overlap", "text": "Shared listing terms: " + ", ".join(overlap), "terms": overlap})
         if cold_start:

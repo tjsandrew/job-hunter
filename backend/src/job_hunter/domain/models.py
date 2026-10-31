@@ -103,13 +103,17 @@ class Job(Base):
     also_seen_on: Mapped[list | None] = mapped_column(JSON)
 
 
-def listed_jobs(now: datetime | None = None):
+def listed_jobs(now: datetime | None = None, posted_after: datetime | None = None):
     """The jobs Discover shows: open, not past their closing date, and not a duplicate of another source's row.
 
     A pull closes expired and long-unseen jobs (import_jobs.close_unseen), but pulls are occasional, so the closing date is also
-    checked here: a listing disappears on the day it expires, not at the next pull."""
-    return and_(Job.status == "open", or_(Job.expires_at.is_(None), Job.expires_at > (now or now_utc())),
-                Job.canonical_job_id.is_(None))
+    checked here: a listing disappears on the day it expires, not at the next pull. ``posted_after`` is Discover's "Posted"
+    filter; a job whose source gave no posting date always passes it."""
+    clause = and_(Job.status == "open", or_(Job.expires_at.is_(None), Job.expires_at > (now or now_utc())),
+                  Job.canonical_job_id.is_(None))
+    if posted_after is not None:
+        clause = and_(clause, or_(Job.posted_at.is_(None), Job.posted_at >= posted_after))
+    return clause
 
 
 class JobReview(Base):
