@@ -196,7 +196,9 @@ def test_each_pull_logs_one_counts_line_that_says_what_started_it(monkeypatch):
     monkeypatch.setitem(__import__("sys").modules, "boto3", SimpleNamespace(client=lambda *a, **k: object()))
     discovery_worker.handler({"version": "0", "source": "aws.events", "detail-type": "Scheduled Event"})
     discovery_worker.handler({"max_new": 10})
-    scheduled, manual = (json.loads(line) for line in lines)
+    discovery_worker.handler({"max_new": 150, "trigger": "schedule"})     # what the schedule actually sends (its own input)
+    scheduled, manual, from_input = (json.loads(line) for line in lines)
+    assert from_input["trigger"] == "schedule"
     assert scheduled == {"event": "pull_finished", "trigger": "schedule", "fetched": 2169, "max_new": 10, "new": 10, "updated": 1,
                          "unchanged": 441, "deferred": 1717, "errors": 0, "failures": 1,
                          "truncated_boards": ["adzuna:data engineer"], "snapshot": "imports/x.json"}
