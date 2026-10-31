@@ -81,9 +81,11 @@ def _rebuild(db: Session, model: str, text_version: str, signature: tuple) -> _P
 
 
 def _pool(db: Session, model: str, text_version: str) -> _Pool:
-    signature = (job_pool.jobs_signature(db), _vectors_signature(db, model, text_version))
     key = (model, text_version)
     pool = _pools.get(key)
+    if not job_pool.due(f"vectors:{model}:{text_version}", pool is not None):
+        return pool
+    signature = (job_pool.jobs_signature(db), _vectors_signature(db, model, text_version))
     if pool is None or pool.signature != signature:
         with _lock:
             pool = _pools.get(key)
@@ -118,3 +120,4 @@ def listed_candidates(db: Session, *, model: str, text_version: str, query_vecto
 def clear() -> None:
     """Forget every copy (tests)."""
     _pools.clear()
+    job_pool._checked_at.clear()

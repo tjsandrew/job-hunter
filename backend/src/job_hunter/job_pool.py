@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import os
 import threading
+import time
 from typing import Any, Callable
 
 from sqlalchemy import select, text
@@ -47,10 +48,30 @@ class _Pool:
 
 _pool: _Pool | None = None
 _lock = threading.Lock()
+_checked_at: dict[str, float] = {}     # when each cache last ran its fingerprint query (monotonic seconds)
 
 
 def enabled() -> bool:
     return os.getenv("JOB_POOL_CACHE", "1").strip().casefold() not in {"0", "false", "no", "off"}
+
+
+def recheck_seconds() -> float:
+    """How long a cache trusts its copy before asking the database again. The fingerprint queries scan every job, which kept a
+    1-ACU Aurora at 100% CPU under load when run on every request; jobs change only when a pull runs. 30 s on AWS Lambda,
+    0 (every request) elsewhere, so local runs and tests see a change at once. JOB_POOL_RECHECK_SECONDS overrides it."""
+    value = os.getenv("JOB_POOL_RECHECK_SECONDS")
+    if value is not None and value.strip():
+        return max(0.0, float(value))
+    return 30.0 if os.getenv("AWS_LAMBDA_FUNCTION_NAME") else 0.0
+
+
+def due(name: str, has_copy: bool) -> bool:
+    """Whether the cache called ``name`` should run its fingerprint query now; records the check when it does."""
+    now = time.monotonic()
+    if has_copy and now - _checked_at.get(name, float("-inf")) < recheck_seconds():
+        return False
+    _checked_at[name] = now
+    return True
 
 
 def _rebuild(db: Session, signature: tuple, job_out: Callable[[Job], dict]) -> _Pool:
@@ -89,8 +110,10 @@ def listed_job_rows(db: Session, job_out: Callable[[Job], dict], *, posted_after
     if not enabled():
         query = select(Job).where(listed_jobs(now=now, posted_after=posted_after, include_closed=include_closed))
         return [job_out(job) for job in db.scalars(query)]
-    signature = jobs_signature(db)
     pool = _pool
+    if not due("jobs", pool is not None):
+        return [row.job for row in pool.rows if _listed(row, now, posted_after, include_closed)]
+    signature = jobs_signature(db)
     if pool is None or pool.signature != signature:
         with _lock:            # concurrent requests (a local server's threads) build it once
             pool = _pool
@@ -103,3 +126,4 @@ def clear() -> None:
     """Forget the copy (tests)."""
     global _pool
     _pool = None
+    _checked_at.clear()
