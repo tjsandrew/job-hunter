@@ -65,7 +65,7 @@ def main() -> int:
     except ValueError:
         print("MAX_NEW must be a whole number.", file=sys.stderr)
         return 1
-    client = boto3.client("lambda", config=Config(read_timeout=490, connect_timeout=10, retries={"total_max_attempts": 1}))
+    client = boto3.client("lambda", config=Config(read_timeout=610, connect_timeout=10, retries={"total_max_attempts": 1}))
     if paused(client, os.environ.get("API_FUNCTION", "")):
         print("Staging is manually paused. Use Pause or resume staging backend first.", file=sys.stderr)
         return 1
