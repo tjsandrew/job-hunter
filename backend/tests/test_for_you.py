@@ -66,6 +66,7 @@ def _wire_for_you(monkeypatch, fusion):
 
     rows = tuple(RankedJob(job_id=j, rank=i, similarity=1.0, role="same", seniority="match", reasons=()) for i, j in enumerate("abc", 1))
     monkeypatch.setenv("FOR_YOU_ENABLED", "1")
+    monkeypatch.setenv("JOB_POOL_CACHE", "0")      # the fake database answers no SQL; read jobs through scalars()
     if fusion is None:
         monkeypatch.delenv("FOR_YOU_FUSION", raising=False)
     else:
