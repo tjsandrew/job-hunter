@@ -70,10 +70,11 @@ class RetrievalResult:
     considered: int                   # candidates that reached the checks
 
 
-def is_eligible(job: Mapping[str, Any], preferences: Mapping[str, Any] | None) -> bool:
-    """Same eligibility the existing ranker applies: open, wanted location, wanted work mode, minimum salary."""
+def is_eligible(job: Mapping[str, Any], preferences: Mapping[str, Any] | None, include_closed: bool = False) -> bool:
+    """Same eligibility the existing ranker applies: open (unless ``include_closed``), wanted location, wanted work mode,
+    minimum salary."""
     preferences = preferences or {}
-    if str(job.get("status", "open")).casefold() != "open":
+    if not include_closed and str(job.get("status", "open")).casefold() != "open":
         return False
     if not _location_matches(job.get("location"), _as_locations(preferences)):
         return False
@@ -81,9 +82,9 @@ def is_eligible(job: Mapping[str, Any], preferences: Mapping[str, Any] | None) -
 
 
 def eligible_jobs(jobs: Iterable[Mapping[str, Any]], preferences: Mapping[str, Any] | None,
-                  exclude_job_ids: Iterable[str] = ()) -> list[Mapping[str, Any]]:
+                  exclude_job_ids: Iterable[str] = (), include_closed: bool = False) -> list[Mapping[str, Any]]:
     excluded = {str(i) for i in exclude_job_ids}
-    return [job for job in jobs if str(job.get("id")) not in excluded and is_eligible(job, preferences)]
+    return [job for job in jobs if str(job.get("id")) not in excluded and is_eligible(job, preferences, include_closed)]
 
 
 def cosine(left: Sequence[float], right: Sequence[float]) -> float:

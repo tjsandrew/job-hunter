@@ -75,7 +75,7 @@ def _wire_for_you(monkeypatch, fusion):
     monkeypatch.setattr(main.semantic, "semantic_for_you", lambda *a, **k: (RetrievalResult(ranked=rows, blocked=(), considered=3), None))
     monkeypatch.setattr(main.semantic, "matching", lambda db, ranked, q, job_out: list(ranked))
     monkeypatch.setattr(main.semantic, "page_items", lambda db, ranked, offset, limit, job_out, **k: [r.job_id for r in ranked[offset:offset + limit]])
-    monkeypatch.setattr(main, "rank_jobs", lambda jobs, profile, prefs: [{"job": {"id": j}} for j in "cba"])
+    monkeypatch.setattr(main, "rank_jobs", lambda jobs, profile, prefs, **_: [{"job": {"id": j}} for j in "cba"])
     def fake_db():
         yield _FakeDb()
 
@@ -126,7 +126,7 @@ def test_for_you_ranks_with_discover_filters_instead_of_saved_preferences(monkey
         client = _wire_for_you(monkeypatch, "0")
         monkeypatch.setattr(main, "effective_preferences", lambda db, chosen: chosen if chosen is not None else {"saved": True})
         original = main.semantic.semantic_for_you
-        def capture(db, confirmed, preferences, skipped, posted_after=None):
+        def capture(db, confirmed, preferences, skipped, posted_after=None, include_closed=False):
             seen["preferences"], seen["posted_after"] = preferences, posted_after
             return original(db, confirmed, preferences, skipped)
         monkeypatch.setattr(main.semantic, "semantic_for_you", capture)
@@ -154,7 +154,7 @@ def test_for_you_passes_the_posted_filter_to_the_semantic_candidates(monkeypatch
     try:
         client = _wire_for_you(monkeypatch, "0")
         original = main.semantic.semantic_for_you
-        def capture(db, confirmed, preferences, skipped, posted_after=None):
+        def capture(db, confirmed, preferences, skipped, posted_after=None, include_closed=False):
             seen["posted_after"] = posted_after
             return original(db, confirmed, preferences, skipped)
         monkeypatch.setattr(main.semantic, "semantic_for_you", capture)

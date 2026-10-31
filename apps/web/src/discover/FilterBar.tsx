@@ -47,6 +47,7 @@ export function FilterBar({ choice, setChoice, saved, onSaveDefault, saving, onE
   // Any edit starts from what is shown now; matching the saved defaults again switches back to "My preferences".
   const edit = (next: JobPreferences) => setChoice({ ...choice, mode: samePreferences(next, saved) ? 'profile' : 'custom', custom: next });
   const pickPosted = (posted: number) => { setChoice({ ...choice, posted }); setOpen(null); };
+  const postedSummary = postedLabel(choice.posted) + (choice.hideExpired ? '' : ' + expired');
   const pick = (mode: FilterChoice['mode']) => { setChoice({ ...choice, mode }); setOpen(null); };
   const presetLabel = choice.mode === 'profile' ? 'My preferences' : choice.mode === 'none' ? 'No filters' : 'Custom';
   const count = activeCount(prefs);
@@ -59,8 +60,8 @@ export function FilterBar({ choice, setChoice, saved, onSaveDefault, saving, onE
       <button type="button" className={`filter-pill preset${choice.mode !== 'none' ? ' on' : ''}`} aria-haspopup="menu" aria-expanded={open === 'preset'} onClick={toggle('preset')}>
         <Icon name={choice.mode === 'profile' ? 'profile' : 'filter'} /><span>{presetLabel}</span><span className="filter-caret" aria-hidden="true">▾</span>
       </button>
-      <button type="button" className={`filter-pill field-pill${choice.posted !== 365 ? ' on' : ''}`} aria-haspopup="menu" aria-label={`Posted: ${postedLabel(choice.posted)}`} aria-expanded={open === 'posted'} onClick={toggle('posted')}>
-        <span>{postedLabel(choice.posted)}</span><span className="filter-caret" aria-hidden="true">▾</span>
+      <button type="button" className={`filter-pill field-pill${choice.posted !== 365 ? ' on' : ''}`} aria-haspopup="menu" aria-label={`Posted: ${postedSummary}`} aria-expanded={open === 'posted'} onClick={toggle('posted')}>
+        <span>{postedSummary}</span><span className="filter-caret" aria-hidden="true">▾</span>
       </button>
       {FIELDS.map(({ field: name, label }) => <button type="button" key={name} className={`filter-pill field-pill${isSet(name, prefs) ? ' on' : ''}`} aria-label={`${label}: ${summary(name, prefs)}`} aria-expanded={open === name} onClick={toggle(name)}>
         <span>{summary(name, prefs)}</span><span className="filter-caret" aria-hidden="true">▾</span>
@@ -85,6 +86,9 @@ export function FilterBar({ choice, setChoice, saved, onSaveDefault, saving, onE
       {POSTED_OPTIONS.map((option) => <button type="button" key={option.days} role="menuitemradio" aria-checked={choice.posted === option.days} onClick={() => pickPosted(option.days)}>
         <strong>{option.label}</strong>{option.days === DEFAULT_POSTED && <small>Default</small>}
       </button>)}
+      <button type="button" role="menuitemcheckbox" aria-checked={choice.hideExpired} className="filter-menu-check" onClick={() => setChoice({ ...choice, hideExpired: !choice.hideExpired })}>
+        <span className="filter-check-box" aria-hidden="true">{choice.hideExpired ? '✓' : ''}</span><span><strong>Hide expired listings</strong><small>Untick to include closed jobs</small></span>
+      </button>
     </div>}
     {field && <div className="filter-popover" role="dialog" aria-label={`${field.label} filter`} style={{ left }}>
       <PreferencesForm preferences={prefs} setPreferences={edit} only={field.field} />

@@ -86,3 +86,11 @@ def test_no_profile_text_skips_tokenising_the_pool():
     rec._document_cache.clear()
     rec.rank_jobs([{"id": "1", "title": "Engineer", "description": "Python", "status": "open"}], {}, {})
     assert len(rec._document_cache) == 0                                      # cold start: nothing to compare against
+
+
+def test_closed_jobs_are_ranked_only_when_asked_for():
+    jobs = [{"id": "1", "title": "Data Engineer", "description": "Python", "status": "open"},
+            {"id": "2", "title": "Data Engineer", "description": "Python", "status": "closed"}]
+    profile = {"skills": ["Python"]}
+    assert [r["job"]["id"] for r in rec.rank_jobs(jobs, profile, {})] == ["1"]
+    assert sorted(r["job"]["id"] for r in rec.rank_jobs(jobs, profile, {}, include_closed=True)) == ["1", "2"]
