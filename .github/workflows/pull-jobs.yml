@@ -7,7 +7,7 @@ on:
       max_new:
         description: How many NEW jobs to add in this run
         required: true
-        default: '10'
+        default: '100'
 permissions:
   contents: read
   id-token: write

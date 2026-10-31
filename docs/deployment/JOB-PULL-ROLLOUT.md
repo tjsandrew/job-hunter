@@ -11,7 +11,7 @@ Aurora is private and the VPC has no internet, so two Lambdas on the API image s
 | `jobhunter-staging-discovery` | outside the VPC | reads Greenhouse, Lever, MyCareersFuture (and Adzuna with keys), Singapore only; stores `imports/<pull id>.json`; invokes the import function and returns its counts |
 | `jobhunter-staging-import` | inside the VPC | reads the snapshot over the S3 gateway endpoint, inserts the next N new jobs as role `jobhunter_app`, links duplicates, writes the embed flag after the commit |
 
-A pull adds at most N new jobs (default 10); jobs already stored are refreshed, the rest are left for the next pull. Nothing needs a NAT gateway or a new bucket notification.
+A pull adds at most N new jobs (100 in staging, at most 200), newest postings first within each search; jobs already stored are refreshed, the rest are left for the next pull. Each pull also closes listings that expired or went unseen for 21 days. Nothing needs a NAT gateway or a new bucket notification.
 
 ## Cost and safety
 

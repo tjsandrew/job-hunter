@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { Icon } from '../ui';
 import { PreferencesForm, type PreferenceField } from '../preferences/PreferencesForm';
-import { activeCount, activePreferences, samePreferences, WORK_MODES, type FilterChoice, type JobPreferences } from './filters';
+import { activeCount, activePreferences, DEFAULT_POSTED, POSTED_OPTIONS, postedLabel, samePreferences, WORK_MODES, type FilterChoice, type JobPreferences } from './filters';
 import './filters.css';
 
 const LEVELS: Record<string, string> = { intern: 'Intern', junior: 'Junior', mid: 'Mid-level', senior: 'Senior', lead: 'Lead', executive: 'Executive' };
@@ -20,12 +20,12 @@ const FIELDS: { field: PreferenceField; label: string }[] = [
   { field: 'seniority', label: 'Level' }, { field: 'salary', label: 'Salary' },
 ];
 
-/** Discover's filters: a preset ("My preferences", "No filters", "Custom"), one pill per preference, and "All filters". */
+/** Discover's filters: a preset ("My preferences", "No filters", "Custom"), "Posted", one pill per preference, and "All filters". */
 export function FilterBar({ choice, setChoice, saved, onSaveDefault, saving, onEditDefaults }: {
   choice: FilterChoice; setChoice: (choice: FilterChoice) => void; saved: JobPreferences;
   onSaveDefault: (prefs: JobPreferences) => void; saving: boolean; onEditDefaults: () => void;
 }) {
-  const [open, setOpenState] = useState<PreferenceField | 'preset' | 'all' | null>(null);
+  const [open, setOpenState] = useState<PreferenceField | 'preset' | 'posted' | 'all' | null>(null);
   const [left, setLeft] = useState(0);   // where the open dropdown sits: under its pill, kept inside the bar
   const root = useRef<HTMLDivElement>(null);
   const setOpen = (next: typeof open, from?: HTMLElement) => {
@@ -45,7 +45,8 @@ export function FilterBar({ choice, setChoice, saved, onSaveDefault, saving, onE
     return () => { document.removeEventListener('mousedown', outside); document.removeEventListener('keydown', escape); };
   }, [open]);
   // Any edit starts from what is shown now; matching the saved defaults again switches back to "My preferences".
-  const edit = (next: JobPreferences) => setChoice(samePreferences(next, saved) ? { mode: 'profile', custom: next } : { mode: 'custom', custom: next });
+  const edit = (next: JobPreferences) => setChoice({ ...choice, mode: samePreferences(next, saved) ? 'profile' : 'custom', custom: next });
+  const pickPosted = (posted: number) => { setChoice({ ...choice, posted }); setOpen(null); };
   const pick = (mode: FilterChoice['mode']) => { setChoice({ ...choice, mode }); setOpen(null); };
   const presetLabel = choice.mode === 'profile' ? 'My preferences' : choice.mode === 'none' ? 'No filters' : 'Custom';
   const count = activeCount(prefs);
@@ -57,6 +58,9 @@ export function FilterBar({ choice, setChoice, saved, onSaveDefault, saving, onE
     <div className="filter-pills" role="group" aria-label="Job filters">
       <button type="button" className={`filter-pill preset${choice.mode !== 'none' ? ' on' : ''}`} aria-haspopup="menu" aria-expanded={open === 'preset'} onClick={toggle('preset')}>
         <Icon name={choice.mode === 'profile' ? 'profile' : 'filter'} /><span>{presetLabel}</span><span className="filter-caret" aria-hidden="true">▾</span>
+      </button>
+      <button type="button" className={`filter-pill field-pill${choice.posted !== 365 ? ' on' : ''}`} aria-haspopup="menu" aria-label={`Posted: ${postedLabel(choice.posted)}`} aria-expanded={open === 'posted'} onClick={toggle('posted')}>
+        <span>{postedLabel(choice.posted)}</span><span className="filter-caret" aria-hidden="true">▾</span>
       </button>
       {FIELDS.map(({ field: name, label }) => <button type="button" key={name} className={`filter-pill field-pill${isSet(name, prefs) ? ' on' : ''}`} aria-label={`${label}: ${summary(name, prefs)}`} aria-expanded={open === name} onClick={toggle(name)}>
         <span>{summary(name, prefs)}</span><span className="filter-caret" aria-hidden="true">▾</span>
@@ -73,9 +77,14 @@ export function FilterBar({ choice, setChoice, saved, onSaveDefault, saving, onE
     <span className="sr-only" role="status">{choice.mode === 'custom' ? "You've changed your filters for this session." : choice.mode === 'none' ? 'Showing every open job, without your preferences.' : ''}</span>
     {open === 'preset' && <div className="filter-menu" role="menu" style={{ left }}>
       <button type="button" role="menuitemradio" aria-checked={choice.mode === 'profile'} onClick={() => pick('profile')}><strong>My preferences</strong><small>Your Profile defaults</small></button>
-      <button type="button" role="menuitemradio" aria-checked={choice.mode === 'none'} onClick={() => pick('none')}><strong>No filters</strong><small>Every open job</small></button>
+      <button type="button" role="menuitemradio" aria-checked={choice.mode === 'none'} onClick={() => pick('none')}><strong>No filters</strong><small>Jobs without your preferences</small></button>
       {customDiffers && <button type="button" role="menuitemradio" aria-checked={choice.mode === 'custom'} onClick={() => pick('custom')}><strong>Custom</strong><small>Your changes this session</small></button>}
       <button type="button" role="menuitem" className="filter-menu-link" onClick={() => { setOpen(null); onEditDefaults(); }}>Edit defaults in Profile →</button>
+    </div>}
+    {open === 'posted' && <div className="filter-menu" role="menu" aria-label="Posted" style={{ left }}>
+      {POSTED_OPTIONS.map((option) => <button type="button" key={option.days} role="menuitemradio" aria-checked={choice.posted === option.days} onClick={() => pickPosted(option.days)}>
+        <strong>{option.label}</strong>{option.days === DEFAULT_POSTED && <small>Default</small>}
+      </button>)}
     </div>}
     {field && <div className="filter-popover" role="dialog" aria-label={`${field.label} filter`} style={{ left }}>
       <PreferencesForm preferences={prefs} setPreferences={edit} only={field.field} />

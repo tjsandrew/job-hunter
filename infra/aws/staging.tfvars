@@ -28,6 +28,9 @@ discovery_enabled = true
 # (about USD 0.10), roughly USD 6 a month; the pause workflow also stops scheduled pulls.
 discovery_schedule_enabled    = true
 discovery_schedule_expression = "cron(0 0,12 * * ? *)"
+# New jobs per pull (newest postings first). The searches see about 100 new listings a day, so 100 twice a day keeps up
+# with the market; jobs close again when they expire or go unseen for 21 days. The code caps one pull at 200.
+discovery_max_new = 100
 # Searches cover the evaluation personas and a broader market. A pull rotates between searches, so each batch is
 # mixed. Nine searches fetched 2,363 unique Singapore listings in about 3 minutes (dry run, 25 October 2026);
 # the discovery function's timeout is 300 seconds.

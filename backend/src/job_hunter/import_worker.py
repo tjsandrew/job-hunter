@@ -24,7 +24,7 @@ _engine = None
 def build_engine():
     from job_hunter.adapters.aws_config import password_engine
     return password_engine(os.environ["DATABASE_HOST"], os.getenv("DATABASE_NAME", "jobhunter"),
-                           os.getenv("DATABASE_USERNAME") or DB_ROLE, attempts=12)   # Aurora may be resuming
+                           os.getenv("DATABASE_USERNAME") or DB_ROLE, attempts=25)   # ~2.5 minutes: Aurora may be resuming (81 s seen)
 
 
 def read_report(s3, bucket: str, key: str):

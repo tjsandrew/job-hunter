@@ -9,7 +9,7 @@ from job_hunter.domain.models import Job
 from job_hunter.import_jobs import STALE_AFTER, SQLAlchemyJobRepository, import_report
 from job_hunter.ingestion.discovery import DiscoveryReport
 
-from tests.integration.test_job_dedup_db import discover, pytestmark, record, world  # noqa: F401  (fixture and skip rule)
+from tests.integration.test_job_dedup_db import HEADERS, client, discover, pytestmark, record, world  # noqa: F401  (fixture and skip rule)
 
 
 def pull(engine, *records, checked=()):
@@ -60,3 +60,24 @@ def test_an_open_copy_takes_over_when_the_canonical_row_closes(world):
     assert [item["job"]["source"] for item in discover(employer)] == ["greenhouse"]
     pull(engine, checked=[f"greenhouse:{board}"])
     assert [item["job"]["source"] for item in discover(employer)] == ["adzuna"]
+
+
+def test_the_posted_filter_keeps_recent_and_undated_jobs(world):
+    engine, employer = world
+    board = f"board-{employer}"
+    now = datetime.now(timezone.utc)
+    pull(engine, record("greenhouse", board, "new", employer, title="Platform Engineer", posted_at=(now - timedelta(days=2)).isoformat()),
+         record("greenhouse", board, "old", employer, posted_at=(now - timedelta(days=20)).isoformat()),
+         record("greenhouse", board, "undated", employer, title="Site Reliability Engineer", posted_at=None))
+
+    def titles(**params):
+        response = client.get("/v1/recommendations", params={"q": employer, "limit": 100, **params}, headers=HEADERS)
+        assert response.status_code == 200, response.text
+        return sorted(item["job"]["title"] for item in response.json()["items"])
+
+    assert titles() == ["Data Engineer", "Platform Engineer", "Site Reliability Engineer"]        # default: the past year
+    assert titles(posted_within=14) == ["Platform Engineer", "Site Reliability Engineer"]
+    with Session(engine) as db, db.begin():
+        db.execute(text("UPDATE jobs SET posted_at = now() - interval '400 days' WHERE company LIKE :name AND external_id = 'old'"),
+                   {"name": f"{employer}%"})
+    assert titles() == ["Platform Engineer", "Site Reliability Engineer"]                          # older than a year: never listed

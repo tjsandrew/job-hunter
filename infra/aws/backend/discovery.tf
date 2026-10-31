@@ -107,8 +107,9 @@ resource "aws_lambda_function" "discovery" {
   architectures = ["arm64"]
   image_config { command = ["job_hunter.discovery_worker.handler"] }
   memory_size = 512
-  # Reading the feeds (MyCareersFuture waits a second between pages) plus the import step, which may wait for Aurora to resume.
-  timeout                        = 300
+  # Reading the feeds (MyCareersFuture waits a second between pages, about 2.5 minutes) plus the import step, which may wait
+  # minutes for Aurora to resume after a long pause (the import function's own limit is 240 s).
+  timeout                        = 480
   reserved_concurrent_executions = 1
   environment {
     variables = {

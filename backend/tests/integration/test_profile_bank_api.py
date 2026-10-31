@@ -234,13 +234,15 @@ def test_recommendations_route_preserves_legacy_order_and_reasons_after_migratio
     from copy import deepcopy
     from job_hunter.api.main import job_out
     from job_hunter.demo import LEGACY_PROFILE
-    from job_hunter.domain.models import Job, ProfileItem
+    from datetime import timedelta
+    from job_hunter.domain.models import Job, ProfileItem, listed_jobs, now_utc
     from job_hunter.profile_bank.migration import migrate_legacy_profile
     from job_hunter.recommendations import rank_jobs
     engine, ids = isolated_users
     with Session(engine) as db, db.begin():
         db.execute(text("SELECT set_config('app.user_id', :uid, true)"), {"uid": str(ids["alice"])})
-        jobs = [job_out(job) for job in db.query(Job).filter(Job.status == "open")]
+        # the jobs the route lists: open, unexpired, not a duplicate, posted in the past year (its default)
+        jobs = [job_out(job) for job in db.query(Job).filter(listed_jobs(posted_after=now_utc() - timedelta(days=365)))]
         before = rank_jobs(jobs, deepcopy(LEGACY_PROFILE), {})
         basics, items = migrate_legacy_profile(LEGACY_PROFILE, ids["alice"])
         db.get(Profile, ids["alice"]).draft = basics

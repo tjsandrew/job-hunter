@@ -91,7 +91,7 @@ def handler(event, context=None):
     # The import step may wait for Aurora to resume, so wait longer than boto3's 60 s default, and never retry a
     # timed-out invoke (a retry would run the import twice).
     from botocore.config import Config
-    lambda_client = boto3.client("lambda", region_name=region, config=Config(read_timeout=280, connect_timeout=10,
+    lambda_client = boto3.client("lambda", region_name=region, config=Config(read_timeout=250, connect_timeout=10,
                                                                              retries={"total_max_attempts": 1}))
     result = pull(boto3.client("s3", region_name=region), lambda_client,
                   bucket=bucket, import_function=import_function, max_new=max_new)

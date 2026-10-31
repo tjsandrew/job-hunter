@@ -11,6 +11,7 @@ role and level checks that actually matched; caveats such as "level not stated" 
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from sqlalchemy import select
@@ -37,11 +38,13 @@ MAX_SKILLS_SHOWN = 3
 
 
 def semantic_for_you(db: Session, confirmed: "tuple[str, int, Any] | None", preferences: Mapping[str, Any] | None,
-                     exclude_job_ids: Iterable[str] = ()) -> "tuple[RetrievalResult | None, str | None]":
-    """``confirmed`` is ``(profile_version_id, revision, snapshot)`` or ``None``."""
+                     exclude_job_ids: Iterable[str] = (), posted_after: datetime | None = None,
+                     ) -> "tuple[RetrievalResult | None, str | None]":
+    """``confirmed`` is ``(profile_version_id, revision, snapshot)`` or ``None``; ``posted_after`` is Discover's "Posted" filter."""
     if confirmed is None:
         return None, NO_PROFILE
-    result = recommend_for_profile(db, confirmed[0], preferences or {}, limit=None, exclude_job_ids=exclude_job_ids)
+    result = recommend_for_profile(db, confirmed[0], preferences or {}, limit=None, exclude_job_ids=exclude_job_ids,
+                                   posted_after=posted_after)
     if result is None:
         return None, NO_VECTOR
     return result, None

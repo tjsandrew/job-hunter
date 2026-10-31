@@ -60,6 +60,15 @@ def test_interleave_rotates_between_keyword_searches_that_share_a_board():
     assert [item["external_id"] for item in mixed] == ["0", "f0", "1", "f1", "2"]
 
 
+def test_interleave_takes_the_newest_postings_of_each_search_first():
+    dated = [dict(job, posted_at=posted) for job, posted in zip(jobs(4, "greenhouse", "a"),
+             ["2026-10-01T00:00:00Z", None, "2026-10-28T09:00:00+00:00", "2026-10-15T00:00:00"])]
+    other = jobs(1, "lever", "z")
+    mixed = job_pull.interleave(dated + other)
+    assert [job["external_id"] for job in mixed if job["source"] == "greenhouse"] == ["2", "3", "0", "1"]   # undated last
+    assert mixed[1]["source"] == "lever"                                                              # still mixed
+
+
 def test_interleave_falls_back_to_board_for_older_snapshots():
     mixed = job_pull.interleave(jobs(2, "mycareersfuture", "sg") + jobs(1, "lever", "z"))
     assert [(item["source"], item["external_id"]) for item in mixed] == [
