@@ -191,7 +191,7 @@ resource "aws_cloudwatch_event_target" "discovery" {
   count = (local.discovery_enabled && var.discovery_schedule_enabled) ? 1 : 0
   rule  = aws_cloudwatch_event_rule.discovery[0].name
   arn   = aws_lambda_function.discovery[0].arn
-  input = jsonencode({ max_new = var.discovery_max_new })
+  input = jsonencode({ max_new = var.discovery_max_new, trigger = "schedule" })
 }
 resource "aws_lambda_permission" "discovery_from_schedule" {
   count         = (local.discovery_enabled && var.discovery_schedule_enabled) ? 1 : 0

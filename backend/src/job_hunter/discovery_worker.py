@@ -82,7 +82,9 @@ def summary_line(result: dict, trigger: str) -> str:
 def handler(event, context=None):
     import boto3
     logging.getLogger().setLevel(logging.INFO)
-    trigger = "schedule" if isinstance(event, dict) and event.get("source") == "aws.events" else "manual"
+    # The schedule sends its own input ({"max_new": ..., "trigger": "schedule"}), which replaces EventBridge's event.
+    scheduled = isinstance(event, dict) and (event.get("trigger") == "schedule" or event.get("source") == "aws.events")
+    trigger = "schedule" if scheduled else "manual"
     region = os.getenv("AWS_REGION") or "ap-southeast-1"
     bucket = os.environ["DOCUMENT_BUCKET"]
     import_function = os.environ["IMPORT_FUNCTION"]

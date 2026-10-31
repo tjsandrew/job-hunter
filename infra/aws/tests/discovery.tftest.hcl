@@ -112,7 +112,7 @@ run "a_cron_schedule_starts_pulls_with_the_batch_size" {
     discovery_schedule_expression = "cron(0 0,12 * * ? *)"
   }
   assert {
-    condition     = aws_cloudwatch_event_rule.discovery[0].schedule_expression == "cron(0 0,12 * * ? *)" && jsondecode(aws_cloudwatch_event_target.discovery[0].input).max_new == 10
+    condition     = aws_cloudwatch_event_rule.discovery[0].schedule_expression == "cron(0 0,12 * * ? *)" && jsondecode(aws_cloudwatch_event_target.discovery[0].input).max_new == 10 && jsondecode(aws_cloudwatch_event_target.discovery[0].input).trigger == "schedule"
     error_message = "The schedule is a variable, and each scheduled pull asks for the configured batch size."
   }
 }
