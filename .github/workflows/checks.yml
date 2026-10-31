@@ -6,9 +6,11 @@ on:
     branches: [main]
 permissions:
   contents: read
+# A newer push to the same PR or to main cancels the older run: only the latest commit's result matters, and Deploy
+# staging runs its own tests anyway. Saves Actions minutes when several PRs merge close together.
 concurrency:
   group: checks-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 jobs:
   changes:
     runs-on: ubuntu-latest
