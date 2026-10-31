@@ -28,14 +28,18 @@ discovery_enabled = true
 # (about USD 0.10), roughly USD 6 a month; the pause workflow also stops scheduled pulls.
 discovery_schedule_enabled    = true
 discovery_schedule_expression = "cron(0 0,12 * * ? *)"
-# New jobs per pull (newest postings first). The searches see about 100 new listings a day, so 100 twice a day keeps up
-# with the market; jobs close again when they expire or go unseen for 21 days. The code caps one pull at 200.
-discovery_max_new = 100
-# Searches cover the evaluation personas and a broader market. A pull rotates between searches, so each batch is
-# mixed. Nine searches fetched 2,363 unique Singapore listings in about 3 minutes (dry run, 25 October 2026);
-# the discovery function's timeout is 300 seconds.
+# New jobs per pull (newest postings first). The 21 searches see roughly 250 new listings a day, so 150 twice a day keeps
+# up with the market; jobs close again when they expire or go unseen for 21 days. The code caps one pull at 200.
+discovery_max_new = 150
+# Searches cover the evaluation personas and a broader market: tech, data and product (the first nine), then finance,
+# marketing, people and operations, consulting and design (added 31 October 2026, each checked to return MyCareersFuture
+# jobs). A pull rotates between searches, so each batch is mixed. Each search reads at most 5 pages of 100; the nine
+# tech searches fetched 2,226 Singapore listings in about 130 seconds, so 21 take about 5-6 minutes (timeout 600 s).
 discovery_mycareersfuture_searches = ["data engineer", "software engineer", "data analyst", "frontend developer",
-"backend developer", "devops engineer", "cloud engineer", "business analyst", "product manager"]
+  "backend developer", "devops engineer", "cloud engineer", "business analyst", "product manager",
+  "machine learning engineer", "financial analyst", "accountant", "investment analyst", "marketing executive",
+  "digital marketing", "hr executive", "operations executive", "supply chain", "management consultant",
+"project manager", "ux designer"]
 
 # Adzuna (Singapore search verified on 24 October 2026). One request per keyword per pull; the free plan allows very few calls a
 # day, so keep this list short. The keys are the GitHub secrets ADZUNA_APP_ID and ADZUNA_APP_KEY; without them Adzuna fails cleanly
