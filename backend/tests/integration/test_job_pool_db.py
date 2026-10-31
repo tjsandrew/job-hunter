@@ -53,3 +53,20 @@ def test_the_pool_is_built_once_while_nothing_changes(world, monkeypatch):
     job_pool.clear()
     listed(); listed(); listed()
     assert len(builds) == 1
+
+
+def test_on_lambda_the_pool_rechecks_the_database_at_most_every_interval(world, monkeypatch):
+    engine, employer = world
+    now = datetime.now(timezone.utc)
+    pull(engine, record("greenhouse", f"b-{employer}", "1", employer, posted_at=now.isoformat()))
+    monkeypatch.setenv("AWS_LAMBDA_FUNCTION_NAME", "jobhunter-staging-api")      # the Lambda default: 30 s
+    assert job_pool.recheck_seconds() == 30
+    job_pool.clear()
+    ids = lambda: {item[0] for item in listed(q=employer)[0]}
+    assert len(ids()) == 1
+    pull(engine, record("greenhouse", f"b-{employer}", "2", employer, title="Platform Engineer", posted_at=now.isoformat()))
+    assert len(ids()) == 1                                                     # within the interval: the copy, no query
+    job_pool._checked_at.clear()                                               # the interval has passed
+    assert len(ids()) == 2
+    monkeypatch.setenv("JOB_POOL_RECHECK_SECONDS", "0")
+    assert job_pool.recheck_seconds() == 0
