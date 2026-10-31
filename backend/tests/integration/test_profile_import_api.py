@@ -345,3 +345,37 @@ def test_delete_uploaded_original_preserves_imported_facts_and_documents(isolate
     with Session(engine) as db:
         db.execute(text("SELECT set_config('app.user_id', :uid, true)"), {"uid": str(user_ids['alice'])})
         assert db.execute(text("SELECT upload_id FROM profile_imports WHERE id=:id"), {"id": row['id']}).scalar_one() is None
+
+
+STACKED = """Alex Tan
+EXPERIENCE
+Research Assistant
+Acme Labs
+Jan 2024 – Present
+- Built forecasting pipelines
+"""
+
+
+def test_merging_an_ended_role_into_a_current_one_keeps_the_dates_and_reports_them(isolated_users):
+    first = start({"text": STACKED})
+    assert apply(first, [{"candidate_id": candidate(first, "experience")["candidate_id"], "action": "add"}]).status_code == 200
+    second = start({"text": STACKED.replace("Jan 2024 – Present", "Jan 2024 – Jun 2025").replace("pipelines", "pipelines in Python")})
+    role = candidate(second, "experience")
+    assert role["match"]["status"] == "update"
+    response = apply(second, [{"candidate_id": role["candidate_id"], "action": "merge", "target_item_id": role["match"]["item_id"],
+                               "expected_revision": role["match"]["item_revision"]}])
+    assert response.status_code == 200, response.text
+    assert set(response.json()["conflicts"][0]["fields"]) == {"end", "current"}
+    item = next(item for item in bank()["items"] if item["kind"] == "experience")
+    assert (item["data"]["start"], item["data"].get("end"), item["data"]["current"]) == ("2024-01", None, True)
+
+
+def test_an_impossible_edit_in_the_review_gets_a_plain_message_and_applies_nothing(isolated_users):
+    row = start({"text": STACKED})
+    role = candidate(row, "experience")
+    before = bank()["bank_revision"]
+    response = apply(row, [{"candidate_id": role["candidate_id"], "action": "add", "data": {**role["data"], "end": "2025-06"}}])
+    assert response.status_code == 422 and error_code(response) == "INVALID_IMPORTED_ITEM"
+    message = response.json()["error"]["message"]
+    assert "Research Assistant" in message and "a current item cannot have an end date" in message and "pydantic" not in message
+    assert bank()["bank_revision"] == before

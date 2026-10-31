@@ -167,11 +167,37 @@ def match_candidates(candidates, items, basics=None, basics_revision=0):
     return result
 
 
+DATE_FIELDS = ('start','end','current','dates_text')
+
+
+def _has_dates(data):
+    return bool(data.get('start') or data.get('end') or data.get('current') is True or data.get('dates_text'))
+
+
+def _merge_dates(result, incoming, conflicts):
+    """Dates merge as one unit, so a merge can never make an entry both current and ended, or end before it starts.
+
+    No dates on file: take the incoming dates whole. No incoming dates: keep the ones on file. Both, and different: keep
+    the ones on file and report each differing field as a conflict."""
+    if not _has_dates(incoming):
+        return
+    if not _has_dates(result):
+        for field in DATE_FIELDS:
+            if field in incoming: result[field] = deepcopy(incoming[field])
+        return
+    for field in DATE_FIELDS:
+        old, new = result.get(field), incoming.get(field)
+        if field == 'current': old, new = bool(old), bool(new)
+        elif new in (None, ''): continue
+        if old != new: conflicts[field] = {'existing': result.get(field), 'incoming': deepcopy(incoming.get(field))}
+
+
 def additive_merge(existing, incoming):
     """Never replace nonempty facts, IDs or existing wording metadata."""
     result, conflicts = deepcopy(existing), {}
+    _merge_dates(result, incoming, conflicts)
     for field,value in incoming.items():
-        if field in ('bullets','provenance','legacy_fields','angles'): continue
+        if field in ('bullets','provenance','legacy_fields','angles',*DATE_FIELDS): continue
         current = result.get(field)
         if current in (None,'',[],{}): result[field]=deepcopy(value)
         elif field in ('skills','tags') and isinstance(value,list): result[field]=list(dict.fromkeys([*current,*value]))

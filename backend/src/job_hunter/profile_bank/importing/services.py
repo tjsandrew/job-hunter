@@ -11,6 +11,8 @@ from sqlalchemy import select
 
 from job_hunter.domain.models import Document, ProfileImport, ProfileItem, Upload, now_utc
 from .. import services as bank
+from pydantic import ValidationError
+
 from ..schema import validate_item_data, Provenance
 from . import (ImportFailure, extract_text, from_text, document_to_json_resume,
                heuristic_to_json_resume, json_resume_to_candidates, match_candidates,
@@ -176,6 +178,19 @@ def _with_provenance(candidate,data,import_id):
     return result
 
 
+def _written(candidate,write):
+    """Run one item write; a value the profile cannot hold becomes a plain message that names the entry."""
+    try:
+        return write()
+    except bank.BankError as exc:
+        cause=exc.__cause__
+        if exc.code!='INVALID_PROFILE_ITEM' or not isinstance(cause,(ValidationError,ValueError)): raise
+        label=candidate['data'].get('title') or candidate['data'].get('name') or candidate['data'].get('qualification') or candidate['kind']
+        reasons=('; '.join(error['msg'].removeprefix('Value error, ') for error in cause.errors())
+                 if isinstance(cause,ValidationError) else str(cause))
+        raise bank.BankError(422,'INVALID_IMPORTED_ITEM',f'“{label}” could not be saved: {reasons}. Edit it in the review, or skip it. Nothing was applied.') from None
+
+
 def apply_import(db,import_id,decisions,expected_profile_epoch):
     profile=bank._profile(db,create=True,lock=True)
     # The row is deliberately hard-deleted with profile data; the client-held
@@ -220,7 +235,7 @@ def apply_import(db,import_id,decisions,expected_profile_epoch):
             continue
         data=_with_provenance(candidate,data,row.id)
         if action=='add':
-            out=bank.create_item(db,candidate['kind'],data,candidate.get('tags',[]))
+            out=_written(candidate,lambda: bank.create_item(db,candidate['kind'],data,candidate.get('tags',[])))
             counts['added']+=1
             item=bank._item(db,UUID(out['id']))
             item.origin='import'; item.import_id=row.id
@@ -231,7 +246,7 @@ def apply_import(db,import_id,decisions,expected_profile_epoch):
             if item.kind!=candidate['kind']: raise bank.BankError(422,'INVALID_MERGE_KIND','Merge into an item of the same kind')
             if item.revision!=decision['expected_revision']: bank._conflict()
             merged,fields=additive_merge(item.data,data)
-            out=bank.update_item(db,item.id,item.revision,{'data':merged,'tags':list(dict.fromkeys([*item.tags,*candidate.get('tags',[])]))})
+            out=_written(candidate,lambda: bank.update_item(db,item.id,item.revision,{'data':merged,'tags':list(dict.fromkeys([*item.tags,*candidate.get('tags',[])]))}))
             if fields: conflicts.append({'candidate_id':candidate['candidate_id'],'fields':fields})
             counts['merged']+=1
         else: raise bank.BankError(422,'INVALID_IMPORT_ACTION','Choose add, merge or skip')
