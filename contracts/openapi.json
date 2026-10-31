@@ -4386,6 +4386,18 @@
             }
           },
           {
+            "description": "Also list closed and expired jobs (Discover's switch)",
+            "in": "query",
+            "name": "include_expired",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also list closed and expired jobs (Discover's switch)",
+              "title": "Include Expired",
+              "type": "boolean"
+            }
+          },
+          {
             "description": "Only jobs posted in the last N days: 3, 7, 14, 30 or 365",
             "in": "query",
             "name": "posted_within",
@@ -4603,6 +4615,18 @@
                 }
               ],
               "title": "Salary Period"
+            }
+          },
+          {
+            "description": "Also list closed and expired jobs (Discover's switch)",
+            "in": "query",
+            "name": "include_expired",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also list closed and expired jobs (Discover's switch)",
+              "title": "Include Expired",
+              "type": "boolean"
             }
           },
           {

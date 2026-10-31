@@ -39,3 +39,12 @@
 .page-wrap .discovery-summary.compact > div:last-child { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
 .page-wrap .discovery-summary.compact strong { font-size: 13px; }
 .page-wrap .discovery-summary.compact p { margin: 0; font-size: 12px; }
+
+.expired-tag { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; background: #ececec; color: #555; font-size: 11px; font-weight: 600; }
+.filter-menu .filter-menu-check { flex-direction: row; align-items: flex-start; gap: 8px; border-top: 1px solid var(--line); border-radius: 0 0 8px 8px; margin-top: 4px; padding-top: 10px; }
+.filter-menu .filter-menu-check[aria-checked='true'] { background: transparent; }
+.filter-menu .filter-menu-check:hover { background: var(--pale); }
+.filter-menu .filter-menu-check[aria-checked='true'] strong::after { content: none; }
+.filter-menu-check > span:last-child { display: flex; flex-direction: column; gap: 2px; }
+.filter-check-box { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; margin-top: 1px; border: 1.5px solid var(--muted); border-radius: 4px; font-size: 11px; line-height: 1; color: var(--white); }
+.filter-menu-check[aria-checked='true'] .filter-check-box { background: var(--green); border-color: var(--green); }

@@ -901,6 +901,17 @@ describe('Discover filters', () => {
     expect(mockApi.putPreferences).not.toHaveBeenCalled();
   });
 
+  it('hides expired listings by default, and unticking the box asks for them', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'Posted: Last 14 days' }));
+    const box = screen.getByRole('menuitemcheckbox', { name: /Hide expired listings/ });
+    expect(box).toHaveAttribute('aria-checked', 'true');
+    await user.click(box);
+    await waitFor(() => expect(mockApi.recommendationsForYou).toHaveBeenLastCalledWith('', 0, { posted_within: '14', include_expired: 'true' }));
+    expect(screen.getByRole('button', { name: 'Posted: Last 14 days + expired' })).toBeInTheDocument();
+  });
+
   it('saves the current filters as the new profile default on request', async () => {
     const user = userEvent.setup();
     mockApi.putPreferences.mockImplementation(async (values: any) => ({ ...values, revision: 4 }));

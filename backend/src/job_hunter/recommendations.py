@@ -393,8 +393,9 @@ def rank_jobs(
     jobs: Sequence[Mapping[str, Any]],
     profile: Mapping[str, Any] | None,
     preferences: Mapping[str, Any] | None,
+    include_closed: bool = False,
 ) -> list[dict[str, Any]]:
-    """Rank eligible open jobs by local TF-IDF, explicit skills, and target roles.
+    """Rank eligible open jobs by local TF-IDF, explicit skills, and target roles (closed ones too with ``include_closed``).
 
     Scores are bounded numeric relevance values, not probabilities. Explicit
     location/work-mode preferences are hard filters. Missing location passes
@@ -415,7 +416,7 @@ def rank_jobs(
 
     eligible: list[tuple[int, Mapping[str, Any]]] = []
     for index, job in enumerate(jobs):
-        if str(job.get("status", "open")).casefold() != "open":
+        if not include_closed and str(job.get("status", "open")).casefold() != "open":
             continue
         if not _location_matches(job.get("location"), wanted_locations):
             continue

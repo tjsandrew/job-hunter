@@ -81,3 +81,27 @@ def test_the_posted_filter_keeps_recent_and_undated_jobs(world):
         db.execute(text("UPDATE jobs SET posted_at = now() - interval '400 days' WHERE company LIKE :name AND external_id = 'old'"),
                    {"name": f"{employer}%"})
     assert titles() == ["Platform Engineer", "Site Reliability Engineer"]                          # older than a year: never listed
+
+
+def test_expired_and_closed_jobs_are_hidden_unless_asked_for(world):
+    engine, employer = world
+    board = f"board-{employer}"
+    now = datetime.now(timezone.utc)
+    pull(engine, record("greenhouse", board, "live", employer, title="Platform Engineer", posted_at=now.isoformat()),
+         record("greenhouse", board, "expired", employer, posted_at=now.isoformat(),
+                expires_at=(now + timedelta(days=1)).isoformat()),
+         record("greenhouse", board, "closed", employer, title="Site Reliability Engineer", posted_at=now.isoformat()))
+    with Session(engine) as db, db.begin():
+        db.execute(text("UPDATE jobs SET expires_at = now() - interval '1 hour' WHERE company LIKE :name AND external_id = 'expired'"),
+                   {"name": f"{employer}%"})
+        db.execute(text("UPDATE jobs SET status = 'closed' WHERE company LIKE :name AND external_id = 'closed'"), {"name": f"{employer}%"})
+
+    def listed(**params):
+        response = client.get("/v1/recommendations", params={"q": employer, "limit": 100, **params}, headers=HEADERS)
+        assert response.status_code == 200, response.text
+        return {item["job"]["title"]: item["job"] for item in response.json()["items"]}
+
+    assert set(listed()) == {"Platform Engineer"}
+    shown = listed(include_expired="true")
+    assert set(shown) == {"Platform Engineer", "Data Engineer", "Site Reliability Engineer"}
+    assert shown["Site Reliability Engineer"]["status"] == "closed" and shown["Data Engineer"]["expires_at"]

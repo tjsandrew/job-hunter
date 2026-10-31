@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { activeCount, activePreferences, cleanPreferences, DEFAULT_POSTED, emptyPreferences, filterQuery, loadChoice, preferenceMatches, samePreferences, storeChoice } from './filters';
+import { activeCount, activePreferences, cleanPreferences, DEFAULT_POSTED, emptyPreferences, filterQuery, isExpired, loadChoice, preferenceMatches, samePreferences, storeChoice } from './filters';
 import type { Job } from '../types';
 
 const saved = cleanPreferences({ roles: ['Backend Engineer'], locations: ['Singapore'], work_modes: ['hybrid'], seniority: 'mid', salary_min: 6000, salary_currency: 'SGD', salary_period: 'month' });
@@ -8,28 +8,35 @@ describe('Discover filters', () => {
   beforeEach(() => sessionStorage.clear());
 
   it('sends only the Posted filter for the profile defaults, so the server reads the saved ones', () => {
-    expect(filterQuery({ mode: 'profile', custom: saved, posted: 14 })).toEqual({ posted_within: '14' });
+    expect(filterQuery({ mode: 'profile', custom: saved, posted: 14, hideExpired: true })).toEqual({ posted_within: '14' });
+  });
+
+  it('asks for expired listings only when "Hide expired listings" is unticked', () => {
+    expect(filterQuery({ mode: 'profile', custom: saved, posted: 14, hideExpired: false })).toEqual({ posted_within: '14', include_expired: 'true' });
+    expect(isExpired({ id: 'a', title: 't', company: 'c', location: null, status: 'closed' })).toBe(true);
+    expect(isExpired({ id: 'a', title: 't', company: 'c', location: null, status: 'open', expires_at: '2020-01-01T00:00:00Z' })).toBe(true);
+    expect(isExpired({ id: 'a', title: 't', company: 'c', location: null, status: 'open', expires_at: null })).toBe(false);
   });
 
   it('sends the Posted choice, and falls back to the default for a value the server would refuse', () => {
-    expect(filterQuery({ mode: 'profile', custom: saved, posted: 365 })).toEqual({ posted_within: '365' });
-    expect(filterQuery({ mode: 'profile', custom: saved, posted: 90 })).toEqual({ posted_within: String(DEFAULT_POSTED) });
+    expect(filterQuery({ mode: 'profile', custom: saved, posted: 365, hideExpired: true })).toEqual({ posted_within: '365' });
+    expect(filterQuery({ mode: 'profile', custom: saved, posted: 90, hideExpired: true })).toEqual({ posted_within: String(DEFAULT_POSTED) });
   });
 
   it('asks for no preferences when filters are cleared', () => {
-    expect(filterQuery({ mode: 'none', custom: saved, posted: 7 })).toEqual({ filters: 'none', posted_within: '7' });
+    expect(filterQuery({ mode: 'none', custom: saved, posted: 7, hideExpired: true })).toEqual({ filters: 'none', posted_within: '7' });
   });
 
   it('sends every custom value, and the salary only when one is set', () => {
-    expect(filterQuery({ mode: 'custom', custom: saved, posted: 14 })).toEqual({ filters: 'custom', role: ['Backend Engineer'], location: ['Singapore'], work_mode: ['hybrid'], seniority: 'mid', salary_min: '6000', salary_currency: 'SGD', salary_period: 'month', posted_within: '14' });
-    expect(filterQuery({ mode: 'custom', custom: { ...saved, salary_min: '' }, posted: 14 })).not.toHaveProperty('salary_min');
+    expect(filterQuery({ mode: 'custom', custom: saved, posted: 14, hideExpired: true })).toEqual({ filters: 'custom', role: ['Backend Engineer'], location: ['Singapore'], work_mode: ['hybrid'], seniority: 'mid', salary_min: '6000', salary_currency: 'SGD', salary_period: 'month', posted_within: '14' });
+    expect(filterQuery({ mode: 'custom', custom: { ...saved, salary_min: '' }, posted: 14, hideExpired: true })).not.toHaveProperty('salary_min');
   });
 
   it('shows the saved defaults, nothing, or the custom values', () => {
     const custom = { ...saved, work_modes: ['remote'] };
-    expect(activePreferences({ mode: 'profile', custom, posted: 14 }, saved)).toEqual(saved);
-    expect(activePreferences({ mode: 'none', custom, posted: 14 }, saved)).toEqual(emptyPreferences());
-    expect(activePreferences({ mode: 'custom', custom, posted: 14 }, saved).work_modes).toEqual(['remote']);
+    expect(activePreferences({ mode: 'profile', custom, posted: 14, hideExpired: true }, saved)).toEqual(saved);
+    expect(activePreferences({ mode: 'none', custom, posted: 14, hideExpired: true }, saved)).toEqual(emptyPreferences());
+    expect(activePreferences({ mode: 'custom', custom, posted: 14, hideExpired: true }, saved).work_modes).toEqual(['remote']);
   });
 
   it('compares preferences by value and counts the ones that are set', () => {
@@ -39,10 +46,11 @@ describe('Discover filters', () => {
   });
 
   it('remembers the choice per user for this session only', () => {
-    storeChoice('alice', { mode: 'custom', custom: saved, posted: 30 });
-    expect(loadChoice('alice')).toEqual({ mode: 'custom', custom: saved, posted: 30 });
+    storeChoice('alice', { mode: 'custom', custom: saved, posted: 30, hideExpired: true });
+    expect(loadChoice('alice')).toEqual({ mode: 'custom', custom: saved, posted: 30, hideExpired: true });
     sessionStorage.setItem('jh-discover-filters:bob', '{"mode":"profile"}');          // stored before "Posted" existed
     expect(loadChoice('bob')?.posted).toBe(DEFAULT_POSTED);
+    expect(loadChoice('bob')?.hideExpired).toBe(true);
     expect(loadChoice('casey')).toBeNull();
     sessionStorage.setItem('jh-discover-filters:alice', '{"mode":"broken"}');
     expect(loadChoice('alice')).toBeNull();

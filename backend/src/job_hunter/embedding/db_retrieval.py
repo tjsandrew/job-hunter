@@ -55,7 +55,8 @@ def load_profile_query(session: Session, profile_version_id: str, *, target_role
 
 
 def load_job_candidates(session: Session, *, model: str, text_version: str = JOB_TEXT_VERSION,
-                        posted_after: datetime | None = None) -> list[tuple[dict[str, Any], RetrievalCandidate]]:
+                        posted_after: datetime | None = None, include_closed: bool = False,
+                        ) -> list[tuple[dict[str, Any], RetrievalCandidate]]:
     """Every job with a ready vector for this model and text version, with its eligibility fields.
 
     Only jobs Discover lists are loaded (``listed_jobs``): a closed or expired job, or a duplicate of another source's posting
@@ -70,7 +71,7 @@ def load_job_candidates(session: Session, *, model: str, text_version: str = JOB
                job_embeddings.c.embedding)
         .join(job_embeddings, job_embeddings.c.job_id == Job.id)
         .where(job_embeddings.c.text_version == text_version, job_embeddings.c.status == STATUS_READY,
-               job_embeddings.c.model == model, listed_jobs(posted_after=posted_after))).all()
+               job_embeddings.c.model == model, listed_jobs(posted_after=posted_after, include_closed=include_closed))).all()
     loaded = []
     for (job_id, title, company, location, work_mode, status, category, seniority, salary_min, salary_max,
          salary_currency, salary_period, embedding) in rows:
@@ -90,7 +91,7 @@ def recommend_for_profile(session: Session, profile_version_id: str, preferences
                           exclude_job_ids: Iterable[str] = (), apply_checks: bool = True,
                           classify: Classifier | None = None, job_text_version: str = JOB_TEXT_VERSION,
                           profile_text_version: str = PROFILE_TEXT_VERSION,
-                          posted_after: datetime | None = None) -> RetrievalResult | None:
+                          posted_after: datetime | None = None, include_closed: bool = False) -> RetrievalResult | None:
     """Eligibility, then role/seniority checks, then similarity. ``None`` means "no usable profile vector"."""
     preferences = preferences or {}
     if target_roles is None:
@@ -107,7 +108,8 @@ def recommend_for_profile(session: Session, profile_version_id: str, preferences
     if loaded is None:
         return None
     query, model = loaded
-    candidates = load_job_candidates(session, model=model, text_version=job_text_version, posted_after=posted_after)
+    candidates = load_job_candidates(session, model=model, text_version=job_text_version, posted_after=posted_after,
+                                     include_closed=include_closed)
     by_id = {job["id"]: candidate for job, candidate in candidates}
-    eligible = eligible_jobs((job for job, _ in candidates), preferences, exclude_job_ids)
+    eligible = eligible_jobs((job for job, _ in candidates), preferences, exclude_job_ids, include_closed)
     return retrieve(query, (by_id[job["id"]] for job in eligible), limit=limit, apply_checks=apply_checks)

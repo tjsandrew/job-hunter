@@ -166,6 +166,15 @@ def posted_after(posted_within: int = Query(365, description="Only jobs posted i
                                          "errors": [f"posted_within must be one of {', '.join(map(str, POSTED_WITHIN_DAYS))}"]})
     return now_utc() - timedelta(days=posted_within)
 
+class ListScope(BaseModel):
+    """Which jobs a Discover list covers: posted after ``since``, and closed or expired ones too when asked."""
+    since: datetime
+    include_expired: bool = False
+
+def list_scope(since: datetime = Depends(posted_after),
+               include_expired: bool = Query(False, description="Also list closed and expired jobs (Discover's switch)")) -> ListScope:
+    return ListScope(since=since, include_expired=include_expired)
+
 def effective_preferences(db: Session, chosen: dict | None) -> dict:
     if chosen is not None:
         return chosen
@@ -389,15 +398,16 @@ def update_preferences(body: PreferencesWrite, db: Session = Depends(db_for, sco
 def recommendations(db: Session = Depends(db_for, scope="function"), limit: int = Query(20, ge=1, le=100),
                      offset: int = Query(0, ge=0, le=1000000),
                      q: str | None = Query(None, max_length=200),
-                     chosen: dict | None = Depends(discover_filters), since: datetime = Depends(posted_after)):
-    return keyword_recommendations(db, limit, offset, q, effective_preferences(db, chosen), since)
+                     chosen: dict | None = Depends(discover_filters), scope: ListScope = Depends(list_scope)):
+    return keyword_recommendations(db, limit, offset, q, effective_preferences(db, chosen), scope)
 
 def keyword_recommendations(db: Session, limit: int, offset: int, q: str | None, prefs: dict,
-                            since: datetime | None = None) -> dict:
-    jobs = db.scalars(select(Job).where(listed_jobs(posted_after=since))).all()
+                            scope: ListScope | None = None) -> dict:
+    scope = scope or ListScope(since=now_utc() - timedelta(days=365))
+    jobs = db.scalars(select(Job).where(listed_jobs(posted_after=scope.since, include_closed=scope.include_expired))).all()
     skipped = skipped_job_ids(db)
     candidates = [job_out(job) for job in jobs if str(job.id) not in skipped]
-    ranked = rank_jobs(candidates, bank_services.build_profile_snapshot(db), prefs)
+    ranked = rank_jobs(candidates, bank_services.build_profile_snapshot(db), prefs, include_closed=scope.include_expired)
     query = q.strip().casefold() if q else ""
     if query:
         ranked = [row for row in ranked if query in " ".join(str(row["job"].get(field) or "")
@@ -416,7 +426,7 @@ def keyword_recommendations(db: Session, limit: int, offset: int, q: str | None,
 def recommendations_for_you(db: Session = Depends(db_for, scope="function"), limit: int = Query(20, ge=1, le=100),
                             offset: int = Query(0, ge=0, le=1000000),
                             q: str | None = Query(None, max_length=200),
-                            chosen: dict | None = Depends(discover_filters), since: datetime = Depends(posted_after)):
+                            chosen: dict | None = Depends(discover_filters), scope: ListScope = Depends(list_scope)):
     """Semantic recommendations (eligibility, role/seniority checks, then similarity), behind FOR_YOU_ENABLED.
 
     Falls back to the keyword ranker, and says so in ``ranking_mode`` / ``fallback_reason``, whenever the
@@ -428,17 +438,18 @@ def recommendations_for_you(db: Session = Depends(db_for, scope="function"), lim
     prefs = effective_preferences(db, chosen)
     skipped = sorted(skipped_job_ids(db))
     confirmed = bank_services.get_confirmed_snapshot(db)
-    result, reason = semantic.semantic_for_you(db, confirmed, prefs, skipped, posted_after=since)
+    result, reason = semantic.semantic_for_you(db, confirmed, prefs, skipped, posted_after=scope.since,
+                                               include_closed=scope.include_expired)
     if result is None:
-        base = keyword_recommendations(db, limit, offset, q, prefs, since)
+        base = keyword_recommendations(db, limit, offset, q, prefs, scope)
         code = "profile_embedding_pending" if reason == semantic.NO_VECTOR else "no_profile"   # the page offers "Check again" only for the first
         return {**base, "ranking_mode": "keyword_fallback", "fallback_reason": reason, "fallback_code": code}
     ordered, fused = result.ranked, False
     if embedding_settings.for_you_fusion_enabled():
         try:   # merge the keyword ranking in; if it cannot be computed, keep the semantic order rather than fail the page
-            open_jobs = db.scalars(select(Job).where(listed_jobs(posted_after=since))).all()
+            open_jobs = db.scalars(select(Job).where(listed_jobs(posted_after=scope.since, include_closed=scope.include_expired))).all()
             keyword_ranked = rank_jobs([job_out(job) for job in open_jobs if str(job.id) not in set(skipped)],
-                                       bank_services.build_profile_snapshot(db), prefs)
+                                       bank_services.build_profile_snapshot(db), prefs, include_closed=scope.include_expired)
             ordered, fused = semantic.fuse_with_keyword(result.ranked, keyword_ranked), True
         except Exception:
             logging.getLogger(__name__).exception("For you: keyword fusion failed; serving the semantic order")
@@ -470,6 +481,7 @@ def job_out(job: Job) -> dict:
             "source_url": job.source_url or job.url, "source": job.source,
             "source_board": job.source_board,
             "posted_at": job.posted_at.isoformat() if job.posted_at else None,
+            "expires_at": job.expires_at.isoformat() if job.expires_at else None,
             "fetched_at": job.fetched_at.isoformat() if job.fetched_at else None,
             "category": job.category, "category_source": job.category_source,
             "category_evidence": job.category_evidence,

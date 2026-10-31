@@ -8,8 +8,9 @@ export type JobPreferences = {
 
 /** Discover starts from the saved profile preferences ("profile") at every sign-in; "custom" lasts until sign-out. */
 export type FilterMode = 'profile' | 'none' | 'custom';
-/** ``posted`` is the "Posted" filter in days. It is separate from the preferences: it is never saved to the profile. */
-export type FilterChoice = { mode: FilterMode; custom: JobPreferences; posted: number };
+/** ``posted`` is the "Posted" filter in days and ``hideExpired`` its "Hide expired listings" box (ticked by default). Both
+ * are separate from the preferences: they are never saved to the profile. */
+export type FilterChoice = { mode: FilterMode; custom: JobPreferences; posted: number; hideExpired: boolean };
 
 /** The "Posted" choices; the server accepts exactly these. A year is the widest, so a list never reaches back further. */
 export const POSTED_OPTIONS = [
@@ -19,7 +20,10 @@ export const POSTED_OPTIONS = [
 export const DEFAULT_POSTED = 14;
 export const postedLabel = (days: number) => POSTED_OPTIONS.find((option) => option.days === days)?.label || 'Past year';
 const postedDays = (value: unknown) => (POSTED_OPTIONS.some((option) => option.days === value) ? Number(value) : DEFAULT_POSTED);
-export const defaultChoice = (): FilterChoice => ({ mode: 'profile', custom: emptyPreferences(), posted: DEFAULT_POSTED });
+export const defaultChoice = (): FilterChoice => ({ mode: 'profile', custom: emptyPreferences(), posted: DEFAULT_POSTED, hideExpired: true });
+
+/** A job that is closed, or past its closing date: shown only when "Hide expired listings" is unticked, with a tag. */
+export const isExpired = (job: Job, now = Date.now()) => (!!job.status && job.status !== 'open') || (!!job.expires_at && Date.parse(job.expires_at) <= now);
 
 export const WORK_MODES = [{ value: 'remote', label: 'Remote' }, { value: 'hybrid', label: 'Hybrid' }, { value: 'onsite', label: 'On-site' }];
 
@@ -50,7 +54,8 @@ export function activeCount(prefs: JobPreferences): number {
 
 /** Query parameters for a job list. No preferences are sent for the profile defaults, so the server reads the saved ones. */
 export function filterQuery(choice: FilterChoice): Record<string, string | string[]> {
-  const posted = { posted_within: String(postedDays(choice.posted)) };
+  const posted: Record<string, string> = { posted_within: String(postedDays(choice.posted)) };
+  if (choice.hideExpired === false) posted.include_expired = 'true';
   if (choice.mode === 'profile') return posted;
   if (choice.mode === 'none') return { filters: 'none', ...posted };
   const prefs = cleanPreferences(choice.custom);
@@ -74,7 +79,7 @@ export function loadChoice(user: string): FilterChoice | null {
   try {
     const raw = JSON.parse(sessionStorage.getItem(storageKey(user)) || 'null');
     if (!raw || !['profile', 'none', 'custom'].includes(raw.mode)) return null;
-    return { mode: raw.mode, custom: cleanPreferences(raw.custom), posted: postedDays(raw.posted) };
+    return { mode: raw.mode, custom: cleanPreferences(raw.custom), posted: postedDays(raw.posted), hideExpired: raw.hideExpired !== false };
   } catch { return null; }
 }
 
