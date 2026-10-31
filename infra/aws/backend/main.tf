@@ -179,12 +179,15 @@ resource "aws_cloudwatch_log_group" "lambda" {
   retention_in_days = 7
 }
 resource "aws_lambda_function" "api" {
-  function_name                  = "${var.name}-api"
-  role                           = aws_iam_role.api.arn
-  package_type                   = "Image"
-  image_uri                      = var.image_uri
-  architectures                  = ["arm64"]
-  memory_size                    = 1024
+  function_name = "${var.name}-api"
+  role          = aws_iam_role.api.arn
+  package_type  = "Image"
+  image_uri     = var.image_uri
+  architectures = ["arm64"]
+  # Lambda's CPU grows with memory: 1,024 MB is ~0.6 of a core, from 1,769 MB a full one. Discover's ranking is single-threaded
+  # Python, CPU-bound after the job and vector caches (load test, 31 October 2026: ~2 s per list at 1,024 MB with Aurora at
+  # ~60%). About the same cost per request: twice the price per millisecond, about half the milliseconds.
+  memory_size                    = 2048
   timeout                        = 29
   reserved_concurrent_executions = 10
   vpc_config {
