@@ -22,8 +22,9 @@ jobs:
     env:
       AWS_REGION: ap-southeast-1
       API_FUNCTION: ${{ vars.API_FUNCTION }}
-      # Pauses the embedding worker with the API when it exists (empty otherwise).
+      # Pauses the embedding worker and the job pull with the API when they exist (empty otherwise).
       EMBED_FUNCTION: ${{ vars.EMBED_FUNCTION }}
+      DISCOVERY_FUNCTION: ${{ vars.DISCOVERY_FUNCTION }}
       BACKEND_MODE: ${{ inputs.mode }}
     steps:
       - uses: actions/checkout@v4

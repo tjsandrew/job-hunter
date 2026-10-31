@@ -80,6 +80,14 @@ run "discovery_has_internet_and_import_has_the_database" {
     condition     = length(aws_cloudwatch_event_rule.discovery) == 0
     error_message = "No schedule unless discovery_schedule_enabled is true."
   }
+  assert {
+    condition     = aws_lambda_function_event_invoke_config.discovery[0].maximum_retry_attempts == 0 && aws_lambda_function_event_invoke_config.discovery[0].maximum_event_age_in_seconds == 3600
+    error_message = "An asynchronous (scheduled) pull is never retried, and is dropped if it cannot start within an hour (for example while paused)."
+  }
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.discovery_errors[0].metric_name == "Errors" && aws_cloudwatch_metric_alarm.discovery_errors[0].threshold == 0 && aws_cloudwatch_metric_alarm.discovery_errors[0].alarm_name == "test-staging-discovery-errors"
+    error_message = "Any failed pull alarms to the team."
+  }
 }
 
 run "the_schedule_exists_only_when_asked_for" {
@@ -92,6 +100,20 @@ run "the_schedule_exists_only_when_asked_for" {
   assert {
     condition     = length(aws_cloudwatch_event_rule.discovery) == 1 && aws_cloudwatch_event_rule.discovery[0].schedule_expression == "rate(1 day)" && length(aws_lambda_permission.discovery_from_schedule) == 1
     error_message = "A daily rule and the permission for EventBridge to invoke discovery."
+  }
+}
+
+run "a_cron_schedule_starts_pulls_with_the_batch_size" {
+  command = plan
+  module { source = "./backend" }
+  variables {
+    discovery_enabled             = true
+    discovery_schedule_enabled    = true
+    discovery_schedule_expression = "cron(0 0,12 * * ? *)"
+  }
+  assert {
+    condition     = aws_cloudwatch_event_rule.discovery[0].schedule_expression == "cron(0 0,12 * * ? *)" && jsondecode(aws_cloudwatch_event_target.discovery[0].input).max_new == 10
+    error_message = "The schedule is a variable, and each scheduled pull asks for the configured batch size."
   }
 }
 

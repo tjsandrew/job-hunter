@@ -90,7 +90,7 @@ variable "discovery_max_new" {
   default     = 10
 }
 variable "discovery_schedule_enabled" {
-  description = "Also start a job pull on a schedule. Each run wakes Aurora (cost and activity alarm), so it is off by default."
+  description = "Also start a job pull on a schedule (EventBridge). Each run wakes Aurora for about 30 minutes, so it is off by default."
   type        = bool
   default     = false
 }
