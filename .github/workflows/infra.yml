@@ -7,6 +7,9 @@ on:
     paths: ['infra/**', '.github/workflows/infra.yml']
 permissions:
   contents: read
+concurrency:   # a newer push to the same PR or to main cancels the older validation run
+  group: infra-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   validate:
     runs-on: ubuntu-latest
