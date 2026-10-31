@@ -60,14 +60,25 @@ def _rebuild(db: Session, signature: tuple, job_out: Callable[[Job], dict]) -> _
     return _Pool(signature=signature, rows=rows)
 
 
-def _listed(row: _Row, now: datetime, posted_after: datetime | None, include_closed: bool) -> bool:
+def is_listed(*, status: str, duplicate: bool, posted_at: datetime | None, expires_at: datetime | None, now: datetime,
+              posted_after: datetime | None, include_closed: bool) -> bool:
     """The rule of ``listed_jobs``: not a duplicate; open and not past its closing date unless closed ones are wanted;
     posted within the window, a job with no posting date always passing."""
-    if row.duplicate:
+    if duplicate:
         return False
-    if not include_closed and (row.status != "open" or (row.expires_at is not None and row.expires_at <= now)):
+    if not include_closed and (status != "open" or (expires_at is not None and expires_at <= now)):
         return False
-    return posted_after is None or row.posted_at is None or row.posted_at >= posted_after
+    return posted_after is None or posted_at is None or posted_at >= posted_after
+
+
+def _listed(row: _Row, now: datetime, posted_after: datetime | None, include_closed: bool) -> bool:
+    return is_listed(status=row.status, duplicate=row.duplicate, posted_at=row.posted_at, expires_at=row.expires_at, now=now,
+                     posted_after=posted_after, include_closed=include_closed)
+
+
+def jobs_signature(db: Session) -> tuple:
+    """The fingerprint of everything a Discover list depends on (also used by the For you vector cache)."""
+    return tuple(db.execute(SIGNATURE_SQL).one())
 
 
 def listed_job_rows(db: Session, job_out: Callable[[Job], dict], *, posted_after: datetime | None = None,
@@ -78,7 +89,7 @@ def listed_job_rows(db: Session, job_out: Callable[[Job], dict], *, posted_after
     if not enabled():
         query = select(Job).where(listed_jobs(now=now, posted_after=posted_after, include_closed=include_closed))
         return [job_out(job) for job in db.scalars(query)]
-    signature = tuple(db.execute(SIGNATURE_SQL).one())
+    signature = jobs_signature(db)
     pool = _pool
     if pool is None or pool.signature != signature:
         with _lock:            # concurrent requests (a local server's threads) build it once

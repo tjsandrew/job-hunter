@@ -113,18 +113,19 @@ def _reasons(role: str, seniority: str) -> tuple[str, ...]:
 
 
 def retrieve(query: ProfileQuery, candidates: Iterable[RetrievalCandidate], *, limit: int | None = 10,
-             apply_checks: bool = True) -> RetrievalResult:
+             apply_checks: bool = True, similarities: Mapping[str, float] | None = None) -> RetrievalResult:
     """Apply the checks, then rank the survivors by similarity.
 
     ``candidates`` must already be eligible (see :func:`eligible_jobs`). ``apply_checks=False``
     skips the blocking (checks are still reported) and exists to measure what the checks add.
+    ``similarities`` (job id -> cosine) replaces the per-candidate cosine when the caller computed them all at once.
     """
     ranked_rows: list[tuple[float, str, str, str, tuple[str, ...]]] = []
     blocked: list[BlockedJob] = []
     considered = 0
     for candidate in candidates:
         considered += 1
-        similarity = cosine(query.vector, candidate.vector)
+        similarity = similarities[candidate.job_id] if similarities is not None else cosine(query.vector, candidate.vector)
         role = check_role_family(candidate.role_family, query.role_families)
         subrole = check_engineering_subrole(candidate.role_family, candidate.engineering_subrole, query.role_families,
                                             query.engineering_subroles)

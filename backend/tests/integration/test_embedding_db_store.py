@@ -544,3 +544,48 @@ def test_text_report_summarises_heading_detection_per_source(db):
     assert acme["jobs"] == 2 and acme["v1_uses_sections"] == 1 and acme["v3_uses_sections"] == 1
     assert acme["fallback_reasons"] == {"no recognisable heading": 1} and 0 < acme["avg_kept_share_v1"] < 1
     assert report["lever/x"]["fallback_reasons"] == {"no description": 1}
+
+
+def test_the_vector_cache_gives_the_same_for_you_results_and_sees_new_vectors(db, monkeypatch):
+    import random
+    from job_hunter.embedding import vector_pool
+    from job_hunter.embedding.db_retrieval import recommend_for_profile
+
+    rng = random.Random(7)
+    titles = ["Backend Engineer", "Platform Engineer", "Data Engineer", "Software Engineer", "Technical Recruiter",
+              "Senior Backend Engineer", "Frontend Developer", "Data Analyst", "DevOps Engineer", "Product Manager"]
+    job_store = DbJobEmbeddingStore(db.session)
+    ids = []
+    for index in range(40):
+        title = titles[index % len(titles)]
+        item = Job(title=title, description="x", category="engineering" if "Engineer" in title or "Developer" in title else "data",
+                   seniority=classify_seniority(title)[0], location="Singapore", status="closed" if index % 9 == 0 else "open")
+        db.session.add(item)
+        db.session.flush()
+        ids.append(str(item.id))
+        job_store.save(str(item.id), EmbeddingRecord(status="ready", model="m", dimensions=512, text_version=JOB_TEXT_VERSION,
+                                                     input_hash="h" * 64, vector=tuple(rng.uniform(-1, 1) for _ in range(512))))
+    DbProfileEmbeddingStore(db.session).save(str(db.version_a), EmbeddingRecord(
+        status="ready", model="m", dimensions=512, text_version="profile-v2", input_hash="p" * 64,
+        vector=tuple(rng.uniform(-1, 1) for _ in range(512))))
+
+    def run(**kwargs):
+        result = recommend_for_profile(db.session, str(db.version_a), {"target_roles": ["Backend Engineer"]}, limit=None, **kwargs)
+        return ([(r.job_id, round(r.similarity, 9), r.role, r.seniority) for r in result.ranked],
+                [(b.job_id, round(b.similarity, 9)) for b in result.blocked], result.considered)
+
+    vector_pool.clear()
+    for kwargs in ({}, {"include_closed": True}, {"exclude_job_ids": ids[:5]}):
+        monkeypatch.setenv("JOB_POOL_CACHE", "1")
+        cached = run(**kwargs)
+        monkeypatch.setenv("JOB_POOL_CACHE", "0")
+        assert run(**kwargs) == cached and cached[2] > 0
+
+    monkeypatch.setenv("JOB_POOL_CACHE", "1")
+    before = run()[2]
+    extra = Job(title="Backend Engineer", description="x", category="engineering", seniority=[], location="Singapore", status="open")
+    db.session.add(extra)
+    db.session.flush()
+    job_store.save(str(extra.id), EmbeddingRecord(status="ready", model="m", dimensions=512, text_version=JOB_TEXT_VERSION,
+                                                  input_hash="h" * 64, vector=tuple(rng.uniform(-1, 1) for _ in range(512))))
+    assert run()[2] == before + 1                                  # a new vector is seen on the next request
