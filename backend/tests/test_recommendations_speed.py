@@ -40,6 +40,9 @@ TEXTS = [
     "natural language processing (NLP)", "powerbi and Power BI", "Go-lang, R&D, node.js, CI/CD pipelines",
     "sqlalchemy is not sql but SQL is", "Café développeur: Python et SQL", "Kubernetes with a Kelvin sign",
     "Übung: Spark, apache spark, SPARK3", "ms excel / Microsoft Excel", "", "pysql nosqlx",
+    # non-ASCII text: curly quotes and bullets, and the four characters that match an ASCII letter case-insensitively
+    "“Python” • SQL – Excel", "\u212aubernetes and \u017fpark", "MACH\u0130NE LEARN\u0130NG, mach\u0131ne learn\u0131ng",
+    "\u017fql\u0130te is not SQL; PYTHON\u0307", "naïve \u212a8s — NLP ✓",
 ]
 
 

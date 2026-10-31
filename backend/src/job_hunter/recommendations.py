@@ -238,17 +238,33 @@ def _alias_matcher(alias: str) -> tuple[re.Pattern[str], str | None]:
     return pattern, alias.lower() if alias.isascii() else None
 
 
+# The only non-ASCII characters that a case-insensitive pattern matches to an ASCII character are U+0130 "İ" (lower() gives
+# "i" plus U+0307), U+0131 "ı", U+017F "ſ" (all three match "i" or "s") and the Kelvin sign (lower() already gives "k").
+# Folding them this way makes the plain-text pre-check exact for any text, not only ASCII text; the regex still decides.
+_ASCII_CASE_FIXES = (("\u0307", ""), ("\u0131", "i"), ("\u017f", "s"))
+
+
+def _searchable_lower(text: str) -> str:
+    """Lower-cased text in which an ASCII spelling appears whenever the case-insensitive whole-word pattern could match."""
+    lowered = text.lower()
+    if not text.isascii():
+        for character, replacement in _ASCII_CASE_FIXES:   # str.replace is far faster than str.translate here
+            if character in lowered:
+                lowered = lowered.replace(character, replacement)
+    return lowered
+
+
 def _find_skill_evidence(profile_skills: Sequence[str], job: Mapping[str, Any]) -> list[dict[str, str]]:
     explicit = _job_skills(job)
     explicit_by_canonical = {_canonical_skill(skill): skill for skill in explicit}
-    # A spelling that is not even a substring of the lower-cased text cannot match the case-insensitive whole-word
-    # pattern, so the (much slower) regex only runs on the few texts that mention it. Only ASCII text and spellings
-    # are pre-checked: for those, lower-casing is exactly what IGNORECASE does.
+    # A spelling that is not even a substring of the folded text cannot match the case-insensitive whole-word pattern,
+    # so the (much slower) regex only runs on the few texts that mention it. ASCII spellings are pre-checked against any
+    # text (see _searchable_lower); a non-ASCII spelling always goes to the regex.
     searchable_fields = []
     for key in ("title", "description"):
         value = job.get(key)
         if isinstance(value, str) and value:
-            searchable_fields.append((key, value, value.lower() if value.isascii() else None))
+            searchable_fields.append((key, value, _searchable_lower(value)))
     evidence: list[dict[str, str]] = []
     for user_skill in profile_skills:
         canonical = _canonical_skill(user_skill)
@@ -260,7 +276,7 @@ def _find_skill_evidence(profile_skills: Sequence[str], job: Mapping[str, Any]) 
         for field, field_text, field_lower in searchable_fields:
             for alias in aliases:
                 pattern, alias_lower = _alias_matcher(alias)
-                if field_lower is not None and alias_lower is not None and alias_lower not in field_lower:
+                if alias_lower is not None and alias_lower not in field_lower:
                     continue
                 match = pattern.search(field_text)
                 if match:
