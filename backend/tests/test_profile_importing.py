@@ -10,6 +10,7 @@ from reportlab.pdfgen.canvas import Canvas
 
 from job_hunter.demo import PROFILE, PROFILE_ITEMS, CONTENT
 from job_hunter.profile_bank.export import export_profile
+from job_hunter.profile_bank.schema import validate_item_data
 from job_hunter.profile_bank.importing import (from_text, extract_text, document_to_json_resume,
     heuristic_to_json_resume, json_resume_to_candidates, match_candidates, additive_merge,
     evidence_for, FakeModel, BedrockModel, parse_with_model)
@@ -207,3 +208,23 @@ Mar 2024 – Present
     assert work[2].get('startDate') == '2024-03'
     assert work[0]['highlights'] == ['Built payment APIs in Python', 'Cut checkout latency']
     assert work[2]['highlights'][-1] == 'rotation for the payments services'   # a lower-case wrap stays a point
+
+
+@pytest.mark.parametrize('existing,incoming,dates,conflicting', [
+    # on file: current, no end; resume: ended. Filling only the end would make it current AND ended.
+    ({'start':'2024-01','end':None,'current':True}, {'start':'2024-01','end':'2025-06','current':False},
+     {'start':'2024-01','end':None,'current':True}, {'end','current'}),
+    # resume has no dates (and so "not current"): keep the dates on file, report nothing
+    ({'start':'2021-05','end':'2021-07','current':False}, {'start':None,'end':None,'current':False},
+     {'start':'2021-05','end':'2021-07','current':False}, set()),
+    # nothing on file: take the resume's dates whole
+    ({'start':None,'end':None,'current':False}, {'start':'2023','end':None,'current':True},
+     {'start':'2023','end':None,'current':True}, set()),
+    # on file: an end only; resume: a later start. Mixing them would end before it starts.
+    ({'end':'2022'}, {'start':'2023','end':'2024'}, {'end':'2022'}, {'start','end'}),
+])
+def test_dates_merge_as_one_unit(existing, incoming, dates, conflicting):
+    merged, conflicts = additive_merge({'title':'Analyst','bullets':[],**existing}, {'title':'Analyst','bullets':[],**incoming})
+    assert {field: merged.get(field) for field in dates} == dates
+    assert set(conflicts) == conflicting
+    validate_item_data('experience', merged)                                  # always a profile-valid item
