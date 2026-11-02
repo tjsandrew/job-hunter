@@ -291,6 +291,7 @@ def test_mycareersfuture_caps_records_and_reports_truncation(monkeypatch):
 
 
 def test_rate_limit_and_partial_source_failure_are_reported(monkeypatch):
+    monkeypatch.setattr(discovery.time, "sleep", lambda *_: None)      # the one retry of a rate-limited board
     monkeypatch.setattr(discovery, "_discover_greenhouse", lambda *a: (_ for _ in ()).throw(ProviderHTTPError("greenhouse", 429, "url")))
     monkeypatch.setattr(discovery, "_discover_lever", lambda *a: ([{"title": "ok"}], False))
     report = discover_report(DiscoveryConfig(greenhouse_boards=["bad"], lever_boards=["good"]))
@@ -324,3 +325,43 @@ def test_http_error_classification():
 def test_config_rejects_unbounded_values(kwargs):
     with pytest.raises(ValueError):
         DiscoveryConfig(**kwargs)
+
+
+def test_a_slow_search_is_retried_once_and_then_counts(monkeypatch):
+    pauses, calls = [], []
+    monkeypatch.setattr(discovery.time, "sleep", pauses.append)
+    def flaky(keyword, config):
+        calls.append(keyword)
+        if len(calls) == 1:
+            raise ProviderRequestError("mycareersfuture", "timeout", "The read operation timed out")
+        return [{"title": "ok", "dedup_key": "k1"}], False
+    monkeypatch.setattr(discovery, "_discover_mycareersfuture", flaky)
+    report = discover_report(DiscoveryConfig(mycareersfuture_searches=["accountant"]))
+    assert calls == ["accountant", "accountant"] and pauses == [discovery.RETRY_PAUSE_SECONDS]
+    assert not report.failures and report.checked_boards == ["mycareersfuture:accountant"] and len(report.jobs) == 1
+
+
+def test_a_client_error_is_not_retried(monkeypatch):
+    calls = []
+    monkeypatch.setattr(discovery.time, "sleep", lambda *_: None)
+    def missing(board, config):
+        calls.append(board)
+        raise ProviderHTTPError("greenhouse", 404, "url")
+    monkeypatch.setattr(discovery, "_discover_greenhouse", missing)
+    report = discover_report(DiscoveryConfig(greenhouse_boards=["gone"]))
+    assert calls == ["gone"] and report.failures[0]["kind"] == "http_error"
+
+
+def test_a_source_that_keeps_timing_out_is_skipped_for_the_rest_of_the_pull(monkeypatch):
+    calls = []
+    monkeypatch.setattr(discovery.time, "sleep", lambda *_: None)
+    def down(keyword, config):
+        calls.append(keyword)
+        raise ProviderRequestError("mycareersfuture", "timeout", "The read operation timed out")
+    monkeypatch.setattr(discovery, "_discover_mycareersfuture", down)
+    monkeypatch.setattr(discovery, "_discover_lever", lambda *a: ([{"title": "still read"}], False))
+    searches = ["a", "b", "c", "d", "e"]
+    report = discover_report(DiscoveryConfig(mycareersfuture_searches=searches, lever_boards=["site"]))
+    assert calls == ["a", "a", "b", "b", "c", "c"]                       # 3 searches, each tried twice; d and e not requested
+    assert [f["kind"] for f in report.failures] == ["timeout"] * 3 + ["skipped"] * 2
+    assert report.checked_boards == ["lever:site"]                       # other sources unaffected; nothing of MCF closes

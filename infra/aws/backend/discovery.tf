@@ -107,9 +107,10 @@ resource "aws_lambda_function" "discovery" {
   architectures = ["arm64"]
   image_config { command = ["job_hunter.discovery_worker.handler"] }
   memory_size = 1024 # holds the whole snapshot (~22 MB of JSON with 21 searches) while it is built
-  # Reading the feeds (MyCareersFuture waits a second between pages; 21 searches take about 5-6 minutes) plus the import
-  # step, which may wait minutes for Aurora to resume after a long pause (the import function's own limit is 240 s).
-  timeout                        = 600
+  # Reading the feeds (MyCareersFuture waits a second between pages; 21 searches take about 5-7 minutes, more on a slow day
+  # with retries) plus the import step, which may wait minutes for Aurora to resume (its own limit is 240 s). 900 s is
+  # Lambda's maximum; a source that keeps failing is skipped after 3 failures in a row, which bounds the time.
+  timeout                        = 900
   reserved_concurrent_executions = 1
   environment {
     variables = {

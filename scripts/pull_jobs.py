@@ -67,7 +67,7 @@ def main() -> int:
         return 1
     # A pull can run for ~7 minutes with nothing on the wire; without TCP keepalive the network drops the idle connection
     # ("Remote end closed connection") and the run fails although the pull finishes in AWS.
-    client = boto3.client("lambda", config=Config(read_timeout=610, connect_timeout=10, retries={"total_max_attempts": 1},
+    client = boto3.client("lambda", config=Config(read_timeout=910, connect_timeout=10, retries={"total_max_attempts": 1},
                                                   tcp_keepalive=True))
     if paused(client, os.environ.get("API_FUNCTION", "")):
         print("Staging is manually paused. Use Pause or resume staging backend first.", file=sys.stderr)
