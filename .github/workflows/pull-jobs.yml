@@ -18,7 +18,7 @@ jobs:
   pull:
     if: github.ref == 'refs/heads/main' && vars.AWS_ROLE_ARN != '' && vars.DISCOVERY_FUNCTION != ''
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 17   # a pull may now run up to the discovery function's 15-minute limit
     env:
       AWS_REGION: ap-southeast-1
       DISCOVERY_FUNCTION: ${{ vars.DISCOVERY_FUNCTION }}

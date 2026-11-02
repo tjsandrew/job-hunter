@@ -24,17 +24,18 @@ llm_worker_enabled = true
 # Job pull (docs/design/04-JOB-INGESTION.md): two Lambdas that load a few new public job postings into Aurora, started by the
 # Pull jobs GitHub workflow and by an EventBridge schedule. Never apply without this line: the functions would be removed.
 discovery_enabled = true
-# Twice a day, 08:00 and 20:00 Singapore time (00:00 and 12:00 UTC). Each pull wakes Aurora for about 30 minutes
-# (about USD 0.10), roughly USD 6 a month; the pause workflow also stops scheduled pulls.
+# Twice a day, 06:00 and 20:00 Singapore time (22:00 the previous day and 12:00 UTC). The morning pull moved from 08:00, when
+# MyCareersFuture was slow (read timeouts on 1 and 2 November 2026); compare the 06:00 pulls' errors before changing it again.
+# Each pull wakes Aurora for about 30 minutes (about USD 0.10), roughly USD 6 a month; the pause workflow also stops scheduled pulls.
 discovery_schedule_enabled    = true
-discovery_schedule_expression = "cron(0 0,12 * * ? *)"
+discovery_schedule_expression = "cron(0 22,12 * * ? *)"
 # New jobs per pull (newest postings first). The 21 searches see roughly 250 new listings a day, so 150 twice a day keeps
 # up with the market; jobs close again when they expire or go unseen for 21 days. The code caps one pull at 200.
 discovery_max_new = 150
 # Searches cover the evaluation personas and a broader market: tech, data and product (the first nine), then finance,
 # marketing, people and operations, consulting and design (added 31 October 2026, each checked to return MyCareersFuture
 # jobs). A pull rotates between searches, so each batch is mixed. Each search reads at most 5 pages of 100; the nine
-# tech searches fetched 2,226 Singapore listings in about 130 seconds, so 21 take about 5-6 minutes (timeout 600 s).
+# tech searches fetched 2,226 Singapore listings in about 130 seconds, so 21 take about 5-7 minutes (timeout 900 s).
 discovery_mycareersfuture_searches = ["data engineer", "software engineer", "data analyst", "frontend developer",
   "backend developer", "devops engineer", "cloud engineer", "business analyst", "product manager",
   "machine learning engineer", "financial analyst", "accountant", "investment analyst", "marketing executive",

@@ -609,6 +609,14 @@ def _discover_adzuna(keyword: str, config: DiscoveryConfig) -> tuple[list[dict[s
     return result, truncated
 
 
+# A board or search that times out or gets a 5xx/429 is tried once more after a short pause: MyCareersFuture is sometimes slow
+# for a moment (read timeouts at 08:00 SGT on 1 and 2 November 2026). After this many such failures in a row, the source's
+# remaining boards are skipped for this pull, so a source that is down cannot use up the discovery function's time limit.
+RETRYABLE_KINDS = frozenset({"timeout", "network_error", "server_error", "rate_limited"})
+RETRY_PAUSE_SECONDS = 5.0
+MAX_FAILURES_IN_A_ROW = 3
+
+
 def discover_report(config: DiscoveryConfig) -> DiscoveryReport:
     """Fetch configured boards; isolate a failed board from successful boards."""
     report = DiscoveryReport()
@@ -622,9 +630,24 @@ def discover_report(config: DiscoveryConfig) -> DiscoveryReport:
     # Keyword searches overlap (one listing can match "data analyst" and "data engineer"); keep the first copy.
     seen: set[str] = set()
     for source, boards, fetch in sources:
+        in_a_row = 0
         for board in boards:
+            if in_a_row >= MAX_FAILURES_IN_A_ROW:
+                item = {"source": source, "board": board, "kind": "skipped",
+                        "error": f"skipped after {in_a_row} failed requests in a row from {source}"}
+                report.failures.append(item)
+                logger.warning("Job board discovery skipped: %s", item)
+                continue
             try:
-                jobs, truncated = fetch(board, config)
+                try:
+                    jobs, truncated = fetch(board, config)
+                except (ProviderHTTPError, ProviderRequestError) as first:
+                    if first.kind not in RETRYABLE_KINDS:
+                        raise
+                    logger.info("Retrying %s:%s after %s", source, board, first.kind)
+                    time.sleep(RETRY_PAUSE_SECONDS)
+                    jobs, truncated = fetch(board, config)
+                in_a_row = 0
                 for job in jobs:
                     key = job.get("dedup_key")
                     if key is not None and key in seen:
@@ -642,6 +665,7 @@ def discover_report(config: DiscoveryConfig) -> DiscoveryReport:
                 item = {"source": source, "board": board, "kind": exc.kind, "error": str(exc)}
                 report.failures.append(item)
                 logger.warning("Job board discovery failed: %s", item)
+                in_a_row = in_a_row + 1 if exc.kind in RETRYABLE_KINDS else 0
     return report
 
 

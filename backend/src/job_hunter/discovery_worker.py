@@ -42,7 +42,7 @@ def build_config() -> DiscoveryConfig:
         smartrecruiters_boards=_names("SMARTRECRUITERS_BOARDS"),
         mycareersfuture_searches=_names("MYCAREERSFUTURE_SEARCHES"),
         adzuna_searches=_names("ADZUNA_SEARCHES"),      # also needs ADZUNA_APP_ID / ADZUNA_APP_KEY (GitHub secrets, set at release)
-        timeout_seconds=float(os.getenv("DISCOVERY_TIMEOUT_SECONDS") or 15),
+        timeout_seconds=float(os.getenv("DISCOVERY_TIMEOUT_SECONDS") or 30),   # MyCareersFuture can take >15 s at busy times
         max_pages_per_board=int(os.getenv("DISCOVERY_MAX_PAGES") or 5),
         singapore_only=True,        # the filter runs after the per-board cap, so keep that cap high
     )
