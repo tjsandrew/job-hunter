@@ -1,0 +1,1456 @@
+{
+  "pulls": [
+    {
+      "trigger": "manual",
+      "saved_at": "2026-10-24T15:48:40.416761Z",
+      "fetched": 1096,
+      "by_source": {
+        "greenhouse": 57,
+        "lever": 11,
+        "mycareersfuture": 978,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {},
+      "failures": [
+        {
+          "source": "greenhouse",
+          "board": "cloudflare",
+          "kind": "response_too_large",
+          "error": "greenhouse request failed (response_too_large): response exceeded 8 MB"
+        }
+      ],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 29.4,
+      "import_seconds": 6.8,
+      "new": null,
+      "already_stored": null,
+      "deferred": null,
+      "to_embedding_finished_s": null
+    },
+    {
+      "trigger": "manual",
+      "saved_at": "2026-10-24T16:28:20.592425Z",
+      "fetched": 1098,
+      "by_source": {
+        "greenhouse": 58,
+        "lever": 11,
+        "mycareersfuture": 979,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {},
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 108.2,
+      "import_seconds": 8.3,
+      "new": null,
+      "already_stored": null,
+      "deferred": null,
+      "to_embedding_finished_s": null
+    },
+    {
+      "trigger": "manual",
+      "saved_at": "2026-10-25T08:09:07.918489Z",
+      "fetched": 1084,
+      "by_source": {
+        "greenhouse": 58,
+        "lever": 11,
+        "mycareersfuture": 967,
+        "adzuna": 48
+      },
+      "cross_source_duplicates": {
+        "adzuna": 2
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 38.3,
+      "import_seconds": 9.2,
+      "new": null,
+      "already_stored": null,
+      "deferred": null,
+      "to_embedding_finished_s": null
+    },
+    {
+      "trigger": "manual",
+      "saved_at": "2026-10-25T09:20:46.884218Z",
+      "fetched": 2177,
+      "by_source": {
+        "greenhouse": 58,
+        "lever": 11,
+        "mycareersfuture": 2058,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 2
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 93.9,
+      "import_seconds": 20.3,
+      "new": null,
+      "already_stored": null,
+      "deferred": null,
+      "to_embedding_finished_s": null
+    },
+    {
+      "trigger": "manual",
+      "saved_at": "2026-10-26T04:20:10.053027Z",
+      "fetched": 2169,
+      "by_source": {
+        "greenhouse": 58,
+        "lever": 11,
+        "mycareersfuture": 2050,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 2
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 166.8,
+      "import_seconds": 12.8,
+      "new": 10,
+      "already_stored": 442,
+      "deferred": 1717,
+      "to_embedding_finished_s": 193.2
+    },
+    {
+      "saved_at": "2026-10-29T11:55:41.216711Z",
+      "trigger": "manual",
+      "fetched": 2310,
+      "by_source": {
+        "greenhouse": 56,
+        "lever": 7,
+        "mycareersfuture": 2197,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 5
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 141.4,
+      "import_seconds": 12.7,
+      "new": null,
+      "already_stored": null,
+      "deferred": null,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-29T12:00:15.167313Z",
+      "trigger": "manual",
+      "fetched": 2260,
+      "by_source": {
+        "greenhouse": 56,
+        "lever": 7,
+        "mycareersfuture": 2197
+      },
+      "cross_source_duplicates": {},
+      "failures": [
+        {
+          "source": "adzuna",
+          "board": "data engineer",
+          "kind": "server_error",
+          "error": "adzuna returned HTTP 503 (server_error)"
+        }
+      ],
+      "truncated": [
+        "mycareersfuture:software engineer"
+      ],
+      "discovery_seconds": 63.3,
+      "import_seconds": 10.6,
+      "new": null,
+      "already_stored": null,
+      "deferred": null,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T10:13:48.840412Z",
+      "trigger": "manual",
+      "fetched": 2226,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 2114,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 3
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 132.0,
+      "import_seconds": 15.5,
+      "new": 200,
+      "already_stored": 524,
+      "deferred": 1502,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T10:16:00.893637Z",
+      "trigger": "manual",
+      "fetched": 2226,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 2114,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 3
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 50.4,
+      "import_seconds": 10.6,
+      "new": 200,
+      "already_stored": 724,
+      "deferred": 1302,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T10:17:59.784495Z",
+      "trigger": "manual",
+      "fetched": 2226,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 2114,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 3
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 52.4,
+      "import_seconds": 12.2,
+      "new": 200,
+      "already_stored": 924,
+      "deferred": 1102,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T10:19:31.602087Z",
+      "trigger": "manual",
+      "fetched": 2226,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 2114,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 3
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 50.5,
+      "import_seconds": 12.1,
+      "new": 200,
+      "already_stored": 1124,
+      "deferred": 902,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T10:20:56.327319Z",
+      "trigger": "manual",
+      "fetched": 2226,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 2114,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 3
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 53.0,
+      "import_seconds": 13.6,
+      "new": 200,
+      "already_stored": 1324,
+      "deferred": 702,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T10:22:40.903680Z",
+      "trigger": "manual",
+      "fetched": 2226,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 2114,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 3
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 52.9,
+      "import_seconds": 13.8,
+      "new": 200,
+      "already_stored": 1524,
+      "deferred": 502,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T10:24:08.464027Z",
+      "trigger": "manual",
+      "fetched": 2226,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 2114,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 3
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 55.5,
+      "import_seconds": 14.1,
+      "new": 200,
+      "already_stored": 1724,
+      "deferred": 302,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T10:25:41.725221Z",
+      "trigger": "manual",
+      "fetched": 2226,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 2114,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 3
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 57.9,
+      "import_seconds": 15.2,
+      "new": 200,
+      "already_stored": 1924,
+      "deferred": 102,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T10:27:10.179022Z",
+      "trigger": "manual",
+      "fetched": 2226,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 2114,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 3
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 54.4,
+      "import_seconds": 15.4,
+      "new": 102,
+      "already_stored": 2124,
+      "deferred": 0,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T10:28:40.211261Z",
+      "trigger": "manual",
+      "fetched": 2226,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 2114,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 3
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 51.4,
+      "import_seconds": 12.9,
+      "new": 0,
+      "already_stored": 2226,
+      "deferred": 0,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T11:00:45.516221Z",
+      "trigger": "manual",
+      "fetched": 5759,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 5647,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 4
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 345.6,
+      "import_seconds": 7.5,
+      "new": null,
+      "already_stored": null,
+      "deferred": null,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T11:25:39.466058Z",
+      "trigger": "manual",
+      "fetched": 5760,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 5648,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 4
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 138.8,
+      "import_seconds": 14.4,
+      "new": 200,
+      "already_stored": 2226,
+      "deferred": 3334,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T11:27:42.682577Z",
+      "trigger": "manual",
+      "fetched": 5760,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 5648,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 4
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 80.7,
+      "import_seconds": 11.3,
+      "new": 200,
+      "already_stored": 2426,
+      "deferred": 3134,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T11:29:40.768237Z",
+      "trigger": "manual",
+      "fetched": 5760,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 5648,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 4
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 79.9,
+      "import_seconds": 11.5,
+      "new": 200,
+      "already_stored": 2626,
+      "deferred": 2934,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T11:31:38.841480Z",
+      "trigger": "manual",
+      "fetched": 5760,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 5648,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 4
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 85.8,
+      "import_seconds": 11.8,
+      "new": 200,
+      "already_stored": 2826,
+      "deferred": 2734,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T11:33:32.816509Z",
+      "trigger": "manual",
+      "fetched": 5760,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 5648,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 4
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 81.1,
+      "import_seconds": 11.6,
+      "new": 200,
+      "already_stored": 3026,
+      "deferred": 2534,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T11:35:27.930172Z",
+      "trigger": "manual",
+      "fetched": 5760,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 5648,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 4
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 80.9,
+      "import_seconds": 12.0,
+      "new": 200,
+      "already_stored": 3226,
+      "deferred": 2334,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T12:06:09.545921Z",
+      "trigger": "manual",
+      "fetched": 5758,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 5646,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 4
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 352.1,
+      "import_seconds": 24.1,
+      "new": 150,
+      "already_stored": 3419,
+      "deferred": 2189,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T13:30:47.863914Z",
+      "trigger": "manual",
+      "fetched": 5760,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 5648,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 4
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 427.4,
+      "import_seconds": 37.3,
+      "new": 200,
+      "already_stored": 3567,
+      "deferred": 1993,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T13:33:50.756996Z",
+      "trigger": "manual",
+      "fetched": 5760,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 5648,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 4
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 81.8,
+      "import_seconds": 12.9,
+      "new": 200,
+      "already_stored": 3767,
+      "deferred": 1793,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T13:35:41.092586Z",
+      "trigger": "manual",
+      "fetched": 5760,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 5648,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 4
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 80.6,
+      "import_seconds": 13.0,
+      "new": 200,
+      "already_stored": 3967,
+      "deferred": 1593,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T13:37:38.797954Z",
+      "trigger": "manual",
+      "fetched": 5760,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 5648,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 4
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 82.5,
+      "import_seconds": 13.4,
+      "new": 200,
+      "already_stored": 4167,
+      "deferred": 1393,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T13:39:33.155561Z",
+      "trigger": "manual",
+      "fetched": 5760,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 5648,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 4
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 81.8,
+      "import_seconds": 12.7,
+      "new": 200,
+      "already_stored": 4367,
+      "deferred": 1193,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T13:41:37.467871Z",
+      "trigger": "manual",
+      "fetched": 5760,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 5648,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 4
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 92.6,
+      "import_seconds": 12.7,
+      "new": 200,
+      "already_stored": 4567,
+      "deferred": 993,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T13:43:34.380863Z",
+      "trigger": "manual",
+      "fetched": 5760,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 5648,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 4
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 86.1,
+      "import_seconds": 15.5,
+      "new": 200,
+      "already_stored": 4767,
+      "deferred": 793,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T13:45:28.884741Z",
+      "trigger": "manual",
+      "fetched": 5760,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 5648,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 4
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 85.3,
+      "import_seconds": 13.8,
+      "new": 200,
+      "already_stored": 4967,
+      "deferred": 593,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T13:47:24.050253Z",
+      "trigger": "manual",
+      "fetched": 5760,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 5648,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 4
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 83.2,
+      "import_seconds": 13.9,
+      "new": 200,
+      "already_stored": 5167,
+      "deferred": 393,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T13:49:23.033115Z",
+      "trigger": "manual",
+      "fetched": 5760,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 5648,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 4
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 82.1,
+      "import_seconds": 14.0,
+      "new": 200,
+      "already_stored": 5367,
+      "deferred": 193,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T13:51:18.546362Z",
+      "trigger": "manual",
+      "fetched": 5760,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 5648,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 4
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 83.0,
+      "import_seconds": 14.1,
+      "new": 193,
+      "already_stored": 5567,
+      "deferred": 0,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-10-31T13:53:22.163094Z",
+      "trigger": "manual",
+      "fetched": 5760,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 5648,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 4
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 86.9,
+      "import_seconds": 13.4,
+      "new": 0,
+      "already_stored": 5760,
+      "deferred": 0,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-11-01T00:06:53.803529Z",
+      "trigger": "schedule",
+      "fetched": 4807,
+      "by_source": {
+        "greenhouse": 54,
+        "lever": 7,
+        "mycareersfuture": 4696,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 3
+      },
+      "failures": [
+        {
+          "source": "mycareersfuture",
+          "board": "accountant",
+          "kind": "timeout",
+          "error": "mycareersfuture request failed (timeout): The read operation timed out"
+        },
+        {
+          "source": "mycareersfuture",
+          "board": "investment analyst",
+          "kind": "timeout",
+          "error": "mycareersfuture request failed (timeout): The read operation timed out"
+        },
+        {
+          "source": "mycareersfuture",
+          "board": "marketing executive",
+          "kind": "timeout",
+          "error": "mycareersfuture request failed (timeout): The read operation timed out"
+        }
+      ],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 421.7,
+      "import_seconds": 46.9,
+      "new": 111,
+      "already_stored": 4696,
+      "deferred": 0,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-11-01T12:06:32.462371Z",
+      "trigger": "schedule",
+      "fetched": 5698,
+      "by_source": {
+        "greenhouse": 54,
+        "lever": 7,
+        "mycareersfuture": 5587,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 2
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 393.2,
+      "import_seconds": 39.4,
+      "new": 102,
+      "already_stored": 5596,
+      "deferred": 0,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-11-02T00:04:20.405503Z",
+      "trigger": "schedule",
+      "fetched": 1596,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 1534
+      },
+      "cross_source_duplicates": {},
+      "failures": [
+        {
+          "source": "mycareersfuture",
+          "board": "data analyst",
+          "kind": "timeout",
+          "error": "mycareersfuture request failed (timeout): The read operation timed out"
+        },
+        {
+          "source": "mycareersfuture",
+          "board": "business analyst",
+          "kind": "timeout",
+          "error": "mycareersfuture request failed (timeout): The read operation timed out"
+        },
+        {
+          "source": "mycareersfuture",
+          "board": "financial analyst",
+          "kind": "timeout",
+          "error": "mycareersfuture request failed (timeout): The read operation timed out"
+        },
+        {
+          "source": "mycareersfuture",
+          "board": "accountant",
+          "kind": "timeout",
+          "error": "mycareersfuture request failed (timeout): The read operation timed out"
+        },
+        {
+          "source": "mycareersfuture",
+          "board": "investment analyst",
+          "kind": "timeout",
+          "error": "mycareersfuture request failed (timeout): The read operation timed out"
+        },
+        {
+          "source": "mycareersfuture",
+          "board": "marketing executive",
+          "kind": "timeout",
+          "error": "mycareersfuture request failed (timeout): The read operation timed out"
+        },
+        {
+          "source": "mycareersfuture",
+          "board": "digital marketing",
+          "kind": "timeout",
+          "error": "mycareersfuture request failed (timeout): The read operation timed out"
+        },
+        {
+          "source": "mycareersfuture",
+          "board": "hr executive",
+          "kind": "timeout",
+          "error": "mycareersfuture request failed (timeout): The read operation timed out"
+        },
+        {
+          "source": "mycareersfuture",
+          "board": "operations executive",
+          "kind": "timeout",
+          "error": "mycareersfuture request failed (timeout): The read operation timed out"
+        },
+        {
+          "source": "mycareersfuture",
+          "board": "supply chain",
+          "kind": "timeout",
+          "error": "mycareersfuture request failed (timeout): The read operation timed out"
+        },
+        {
+          "source": "mycareersfuture",
+          "board": "management consultant",
+          "kind": "timeout",
+          "error": "mycareersfuture request failed (timeout): The read operation timed out"
+        },
+        {
+          "source": "mycareersfuture",
+          "board": "project manager",
+          "kind": "timeout",
+          "error": "mycareersfuture request failed (timeout): The read operation timed out"
+        },
+        {
+          "source": "mycareersfuture",
+          "board": "ux designer",
+          "kind": "timeout",
+          "error": "mycareersfuture request failed (timeout): The read operation timed out"
+        },
+        {
+          "source": "adzuna",
+          "board": "data engineer",
+          "kind": "server_error",
+          "error": "adzuna returned HTTP 503 (server_error)"
+        }
+      ],
+      "truncated": [
+        "mycareersfuture:software engineer"
+      ],
+      "discovery_seconds": 254.9,
+      "import_seconds": 33.9,
+      "new": 22,
+      "already_stored": 1574,
+      "deferred": 0,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-11-02T12:06:38.807892Z",
+      "trigger": "schedule",
+      "fetched": 5734,
+      "by_source": {
+        "greenhouse": 55,
+        "lever": 7,
+        "mycareersfuture": 5622,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 2
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 412.5,
+      "import_seconds": 52.6,
+      "new": 150,
+      "already_stored": 5352,
+      "deferred": 232,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-11-02T22:06:45.447184Z",
+      "trigger": "schedule",
+      "fetched": 5705,
+      "by_source": {
+        "greenhouse": 54,
+        "lever": 7,
+        "mycareersfuture": 5594,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 2
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 422.7,
+      "import_seconds": 47.5,
+      "new": 150,
+      "already_stored": 5425,
+      "deferred": 130,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-11-03T12:06:54.009523Z",
+      "trigger": "schedule",
+      "fetched": 5789,
+      "by_source": {
+        "greenhouse": 53,
+        "lever": 7,
+        "mycareersfuture": 5679,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 1
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 438.7,
+      "import_seconds": 52.3,
+      "new": 150,
+      "already_stored": 5370,
+      "deferred": 269,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-11-03T22:07:52.905462Z",
+      "trigger": "schedule",
+      "fetched": 5757,
+      "by_source": {
+        "greenhouse": 52,
+        "lever": 7,
+        "mycareersfuture": 5648,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 1
+      },
+      "failures": [],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:operations executive",
+        "mycareersfuture:supply chain",
+        "mycareersfuture:project manager",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 487.2,
+      "import_seconds": 41.9,
+      "new": 150,
+      "already_stored": 5444,
+      "deferred": 163,
+      "to_embedding_finished_s": null
+    },
+    {
+      "saved_at": "2026-11-04T12:08:10.987579Z",
+      "trigger": "schedule",
+      "fetched": 4835,
+      "by_source": {
+        "greenhouse": 57,
+        "lever": 7,
+        "mycareersfuture": 4721,
+        "adzuna": 50
+      },
+      "cross_source_duplicates": {
+        "adzuna": 2
+      },
+      "failures": [
+        {
+          "source": "mycareersfuture",
+          "board": "operations executive",
+          "kind": "timeout",
+          "error": "mycareersfuture request failed (timeout): The read operation timed out"
+        },
+        {
+          "source": "mycareersfuture",
+          "board": "management consultant",
+          "kind": "timeout",
+          "error": "mycareersfuture request failed (timeout): The read operation timed out"
+        },
+        {
+          "source": "mycareersfuture",
+          "board": "project manager",
+          "kind": "timeout",
+          "error": "mycareersfuture request failed (timeout): The read operation timed out"
+        }
+      ],
+      "truncated": [
+        "mycareersfuture:software engineer",
+        "mycareersfuture:accountant",
+        "mycareersfuture:marketing executive",
+        "mycareersfuture:digital marketing",
+        "mycareersfuture:hr executive",
+        "mycareersfuture:supply chain",
+        "adzuna:data engineer"
+      ],
+      "discovery_seconds": 499.8,
+      "import_seconds": 36.8,
+      "new": 150,
+      "already_stored": 4487,
+      "deferred": 198,
+      "to_embedding_finished_s": null
+    }
+  ],
+  "failures": {
+    "greenhouse:cloudflare response_too_large": 1,
+    "adzuna:data engineer server_error": 2,
+    "mycareersfuture:accountant timeout": 2,
+    "mycareersfuture:investment analyst timeout": 2,
+    "mycareersfuture:marketing executive timeout": 2,
+    "mycareersfuture:data analyst timeout": 1,
+    "mycareersfuture:business analyst timeout": 1,
+    "mycareersfuture:financial analyst timeout": 1,
+    "mycareersfuture:digital marketing timeout": 1,
+    "mycareersfuture:hr executive timeout": 1,
+    "mycareersfuture:operations executive timeout": 2,
+    "mycareersfuture:supply chain timeout": 1,
+    "mycareersfuture:management consultant timeout": 2,
+    "mycareersfuture:project manager timeout": 2,
+    "mycareersfuture:ux designer timeout": 1
+  }
+}

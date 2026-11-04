@@ -1,0 +1,292 @@
+{
+  "prices": {
+    "lambda_gb_s_arm": 1.33334e-05,
+    "lambda_request": 2e-07,
+    "http_api_request": 1.25e-06,
+    "aurora_acu_hour": 0.2,
+    "aurora_storage_gb_month": 0.11,
+    "aurora_io_million": 0.22,
+    "s3_gb_month": 0.025,
+    "s3_put": 5e-06,
+    "s3_get": 4e-07,
+    "logs_ingest_gb": 0.7,
+    "logs_store_gb_month": 0.03,
+    "cognito_lite_mau": 0.0055,
+    "cognito_free_mau": 10000,
+    "amplify_gb_out": 0.15,
+    "amplify_build_minute": 0.01,
+    "secret_month": 0.4,
+    "ecr_gb_month": 0.1,
+    "gst": 0.09,
+    "ec2_c7g_xlarge_hour": 0.1666,
+    "ec2_t4g_medium_hour": 0.0424,
+    "rds_pg_m7g_large_hour": 0.234,
+    "rds_pg_t4g_medium_hour": 0.102,
+    "rds_gp3_gb_month": 0.138,
+    "alb_hour": 0.0252,
+    "alb_lcu_hour": 0.008,
+    "nova_lite_in": 8.1e-08,
+    "nova_lite_out": 3.24e-07,
+    "haiku_45_in": 1e-06,
+    "haiku_45_out": 5e-06
+  },
+  "fx": {
+    "usd_sgd": 1.2784776199410346,
+    "usd_myr": 4.0854998659876705
+  },
+  "on_prem": {
+    "server_myr": 36835.51,
+    "amortise_months": 36,
+    "average_watts": 250,
+    "pue": 1.5,
+    "tariff_sgd_kwh": 0.3116,
+    "network_sgd_month": 267,
+    "admin_hours_month": 8,
+    "admin_sgd_month_salary": 5000,
+    "employer_cpf": 0.17
+  },
+  "measured": {
+    "api_gb_s_per_request": 1.7,
+    "request_seconds": 0.83,
+    "log_bytes_per_request": 550,
+    "acu_floor_when_awake": 0.5,
+    "acu_per_instance": 0.1,
+    "pause_after_hours": 0.5,
+    "ai": {
+      "fit": {
+        "worker_gb_s": 11.9,
+        "api_gb_s": 5.2,
+        "tokens_in": 3160,
+        "tokens_out": 1136
+      },
+      "cover_letter": {
+        "worker_gb_s": 4.6,
+        "api_gb_s": 20.6,
+        "tokens_in": 991,
+        "tokens_out": 497
+      },
+      "tailor": {
+        "worker_gb_s": 1.5,
+        "api_gb_s": 8.4,
+        "tokens_in": 821,
+        "tokens_out": 84
+      }
+    },
+    "pull_gb_s": 795.0,
+    "fixed_secrets": 2,
+    "fixed_ecr_gb": 8.1,
+    "aurora_storage_gb": 0.1
+  },
+  "usage": {
+    "sessions": 8,
+    "requests_per_session": 25,
+    "ai_tasks": {
+      "fit": 1,
+      "cover_letter": 1,
+      "tailor": 1
+    },
+    "web_mb_per_session": 2.0,
+    "storage_mb": 5.0,
+    "session_hours": 0.25,
+    "waking_hours_month": 480,
+    "night_share": 0.05,
+    "peak_factor": 3.0,
+    "pulls_per_month": 60,
+    "builds_per_month": 30,
+    "build_minutes": 4
+  },
+  "serverless": [
+    {
+      "users": 10,
+      "requests": 2000,
+      "database_hours": 84.4,
+      "acu": 0.5,
+      "lines": {
+        "API function": 0.05,
+        "API Gateway": 0.0,
+        "Aurora": 8.46,
+        "AI and pipeline functions": 0.64,
+        "S3": 0.0,
+        "CloudWatch Logs": 0.0,
+        "Cognito": 0.0,
+        "Amplify": 1.22,
+        "Secrets and images": 1.61
+      },
+      "aws_total": 13.06,
+      "llm": {
+        "SoClaaS (NUS)": 0.0,
+        "Nova Lite price": 0.01,
+        "Claude Haiku 4.5 price": 0.14
+      }
+    },
+    {
+      "users": 100,
+      "requests": 20000,
+      "database_hours": 376.7,
+      "acu": 0.5,
+      "lines": {
+        "API function": 0.5,
+        "API Gateway": 0.03,
+        "Aurora": 37.95,
+        "AI and pipeline functions": 0.66,
+        "S3": 0.02,
+        "CloudWatch Logs": 0.01,
+        "Cognito": 0.0,
+        "Amplify": 1.43,
+        "Secrets and images": 1.61
+      },
+      "aws_total": 46.0,
+      "llm": {
+        "SoClaaS (NUS)": 0.0,
+        "Nova Lite price": 0.1,
+        "Claude Haiku 4.5 price": 1.36
+      }
+    },
+    {
+      "users": 1000,
+      "requests": 200000,
+      "database_hours": 654.1,
+      "acu": 0.53,
+      "lines": {
+        "API function": 5.03,
+        "API Gateway": 0.25,
+        "Aurora": 69.63,
+        "AI and pipeline functions": 0.88,
+        "S3": 0.16,
+        "CloudWatch Logs": 0.08,
+        "Cognito": 0.0,
+        "Amplify": 3.54,
+        "Secrets and images": 1.61
+      },
+      "aws_total": 88.49,
+      "llm": {
+        "SoClaaS (NUS)": 0.0,
+        "Nova Lite price": 0.96,
+        "Claude Haiku 4.5 price": 13.56
+      }
+    },
+    {
+      "users": 10000,
+      "requests": 2000000,
+      "database_hours": 720.0,
+      "acu": 0.79,
+      "lines": {
+        "API function": 50.3,
+        "API Gateway": 2.54,
+        "Aurora": 117.91,
+        "AI and pipeline functions": 3.04,
+        "S3": 1.56,
+        "CloudWatch Logs": 0.8,
+        "Cognito": 0.0,
+        "Amplify": 24.64,
+        "Secrets and images": 1.61
+      },
+      "aws_total": 220.61,
+      "llm": {
+        "SoClaaS (NUS)": 0.0,
+        "Nova Lite price": 9.59,
+        "Claude Haiku 4.5 price": 135.57
+      }
+    },
+    {
+      "users": 100000,
+      "requests": 20000000,
+      "database_hours": 720.0,
+      "acu": 3.38,
+      "lines": {
+        "API function": 503.0,
+        "API Gateway": 25.38,
+        "Aurora": 531.01,
+        "AI and pipeline functions": 24.64,
+        "S3": 15.57,
+        "CloudWatch Logs": 8.03,
+        "Cognito": 495.0,
+        "Amplify": 235.57,
+        "Secrets and images": 1.61
+      },
+      "aws_total": 2005.38,
+      "llm": {
+        "SoClaaS (NUS)": 0.0,
+        "Nova Lite price": 95.9,
+        "Claude Haiku 4.5 price": 1355.7
+      }
+    }
+  ],
+  "alternatives": {
+    "10": {
+      "always_on_peak": 1332.81,
+      "always_on_minimum": 174.59,
+      "on_premise": {
+        "parts": {
+          "hardware (3-year)": 250.45,
+          "power and cooling": 66.72,
+          "network": 208.84,
+          "admin time": 211.6,
+          "hosted services kept": 3.78
+        },
+        "total": 741.39
+      }
+    },
+    "100": {
+      "always_on_peak": 1333.09,
+      "always_on_minimum": 174.87,
+      "on_premise": {
+        "parts": {
+          "hardware (3-year)": 250.45,
+          "power and cooling": 66.72,
+          "network": 208.84,
+          "admin time": 211.6,
+          "hosted services kept": 4.07
+        },
+        "total": 741.67
+      }
+    },
+    "1000": {
+      "always_on_peak": 1335.86,
+      "always_on_minimum": 177.64,
+      "on_premise": {
+        "parts": {
+          "hardware (3-year)": 250.45,
+          "power and cooling": 66.72,
+          "network": 208.84,
+          "admin time": 211.6,
+          "hosted services kept": 6.83
+        },
+        "total": 744.44
+      }
+    },
+    "10000": {
+      "always_on_peak": 1363.53,
+      "always_on_minimum": 205.3,
+      "on_premise": {
+        "parts": {
+          "hardware (3-year)": 250.45,
+          "power and cooling": 66.72,
+          "network": 208.84,
+          "admin time": 211.6,
+          "hosted services kept": 34.5
+        },
+        "total": 772.11
+      }
+    },
+    "100000": {
+      "always_on_peak": 2179.69,
+      "always_on_minimum": 1021.46,
+      "on_premise": {
+        "parts": {
+          "hardware (3-year)": 250.45,
+          "power and cooling": 66.72,
+          "network": 208.84,
+          "admin time": 211.6,
+          "hosted services kept": 850.66
+        },
+        "total": 1588.26
+      }
+    }
+  },
+  "break_even_users": {
+    "Break-even vs always-on minimum": 8913,
+    "Break-even vs peak-sized": null,
+    "Break-even vs on-premise": 63096
+  }
+}

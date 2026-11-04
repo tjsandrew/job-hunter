@@ -1,0 +1,2486 @@
+[
+ {
+  "TimePeriod": {
+   "Start": "2026-10-01",
+   "End": "2026-10-02"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Tax"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.51",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-02",
+   "End": "2026-10-03"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-03",
+   "End": "2026-10-04"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-04",
+   "End": "2026-10-05"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-05",
+   "End": "2026-10-06"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-06",
+   "End": "2026-10-07"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-07",
+   "End": "2026-10-08"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-08",
+   "End": "2026-10-09"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-09",
+   "End": "2026-10-10"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-10",
+   "End": "2026-10-11"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-11",
+   "End": "2026-10-12"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-12",
+   "End": "2026-10-13"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-13",
+   "End": "2026-10-14"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-14",
+   "End": "2026-10-15"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-15",
+   "End": "2026-10-16"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-16",
+   "End": "2026-10-17"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-17",
+   "End": "2026-10-18"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-18",
+   "End": "2026-10-19"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-19",
+   "End": "2026-10-20"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-20",
+   "End": "2026-10-21"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS Amplify"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0003209714",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS CloudShell"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000003094",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Cost Explorer"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.009",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Key Management Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000216",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Lambda"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Secrets Manager"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.005338271",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon API Gateway"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.000268875",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Cognito"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon EC2 Container Registry (ECR)"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0003787885",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Relational Database Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.2808303361",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Notification Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Storage Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.00052506",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AmazonCloudWatch"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0007597425",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-21",
+   "End": "2026-10-22"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS Amplify"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0001883257",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Key Management Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000027",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Lambda"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Secrets Manager"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0234057907",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon API Gateway"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0003195",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon EC2 Container Registry (ECR)"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0025386769",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Relational Database Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.4987707708",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Notification Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Queue Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Storage Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0005795999",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AmazonCloudWatch"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0062654767",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-22",
+   "End": "2026-10-23"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS Amplify"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000238355",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Secrets Manager"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0232257907",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon EC2 Container Registry (ECR)"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.003989904",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Relational Database Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0001814168",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Notification Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Queue Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Storage Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000044999",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AmazonCloudWatch"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0117478953",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-23",
+   "End": "2026-10-24"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS Amplify"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000518917",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS CloudShell"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000041635",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Lambda"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Secrets Manager"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0232257907",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon API Gateway"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.000054",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon EC2 Container Registry (ECR)"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.003989904",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Relational Database Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.1153723825",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Queue Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Storage Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "-0.0000000001",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AmazonCloudWatch"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0116416989",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-24",
+   "End": "2026-10-25"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS Amplify"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0004241379",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Key Management Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000108",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Lambda"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000025426",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Secrets Manager"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0233742907",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon API Gateway"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.00059175",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon EC2 Container Registry (ECR)"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0064410488",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Relational Database Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.7278982195",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Notification Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Queue Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Storage Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0004148999",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AmazonCloudWatch"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0144083672",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-25",
+   "End": "2026-10-26"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS Amplify"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0001475886",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Cost Explorer"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.018",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Key Management Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000054",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Lambda"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000025855",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Secrets Manager"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0234147907",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon API Gateway"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.004248",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Cognito"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon EC2 Container Registry (ECR)"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0098372352",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Relational Database Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.836916985",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Notification Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Queue Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Storage Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0011732398",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AmazonCloudWatch"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0163322552",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-26",
+   "End": "2026-10-27"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS Amplify"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000550758",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Cost Explorer"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.009",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Key Management Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000054",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Lambda"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000015106",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Secrets Manager"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0232662907",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon API Gateway"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.039177",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon EC2 Container Registry (ECR)"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0110924424",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Relational Database Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.4925347235",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Notification Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Queue Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Storage Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.00018108",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AmazonCloudWatch"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0276714153",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-27",
+   "End": "2026-10-28"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS Amplify"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0004109522",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Lambda"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Secrets Manager"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0232662907",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon API Gateway"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.00959625",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon EC2 Container Registry (ECR)"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0119921883",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Relational Database Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.7298106284",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Queue Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Storage Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.00006822",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AmazonCloudWatch"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0171914157",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-28",
+   "End": "2026-10-29"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS Amplify"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0001899041",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Lambda"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Secrets Manager"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0232617907",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon API Gateway"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.000003375",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon EC2 Container Registry (ECR)"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0128831575",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Relational Database Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0555433884",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Notification Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Queue Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Storage Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.00003672",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AmazonCloudWatch"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0145178108",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-29",
+   "End": "2026-10-30"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS Amplify"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0004132528",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Lambda"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.000002727",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Secrets Manager"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0232347907",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon API Gateway"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.000187875",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon EC2 Container Registry (ECR)"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0138771555",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Relational Database Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.2310016096",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Notification Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Queue Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Storage Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.00004716",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AmazonCloudWatch"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0146219686",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-30",
+   "End": "2026-10-31"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS Amplify"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000944979",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Secrets Manager"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0232257907",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon EC2 Container Registry (ECR)"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0138771555",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Relational Database Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0002349397",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Queue Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Storage Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AmazonCloudWatch"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0145161288",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-10-31",
+   "End": "2026-11-01"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS Amplify"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0002758635",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Cost Explorer"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.036",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Lambda"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.000030181",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Secrets Manager"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0235002907",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon API Gateway"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.000246375",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon EC2 Container Registry (ECR)"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.017493287",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Relational Database Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.7918291395",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Notification Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Queue Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Storage Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0006588",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AmazonCloudWatch"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0180575865",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": false
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-11-01",
+   "End": "2026-11-02"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS Amplify"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000869401",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Lambda"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000023977",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Secrets Manager"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.024",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon EC2 Container Registry (ECR)"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.020413359",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Relational Database Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.1182214875",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Queue Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Storage Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000187199",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AmazonCloudWatch"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Tax"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.08",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": true
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-11-02",
+   "End": "2026-11-03"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS Amplify"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000731213",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Lambda"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000024959",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Secrets Manager"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.024027",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon API Gateway"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.00000225",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon EC2 Container Registry (ECR)"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0209058315",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Relational Database Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.2893362347",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Notification Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Queue Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Storage Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.00006102",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AmazonCloudWatch"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0179999936",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": true
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-11-03",
+   "End": "2026-11-04"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS Amplify"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0001033756",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Lambda"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000028755",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Secrets Manager"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0240045",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon EC2 Container Registry (ECR)"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0219277117",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Relational Database Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.2408367017",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Queue Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Storage Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.00001872",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AmazonCloudWatch"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0179999936",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": true
+ },
+ {
+  "TimePeriod": {
+   "Start": "2026-11-04",
+   "End": "2026-11-05"
+  },
+  "Total": {},
+  "Groups": [
+   {
+    "Keys": [
+     "AWS Amplify"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000636252",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS CloudTrail"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AWS Secrets Manager"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.004",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon EC2 Container Registry (ECR)"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0036522108",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Relational Database Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0000698757",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "Amazon Simple Queue Service"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0",
+      "Unit": "USD"
+     }
+    }
+   },
+   {
+    "Keys": [
+     "AmazonCloudWatch"
+    ],
+    "Metrics": {
+     "UnblendedCost": {
+      "Amount": "0.0037499986",
+      "Unit": "USD"
+     }
+    }
+   }
+  ],
+  "Estimated": true
+ }
+]
