@@ -12,7 +12,7 @@ import './letters.css';
 const SAVE_DELAY_MS = 700;
 type Start = { jobId: string | null; lockJob: boolean };
 
-/** The cover letters of the "My resumes" page: the list, starting a letter, and the editor with its preview. */
+/** The cover letters of the "My documents" page: the list, starting a letter, and the editor with its preview. */
 export function Letters({ me, apps, resumeCount, activeId, target, refresh, onOpen, onTargetDone, onSection, onMeChanged, onApplicationSaved, announce }: {
   me: Me | null; apps: Application[]; resumeCount: number; activeId: string | null; target: string | null; refresh: number;
   onOpen: (id: string | null) => void; onTargetDone: () => void; onSection: (section: DocumentTab) => void;
@@ -182,7 +182,7 @@ export function Letters({ me, apps, resumeCount, activeId, target, refresh, onOp
   const waiting = apps.filter((item) => item.job && !lettered.has(item.job_id) && !['rejected', 'withdrawn'].includes(item.status)).slice(0, 6);
   const remaining = me?.allowance.remaining ?? 0, limit = me?.allowance.limit ?? 5;
   return <div className="page-wrap letters-page">
-    <div className="page-heading"><div><div className="eyebrow">YOUR DOCUMENTS</div><h1>My resumes</h1><p>Keep your resumes and cover letters here. Open one to edit it, or prepare it for a job.</p></div>
+    <div className="page-heading"><div><div className="eyebrow">YOUR DOCUMENTS</div><h1>My documents</h1><p>Your resumes, cover letters and the original files you uploaded, in one place.</p></div>
       <button className="button primary" onClick={() => { setStart({ jobId: null, lockJob: false }); setStartError(''); }}><Icon name="plus" /> Write cover letter</button></div>
     <DocTabs section="letters" onSection={onSection} resumeCount={resumeCount} letterCount={letters?.length ?? null} />
     {loadError && <p className="letter-error" role="alert">{loadError}</p>}

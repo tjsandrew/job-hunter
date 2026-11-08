@@ -5,9 +5,10 @@ import type { DiscoverMode } from './types';
 //   /jobs/<job id>                                                   one listing (the details window, over the Discover list)
 //   /profile  /tracker  /resumes  /resumes/<resume id>               the other pages, and one resume in the editor
 //   /resumes/letters  /resumes/letters/<letter id>                   the cover letters beside the resumes, and one letter in the editor
+//   /resumes/uploads                                                 the original PDF and Word files the person uploaded
 // The hosting already answers every path without a dot with the app (Amplify rewrite rule, Vite dev server), so nothing there changes.
 export type Page = 'discover' | 'profile' | 'tracker' | 'studio';
-export type DocumentTab = 'resumes' | 'letters';
+export type DocumentTab = 'resumes' | 'letters' | 'uploads';
 export type Route = { page: Page; mode: DiscoverMode; jobId: string | null; resumeId: string | null; tab: DocumentTab; letterId: string | null };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -32,6 +33,7 @@ export function parseRoute(pathname: string): Route {
   if (first === 'tracker' && parts.length === 1) return { ...DEFAULT_ROUTE, page: 'tracker' };
   if (first === 'resumes' && parts.length === 1) return { ...DEFAULT_ROUTE, page: 'studio' };
   if (first === 'resumes' && second === 'letters' && parts.length === 2) return { ...DEFAULT_ROUTE, page: 'studio', tab: 'letters' };
+  if (first === 'resumes' && second === 'uploads' && parts.length === 2) return { ...DEFAULT_ROUTE, page: 'studio', tab: 'uploads' };
   if (first === 'resumes' && second === 'letters' && parts.length === 3 && parts[2] && (UUID.test(parts[2]) || TOKEN.test(parts[2]))) return { ...DEFAULT_ROUTE, page: 'studio', tab: 'letters', letterId: parts[2] };
   if (first === 'resumes' && parts.length === 2 && second && (UUID.test(second) || TOKEN.test(second))) return { ...DEFAULT_ROUTE, page: 'studio', resumeId: second };
   return { ...DEFAULT_ROUTE };
@@ -43,6 +45,7 @@ export function routePath(route: Route): string {
   if (route.page === 'profile') return '/profile';
   if (route.page === 'tracker') return '/tracker';
   if (route.page === 'studio' && route.tab === 'letters') return route.letterId ? `/resumes/letters/${encodeURIComponent(route.letterId)}` : '/resumes/letters';
+  if (route.page === 'studio' && route.tab === 'uploads') return '/resumes/uploads';
   if (route.page === 'studio') return route.resumeId ? `/resumes/${encodeURIComponent(route.resumeId)}` : '/resumes';
   return `/discover${SEGMENT_OF[route.mode]}`;
 }

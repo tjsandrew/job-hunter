@@ -39,3 +39,10 @@
 .library-section .uploaded-resume-row { border-color: #e7ecf3; background: #fbfcfe; }
 .library-show-all { margin-top: 8px; }
 .uploaded-resumes.library-section { margin-top: 0; }
+/* The resume title reads as a heading but is clearly editable: a pencil, and an outline on hover and focus. */
+.editor-title-field { display: inline-flex; align-items: center; gap: 6px; min-width: 0; padding: 2px 8px; margin-left: -8px; border: 1px solid transparent; border-radius: 8px; cursor: text; }
+.editor-title-field:hover { border-color: var(--line); background: #f8fafd; }
+.editor-title-field:focus-within { border-color: #3157ce; background: #fff; box-shadow: 0 0 0 3px #3157ce16; }
+.editor-title-field input { min-width: 6ch; }
+.editor-title-field .icon { width: 15px; height: 15px; color: #8a97ab; flex-shrink: 0; }
+.editor-title-field:hover .icon, .editor-title-field:focus-within .icon { color: #3157ce; }

@@ -25,7 +25,6 @@ export function UploadedResumes() {
   const [deleting, setDeleting] = useState(false);
   const deleteLock = useRef(false);
   const [deleteError, setDeleteError] = useState('');
-  const [showAll, setShowAll] = useState(false);
   const [renaming, setRenaming] = useState<{ id: string; text: string; saving: boolean; error: string } | null>(null);
   const remove = async () => {
     if (!target || deleteLock.current) return;
@@ -66,7 +65,7 @@ export function UploadedResumes() {
     catch (cause) { setError((cause as Error).message); }
     finally { setDownloading(''); }
   };
-  const visible = showAll ? files : files.slice(0, 5);
+  const visible = files;
   return <section className="library-section uploaded-resumes" aria-label="Uploaded resumes">
     <div className="library-section-head"><div><h2>Uploaded files <span className="library-count">{files.length}</span></h2><p>Original PDF and Word files you uploaded. They are kept as-is; import their details from the Profile page.</p></div></div>
     {loading && <Loading label="Loading uploaded resumes…" />}
@@ -97,7 +96,6 @@ export function UploadedResumes() {
         </div>}
       </div>;
     })}</div>
-    {files.length > 5 && <button className="button text-button small-button library-show-all" onClick={() => setShowAll(value => !value)}>{showAll ? 'Show fewer' : `Show all ${files.length} uploaded files`}</button>}
     {target && <Dialog role="alertdialog" title={`Delete uploaded "${target.filename}"?`} onClose={() => { if (!deleteLock.current) setTarget(null); }}>
       <p>This permanently deletes the original file. Imported profile details, generated resumes, and application PDFs will be kept.</p>
       {deleteError && <p role="alert">{deleteError}</p>}

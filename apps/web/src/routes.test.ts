@@ -16,6 +16,7 @@ describe('routes', () => {
       [`/resumes/${JOB}`, { ...DEFAULT_ROUTE, page: 'studio', resumeId: JOB }],
       [`/jobs/${JOB}`, { ...DEFAULT_ROUTE, jobId: JOB }],
       ['/resumes/letters', { ...DEFAULT_ROUTE, page: 'studio', tab: 'letters' }],
+      ['/resumes/uploads', { ...DEFAULT_ROUTE, page: 'studio', tab: 'uploads' }],
       [`/resumes/letters/${JOB}`, { ...DEFAULT_ROUTE, page: 'studio', tab: 'letters', letterId: JOB }],
     ];
     for (const [path, route] of cases) {

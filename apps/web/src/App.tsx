@@ -16,10 +16,11 @@ import { activePreferences, cleanPreferences, defaultChoice, emptyPreferences, f
 import { BrandLogo, Field, Icon, Loading, Pill, SelectField, fmtDate } from './ui';
 import { emptyProfile, profileToForm } from './profile/form';
 import { ProfileView } from './profile/ProfileView';
+import { UploadsPage } from './studio/UploadsPage';
 import { Studio } from './studio/Studio';
 import { applyDefaults } from './studio/build/defaults';
 
-const pageNames: Record<Page, string> = { discover: 'Discover', profile: 'Profile', tracker: 'Application tracker', studio: 'My resumes' };
+const pageNames: Record<Page, string> = { discover: 'Discover', profile: 'Profile', tracker: 'Application tracker', studio: 'My documents' };
 const statusOptions = ['saved', 'preparing', 'applied', 'interviewing', 'offer', 'rejected', 'withdrawn'];
 
 function initials(name: string) { return name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'JH'; }
@@ -86,12 +87,12 @@ export default function App() {
   latestResumeRef.current = activeResume;
   const [previewUrl, setPreviewUrl] = useState('');
   const [studioTab, setStudioTab] = useState<'edit' | 'preview'>('edit');
-  const [section, setSection] = useState<DocumentTab>(initialRoute.tab);                 // "My resumes" shows resumes or cover letters
+  const [section, setSection] = useState<DocumentTab>(initialRoute.tab);                 // "My documents" shows resumes, cover letters or uploaded files
   const [activeLetterId, setActiveLetterId] = useState<string | null>(initialRoute.letterId);
   const [letterTarget, setLetterTarget] = useState<string | null>(null);                 // a job to start a cover letter for
   const [planOpen, setPlanOpen] = useState(false);
   const [prepareFor, setPrepareFor] = useState<Application | null>(null);               // the application a resume is being prepared for (the window)
-  const [buildRequested, setBuildRequested] = useState(false);                          // open the resume builder as soon as My resumes shows
+  const [buildRequested, setBuildRequested] = useState(false);                          // open the resume builder as soon as My documents shows
   const [saving, setSaving] = useState(false);
   const [saveLabel, setSaveLabel] = useState('Saved');
   const [history, setHistory] = useState<ResumeContent[]>([]);
@@ -459,7 +460,7 @@ export default function App() {
 
   // ---- addresses: every page, list and opened listing has its own link (routes.ts) ----
   const onLetters = page === 'studio' && section === 'letters';
-  const currentPath = routePath({ page, mode: discoverMode, jobId: jobDetail?.id ?? null, resumeId: page === 'studio' && !onLetters ? activeResume?.id ?? null : null, tab: onLetters ? 'letters' : 'resumes', letterId: onLetters ? activeLetterId : null });
+  const currentPath = routePath({ page, mode: discoverMode, jobId: jobDetail?.id ?? null, resumeId: page === 'studio' && section === 'resumes' ? activeResume?.id ?? null : null, tab: page === 'studio' ? section : 'resumes', letterId: onLetters ? activeLetterId : null });
   const address = useRef({ path: currentPath, unsaved: false, synced: false, resumeId: null as string | null, openResume });
   address.current.path = currentPath;
   address.current.unsaved = !!activeResume && saveLabel !== 'Saved';
@@ -543,6 +544,7 @@ export default function App() {
           {page === 'profile' && <ProfileView key={user} userKey={user} onChanged={() => setRefresh(value => value + 1)} onBasicsSaved={draft => setProfile(profileToForm(draft))} onOpenResume={openResume} onOpenLibrary={openResumeLibrary} preferences={preferences} setPreferences={setPreferences} savePreferences={savePreferences} savingPreferences={prefSaving} uploading={uploading} uploadMessage={uploadMessage} extractedResumeText={extractedResumeText} onUpload={uploadProfileResume} resumes={resumes} onBusyChange={setProfileBusy} />}
           {page === 'tracker' && <Tracker apps={filteredApps} loading={recordsLoading} query={trackerQuery} setQuery={setTrackerQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onEdit={setTrackerEdit} fitMarks={fitMarks} fitRunning={fitRunning} onOpenJob={setJobDetail} />}
           {page === 'studio' && section === 'letters' && <Letters me={me} apps={apps} resumeCount={resumes.length} activeId={activeLetterId} target={letterTarget} refresh={refresh} onOpen={openLetter} onTargetDone={letterTargetDone} onSection={switchSection} onMeChanged={refreshMe} onApplicationSaved={applicationSaved} announce={announce} />}
+          {page === 'studio' && section === 'uploads' && <UploadsPage onSection={switchSection} resumeCount={resumes.length} />}
           {page === 'studio' && section === 'resumes' && <Studio section={section} onSection={switchSection} startBuild={buildRequested} onBuildStarted={() => setBuildRequested(false)} onDelete={deleteResume} resumes={resumes} loading={recordsLoading} active={activeResume} attachTarget={resumeAttachTarget} tab={studioTab} setTab={setStudioTab} busy={busyResumeAction} saving={saving} saveLabel={saveLabel} history={history} future={future} onCreate={createResume} onOpen={openResume} onCreateTailoredCopy={createTailoredCopy} onTailorWithAI={(resume) => createTailoredCopy(resume, 'ai')} ai={{ available: !!me?.ai_available, remaining: me?.allowance.remaining ?? 0, limit: me?.allowance.limit ?? 5 }} onCopyResume={copyResume} onBuilt={resumeBuilt} onApplyDefaults={applyStyleDefaults} jobs={buildJobs} onAttach={attachResumeToApplication} onReturn={returnToApplication} onBack={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before leaving the editor.'); return; } setActiveResume(null); }} onUpdate={updateResume} onContent={pushContent} onUndo={undo} onRedo={redo} onDuplicate={duplicateResume} onReview={reviewResume} onExport={exportResume} onPreview={previewResume} onReload={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before reloading.'); return; } reloadResume(); }} />}
         </>}
       </div>
