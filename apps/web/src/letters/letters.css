@@ -94,3 +94,7 @@
 .letter-notes summary { font-size: 12.5px; }
 .letter-notes ul { max-height: 200px; gap: 6px; margin-top: 8px; }
 .letter-notes li { font-size: 12.5px; }
+.letter-delete-attached { margin: 12px 0 4px; padding: 10px 12px; border: 1px solid #e3e8f1; background: #f8fafd; border-radius: 10px; font-size: 13px; line-height: 1.55; }
+.letter-delete-attached p { margin: 0 0 6px; }
+.letter-delete-attached .bank-check { margin: 6px 0 0; }
+.letter-delete-hint { color: var(--muted); font-size: 12px; margin: 4px 0 0 25px !important; }

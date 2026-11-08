@@ -9,7 +9,7 @@ import { Letters } from './Letters';
 
 vi.mock('../api', async (importOriginal) => {
   const original = await importOriginal<typeof import('../api')>();
-  return { ...original, api: { letters: vi.fn(), createLetter: vi.fn(), patchLetter: vi.fn(), reviewLetter: vi.fn(), exportDocument: vi.fn(), downloadExport: vi.fn(), putApplication: vi.fn(), archiveDocument: vi.fn() } };
+  return { ...original, api: { letters: vi.fn(), createLetter: vi.fn(), patchLetter: vi.fn(), reviewLetter: vi.fn(), exportDocument: vi.fn(), downloadExport: vi.fn(), putApplication: vi.fn(), archiveDocument: vi.fn(), restoreDocument: vi.fn() } };
 });
 vi.mock('../download', () => ({ downloadFile: vi.fn() }));
 const mockApi = vi.mocked(api);
@@ -22,7 +22,7 @@ const letter = (over: Partial<CoverLetter> = {}): CoverLetter => ({
 const application = (jobId: string, title: string, over: Partial<Application> = {}): Application => ({ id: `app-${jobId}`, job_id: jobId, status: 'saved', notes: '', applied_at: null, revision: 1, job: { id: jobId, title, company: 'Northstar', location: 'Singapore' }, ...over });
 const me = (over: Partial<Me> = {}): Me => ({ user_id: '1', display_name: 'Alice', plan: 'free', ai_available: true, letter_available: true, allowance: { limit: 5, used: 2, remaining: 3, period: '2026-10' }, ...over });
 
-type Harness = { me?: Me | null; apps?: Application[]; activeId?: string | null; target?: string | null; onOpen?: (id: string | null) => void; onMeChanged?: () => void; announce?: (m: string) => void; onSaved?: (a: Application) => void };
+type Harness = { me?: Me | null; apps?: Application[]; activeId?: string | null; target?: string | null; onOpen?: (id: string | null) => void; onMeChanged?: () => void; announce?: (m: string) => void; announceUndo?: (m: string, undo: () => void) => void; onSaved?: (a: Application) => void };
 function Page(props: Harness) {
   const [activeId, setActiveId] = useState<string | null>(props.activeId ?? null);
   const [apps, setApps] = useState<Application[]>(props.apps ?? [application('role-1', 'Product Designer')]);
@@ -30,7 +30,7 @@ function Page(props: Harness) {
   const done = useCallback(() => undefined, []);
   const saved = useCallback((value: Application) => { props.onSaved?.(value); setApps((items) => items.map((item) => (item.job_id === value.job_id ? value : item))); }, []);
   return <Letters me={props.me === undefined ? me() : props.me} apps={apps} resumeCount={2} activeId={activeId} target={props.target ?? null} refresh={0}
-    onOpen={onOpen} onTargetDone={done} onSection={() => undefined} onMeChanged={props.onMeChanged ?? (() => undefined)} onApplicationSaved={saved} announce={props.announce ?? (() => undefined)} />;
+    onOpen={onOpen} onTargetDone={done} onSection={() => undefined} onMeChanged={props.onMeChanged ?? (() => undefined)} onApplicationSaved={saved} announce={props.announce ?? (() => undefined)} announceUndo={props.announceUndo} />;
 }
 
 beforeEach(() => { vi.clearAllMocks(); mockApi.letters.mockResolvedValue({ items: [] }); });
@@ -58,18 +58,45 @@ describe('cover letters: the list', () => {
     expect(await screen.findByText('No cover letters yet.')).toBeInTheDocument();
   });
 
-  it('deletes a letter after asking', async () => {
+  it('deletes a letter after asking in a dialog, and Undo brings it back', async () => {
     const user = userEvent.setup();
     mockApi.letters.mockResolvedValue({ items: [letter()] });
     mockApi.archiveDocument.mockResolvedValue(undefined);
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
-    render(<Page />);
+    mockApi.restoreDocument.mockResolvedValue(letter() as never);
+    const announceUndo = vi.fn();
+    render(<Page apps={[]} announceUndo={announceUndo} />);
     await user.click(await screen.findByRole('button', { name: 'Delete Cover letter — Product Designer' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Delete "Cover letter — Product Designer"?' });
+    expect(within(dialog).queryByRole('checkbox')).not.toBeInTheDocument();   // not attached anywhere: nothing to ask
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     expect(mockApi.archiveDocument).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Delete Cover letter — Product Designer' }));
+    await user.click(screen.getByRole('button', { name: 'Delete letter' }));
     await waitFor(() => expect(mockApi.archiveDocument).toHaveBeenCalledWith('l1'));
     await waitFor(() => expect(screen.queryByText('Cover letter — Product Designer')).not.toBeInTheDocument());
-    confirm.mockRestore();
+    expect(announceUndo).toHaveBeenCalledWith('"Cover letter — Product Designer" deleted.', expect.any(Function));
+    act(() => announceUndo.mock.calls[0][1]());
+    await waitFor(() => expect(mockApi.restoreDocument).toHaveBeenCalledWith('l1'));
+    expect(await screen.findByText('Cover letter — Product Designer')).toBeInTheDocument();
+  });
+
+  it('keeps the sent copy in the tracker unless asked to remove it too', async () => {
+    const user = userEvent.setup();
+    const packet = { export_id: 'e1', document_id: 'l1', title: 'Cover letter — Product Designer', revision: 1, download_url: '/x' };
+    const attached = application('role-1', 'Product Designer', { revision: 4, cover_letter_packet: packet });
+    mockApi.letters.mockResolvedValue({ items: [letter()] });
+    mockApi.archiveDocument.mockResolvedValue(undefined);
+    mockApi.putApplication.mockResolvedValue({ ...attached, revision: 5, cover_letter_packet: null });
+    const onSaved = vi.fn(), announceUndo = vi.fn();
+    render(<Page apps={[attached]} onSaved={onSaved} announceUndo={announceUndo} />);
+    await user.click(await screen.findByRole('button', { name: 'Delete Cover letter — Product Designer' }));
+    const dialog = screen.getByRole('alertdialog');
+    expect(dialog).toHaveTextContent('attached to Product Designer · Northstar');
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Also remove it from that application' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Delete and remove copy' }));
+    await waitFor(() => expect(mockApi.putApplication).toHaveBeenCalledWith('role-1', { cover_letter_document_id: null, expected_revision: 4 }));
+    expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ cover_letter_packet: null }));
+    expect(announceUndo).toHaveBeenCalledWith('"Cover letter — Product Designer" deleted and removed from Product Designer.', expect.any(Function));
   });
 });
 

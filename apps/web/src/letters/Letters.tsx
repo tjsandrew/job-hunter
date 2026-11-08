@@ -8,16 +8,19 @@ import { DocTabs } from './DocTabs';
 import { LetterEditor } from './LetterEditor';
 import { LetterStart } from './LetterStart';
 import { RenameDialog } from '../studio/RenameDialog';
+import { Dialog } from '../studio/points/Dialog';
 import './letters.css';
 
 const SAVE_DELAY_MS = 700;
 type Start = { jobId: string | null; lockJob: boolean };
 
 /** The cover letters of the "My documents" page: the list, starting a letter, and the editor with its preview. */
-export function Letters({ me, apps, resumeCount, activeId, target, refresh, onOpen, onTargetDone, onSection, onMeChanged, onApplicationSaved, announce }: {
+export function Letters({ me, apps, resumeCount, activeId, target, refresh, onOpen, onTargetDone, onSection, onMeChanged, onApplicationSaved, announce, announceUndo }: {
   me: Me | null; apps: Application[]; resumeCount: number; activeId: string | null; target: string | null; refresh: number;
   onOpen: (id: string | null) => void; onTargetDone: () => void; onSection: (section: DocumentTab) => void;
   onMeChanged: () => void; onApplicationSaved: (application: Application) => void; announce: (message: string) => void;
+  /** A notification with an Undo button; falls back to a plain one where the host offers no Undo. */
+  announceUndo?: (message: string, undo: () => void) => void;
 }) {
   const [letters, setLetters] = useState<CoverLetter[] | null>(null);
   const [loadError, setLoadError] = useState('');
@@ -26,6 +29,7 @@ export function Letters({ me, apps, resumeCount, activeId, target, refresh, onOp
   const [saveLabel, setSaveLabel] = useState('Saved');
   const [busy, setBusy] = useState(false);
   const [renaming, setRenaming] = useState<CoverLetter | null>(null);
+  const [deleting, setDeleting] = useState<CoverLetter | null>(null);
   const [start, setStart] = useState<Start | null>(null);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState('');
@@ -158,14 +162,34 @@ export function Letters({ me, apps, resumeCount, activeId, target, refresh, onOp
       return error instanceof HttpError && error.status === 409 ? 'This letter changed in another tab. Reload the page and try again.' : (error as Error).message;
     }
   };
-  const remove = async (letter: CoverLetter) => {
-    if (!window.confirm(`Delete "${letter.title}"? A copy attached to an application stays there.`)) return;
+  // Applications that hold a sent copy (PDF snapshot) of this letter.
+  const attachedTo = (letter: CoverLetter) => apps.filter((application) => application.cover_letter_packet?.document_id === letter.id);
+  const restore = async (letter: CoverLetter, index: number) => {
+    try {
+      const restored = await api.restoreDocument(letter.id) as unknown as CoverLetter;
+      setLetters((items) => (items || []).some((item) => item.id === restored.id) ? items : [...(items || []).slice(0, index), restored, ...(items || []).slice(index)]);
+      announce(`"${restored.title}" restored.`);
+    } catch (error) { announce((error as Error).message); }
+  };
+  // Deleting archives the letter (Undo brings it back). An attached copy stays with its application unless the person
+  // chose to remove it too.
+  const remove = async (letter: CoverLetter, detach: boolean) => {
     setBusy(true);
     try {
+      const index = Math.max(0, (letters || []).findIndex((item) => item.id === letter.id));
       await api.archiveDocument(letter.id);
       setLetters((items) => (items || []).filter((item) => item.id !== letter.id));
       if (activeId === letter.id) onOpen(null);
-      announce(`"${letter.title}" deleted.`);
+      const removedFrom: string[] = [];
+      if (detach) for (const application of attachedTo(letter)) {
+        try {
+          onApplicationSaved(await api.putApplication(application.job_id, { cover_letter_document_id: null, expected_revision: application.revision }));
+          removedFrom.push(application.job?.title || 'an application');
+        } catch { /* reported below: the copy stays where it could not be removed */ }
+      }
+      setDeleting(null);
+      const message = `"${letter.title}" deleted${removedFrom.length ? ` and removed from ${removedFrom.join(', ')}` : ''}.`;
+      if (announceUndo) announceUndo(message, () => void restore(letter, index)); else announce(message);
     } catch (error) { announce((error as Error).message); }
     finally { setBusy(false); }
   };
@@ -184,7 +208,7 @@ export function Letters({ me, apps, resumeCount, activeId, target, refresh, onOp
       <LetterEditor letter={active} notes={notes[active.id] || []} jobTitle={jobTitleFor(active)} saveLabel={saveLabel} busy={busy}
         attachLabel={active.job_id ? 'Attach reviewed letter' : null} attachedRevision={packet && packet.document_id === active.id ? packet.revision : null}
         onTitle={(title) => edit({ title })} onContent={(content: LetterContent) => edit({ content })} onLayout={(layout: ResumeLayout) => edit({ layout })} onTemplate={(template: Template) => edit({ template })}
-        onReview={() => void review()} onDownload={() => void download()} onAttach={() => void attach()} onBack={back} onDelete={() => void remove(active)}
+        onReview={() => void review()} onDownload={() => void download()} onAttach={() => void attach()} onBack={back} onDelete={() => setDeleting(active)}
         onAnother={active.job_id ? () => { setStart({ jobId: active.job_id!, lockJob: true }); setStartError(''); } : undefined} />
       {startDialog}
     </>;
@@ -211,7 +235,7 @@ export function Letters({ me, apps, resumeCount, activeId, target, refresh, onOp
               <div className="resume-card-foot"><div><strong>{letter.title}</strong><span>{jobTitleFor(letter) ? `${jobTitleFor(letter)} · ` : ''}Edited {fmtDateTime(letter.updated_at)}</span></div>
                 <span className="letter-statuses"><span className={`mini-status ${reviewed ? 'reviewed' : ''}`}>{reviewed ? 'Reviewed' : 'Draft'}</span>{packet?.document_id === letter.id && <span className="mini-status reviewed">Attached</span>}</span></div>
             </button>
-            <button className="icon-button resume-card-rename" title="Rename letter" aria-label={`Rename ${letter.title}`} disabled={busy} onClick={() => setRenaming(letter)}><Icon name="edit" /></button><button className="icon-button danger resume-card-delete" title="Delete letter" aria-label={`Delete ${letter.title}`} disabled={busy} onClick={() => void remove(letter)}><Icon name="trash" /></button>
+            <button className="icon-button resume-card-rename" title="Rename letter" aria-label={`Rename ${letter.title}`} disabled={busy} onClick={() => setRenaming(letter)}><Icon name="edit" /></button><button className="icon-button danger resume-card-delete" title="Delete letter" aria-label={`Delete ${letter.title}`} disabled={busy} onClick={() => setDeleting(letter)}><Icon name="trash" /></button>
           </div>;
         })}</div> : <div className="empty-state"><div className="empty-art">Aa</div><h2>No cover letters yet.</h2><p>Write one for a job you saved. AI can write a first draft from your profile, or you can start blank.</p></div>}
       </section>
@@ -220,6 +244,25 @@ export function Letters({ me, apps, resumeCount, activeId, target, refresh, onOp
           <button className="button secondary small-button" onClick={() => { setStart({ jobId: item.job_id, lockJob: false }); setStartError(''); }}>Write with AI ({remaining} of {limit} left)</button></li>)}</ul></section>}
     </>}
     {startDialog}
+    {deleting && <DeleteLetterDialog letter={deleting} attached={attachedTo(deleting)} busy={busy} onCancel={() => setDeleting(null)} onDelete={(detach) => void remove(deleting, detach)} />}
     {renaming && <RenameDialog kind="cover letter" title={renaming.title} onSave={(title) => rename(renaming, title)} onClose={() => setRenaming(null)} />}
   </div>;
+}
+
+/** Confirm deleting a letter. When an application holds a sent copy, say so and let the person remove that copy too. */
+function DeleteLetterDialog({ letter, attached, busy, onCancel, onDelete }: { letter: CoverLetter; attached: Application[]; busy: boolean; onCancel: () => void; onDelete: (detach: boolean) => void }) {
+  const [detach, setDetach] = useState(false);
+  const names = attached.map((application) => [application.job?.title, application.job?.company].filter(Boolean).join(' · ') || 'an application');
+  return <Dialog role="alertdialog" title={`Delete "${letter.title}"?`} onClose={() => { if (!busy) onCancel(); }}>
+    <p className="point-dialog-note">It leaves your library. You can undo right after.</p>
+    {attached.length > 0 && <div className="letter-delete-attached">
+      <p>A copy of this letter is attached to {names.length === 1 ? <strong>{names[0]}</strong> : <>{names.length} applications: <strong>{names.join(', ')}</strong></>} in your tracker, as the version you sent.</p>
+      <label className="bank-check"><input type="checkbox" checked={detach} disabled={busy} onChange={(event) => setDetach(event.target.checked)} />Also remove it from {names.length === 1 ? 'that application' : 'those applications'}</label>
+      {!detach && <p className="letter-delete-hint">Leave this unticked to keep the sent copy in the tracker.</p>}
+    </div>}
+    <div className="point-dialog-actions">
+      <button type="button" className="button secondary" disabled={busy} onClick={onCancel}>Cancel</button>
+      <button type="button" className="button primary" disabled={busy} onClick={() => onDelete(detach)}>{busy ? 'Deleting…' : detach ? 'Delete and remove copy' : 'Delete letter'}</button>
+    </div>
+  </Dialog>;
 }
