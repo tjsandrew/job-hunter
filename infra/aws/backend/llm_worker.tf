@@ -25,9 +25,9 @@ variable "llm_base_url" {
 }
 
 variable "llm_model" {
-  description = "Model used by every task; chosen by benchmark (docs/design/12-FIT-ANALYSIS.md, fit-tools/TAILOR-BENCHMARK-RESULTS.md)."
+  description = "Model used by every task. ornith1.5:35b since 8 Nov 2026, when gemma4:26b went down on SoCLaaS; chosen by a fit comparison of 7 models (docs/design/12-FIT-ANALYSIS.md)."
   type        = string
-  default     = "gemma4:26b"
+  default     = "ornith1.5:35b"
 }
 
 variable "llm_max_concurrency" {

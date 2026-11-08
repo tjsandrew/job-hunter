@@ -58,4 +58,4 @@ The notes are shown when the letter is created and are not stored. They are warn
 
 - The notes are not saved with the letter.
 - No competitor or quality evaluation of the letters yet; cost per letter is unmeasured (assumed close to a fit check, see doc 13).
-- The model is the school gateway's `gemma4:26b`; letter quality has not been compared across models.
+- The figures above were measured on `gemma4:26b`. Since 8 Nov 2026 the worker uses `ornith1.5:35b` (design brief 12, section on the switch); letter speed and quality have not been re-measured on it.
