@@ -13,7 +13,7 @@ concurrency:
 jobs:
   release:
     if: vars.AWS_ROLE_ARN != '' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm   # native arm64: the Lambda images build without QEMU emulation
     timeout-minutes: 30
     env:
       AWS_REGION: ap-southeast-1
@@ -77,8 +77,6 @@ jobs:
       - run: pip install -c backend/requirements.lock boto3
       - name: Release and manual-control regression checks
         run: python -m unittest discover -s scripts/tests -v
-      - uses: docker/setup-qemu-action@v3
-        if: env.ECR_REPOSITORY != ''
       - uses: docker/setup-buildx-action@v3
         if: env.ECR_REPOSITORY != ''
       - uses: aws-actions/amazon-ecr-login@v2
