@@ -600,13 +600,14 @@ export function packetLines(application: Application): { label: string; attached
 }
 
 /** The tracker's fit cell. Every state is a button that opens the job (the same window as on Discover, where the fit
- *  breakdown and "Check my fit" live): the saved percentage, "In progress" while a check runs, or "Not run". */
+ *  breakdown and "Check my fit" live): the saved percentage, "In progress" while a check runs, or "Check fit", styled as
+ *  an action (outlined, brand colour, spark icon) so it does not read as a status label. */
 function FitCell({ application, mark, running, onOpenJob }: { application: Application; mark: FitSummary | undefined; running: boolean; onOpenJob: (job: Job) => void }) {
   const job = application.job;
   if (!job) return <span className="fit-cell-empty">-</span>;
   const open = () => onOpenJob(job);
   if (running) return <button type="button" className="fit-chip running" onClick={open} aria-label={`Fit check for ${job.title} is in progress. Open job details.`} title="The check is still running. Open the job to follow it.">In progress</button>;
-  if (!mark) return <button type="button" className="fit-chip notrun" onClick={open} aria-label={`Fit not run for ${job.title}. Open job details to check it.`} title="Open the job to check your fit.">Not run</button>;
+  if (!mark) return <button type="button" className="fit-chip notrun" onClick={open} aria-label={`Fit not run for ${job.title}. Open job details to check it.`} title="Open the job and check how well your profile covers it."><Icon name="spark" />Check fit</button>;
   const tone = mark.percent === null ? 'none' : mark.percent >= 70 ? 'high' : mark.percent >= 40 ? 'mid' : 'low';
   const score = mark.percent === null ? 'No score' : `${mark.percent}%`;
   return <button type="button" className={`fit-chip ${tone}`} onClick={open}

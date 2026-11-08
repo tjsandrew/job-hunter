@@ -136,7 +136,7 @@ it('separates original uploaded files from resumes created in the app', async ()
 });
 
 it('renames a resume from its card without opening it', async () => {
-  mockApi.patchDocument.mockImplementation(async (id, values) => ({ ...first, title: values.title!, revision: first.revision + 1 }));
+  mockApi.patchDocument.mockImplementation(async (_id, values) => ({ ...first, title: values.title!, revision: first.revision + 1 }));
   const user = userEvent.setup(); render(<App />); await goToStudio(user);
   await user.click(await screen.findByRole('button', { name: 'Rename Backend Engineer – Stripe' }));
   const input = screen.getByRole('textbox', { name: 'New name for Backend Engineer – Stripe' });
