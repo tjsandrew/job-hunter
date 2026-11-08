@@ -6,8 +6,9 @@ on:
     branches: [main]
 permissions:
   contents: read
-# A newer push to the same PR or to main cancels the older run: only the latest commit's result matters, and Deploy
-# staging runs its own tests anyway. Saves Actions minutes when several PRs merge close together.
+# A newer push to the same PR or to main cancels the older run: only the latest commit's result matters (Deploy
+# staging deploys only the latest main commit, and requires this workflow's "Checks passed" for it). Saves Actions
+# minutes when several PRs merge close together.
 concurrency:
   group: checks-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
