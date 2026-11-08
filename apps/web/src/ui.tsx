@@ -15,6 +15,8 @@ export function Field({ label, value, onChange, placeholder, type = 'text', help
 
 export function SelectField({ label, value, onChange, options, disabled = false }: { label: string; value: string; onChange: (v: string) => void; options: string[]; disabled?: boolean }) { return <label className="field"><span>{label}</span><select disabled={disabled} value={value} onChange={(e) => onChange(e.target.value)}>{options.map((option) => <option key={option} value={option}>{option || 'Select one'}</option>)}</select></label>; }
 
+/** "9 Nov 2026, 3:42 pm" in the viewer's locale and time zone. */
+export function fmtDateTime(value?: string | null) { if (!value) return '—'; const date = new Date(value); return Number.isNaN(date.getTime()) ? value : `${date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}, ${date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`; }
 export function fmtDate(value?: string | null) { if (!value) return '—'; const date = new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' }); }
 
 

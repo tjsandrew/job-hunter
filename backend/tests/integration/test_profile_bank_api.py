@@ -421,6 +421,16 @@ def test_uploaded_source_library_and_original_download_are_owned(isolated_users)
     assert downloaded.status_code == 200 and downloaded.content == data
     assert client.get(path, headers=CASEY).status_code == 404
 
+    # Rename is a display label only: owner-scoped, keeps the extension, strips paths, and names the download.
+    rename = f"/v1/uploads/{upload['upload_id']}"
+    assert client.patch(rename, headers=CASEY, json={'filename': 'stolen'}).status_code == 404
+    renamed = client.patch(rename, headers=ALICE, json={'filename': '../Backend roles – Nov'})
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()['filename'] == 'Backend roles – Nov.pdf' and renamed.json()['created_at']
+    assert client.get('/v1/uploads', headers=ALICE).json()['items'][0]['filename'] == 'Backend roles – Nov.pdf'
+    assert client.patch(rename, headers=ALICE, json={'filename': '  .pdf'}).status_code == 422
+    assert client.get(path, headers=ALICE).headers['content-disposition'] == 'attachment; filename="Backend roles _ Nov.pdf"'
+
 
 def full_point():
     item = client.post('/v1/profile/items', headers=ALICE, json={

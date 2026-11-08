@@ -3,7 +3,7 @@ import { api, HttpError } from '../api';
 import { downloadFile } from '../download';
 import type { DocumentTab } from '../routes';
 import type { Application, CoverLetter, LetterContent, LetterNote, LetterRequest, Me, ResumeLayout, Template } from '../types';
-import { Icon, Loading, fmtDate } from '../ui';
+import { Icon, Loading, fmtDateTime } from '../ui';
 import { DocTabs } from './DocTabs';
 import { LetterEditor } from './LetterEditor';
 import { LetterStart } from './LetterStart';
@@ -195,7 +195,7 @@ export function Letters({ me, apps, resumeCount, activeId, target, refresh, onOp
           return <div className="resume-card-wrap" key={letter.id}>
             <button className="resume-card" onClick={() => onOpen(letter.id)} aria-label={`Open ${letter.title}`}>
               <div className="resume-thumb classic letter-thumb"><div className="thumb-name">{letter.content.name || 'Your Name'}</div><div className="thumb-line long" /><div className="thumb-gap" /><div className="thumb-line" /><div className="thumb-line long" /><div className="thumb-line long" /><div className="thumb-line" /><div className="thumb-gap" /><div className="thumb-line long" /><div className="thumb-line" /></div>
-              <div className="resume-card-foot"><div><strong>{letter.title}</strong><span>{jobTitleFor(letter) ? `${jobTitleFor(letter)} · ` : ''}Edited {fmtDate(letter.updated_at)}</span></div>
+              <div className="resume-card-foot"><div><strong>{letter.title}</strong><span>{jobTitleFor(letter) ? `${jobTitleFor(letter)} · ` : ''}Edited {fmtDateTime(letter.updated_at)}</span></div>
                 <span className="letter-statuses"><span className={`mini-status ${reviewed ? 'reviewed' : ''}`}>{reviewed ? 'Reviewed' : 'Draft'}</span>{packet?.document_id === letter.id && <span className="mini-status reviewed">Attached</span>}</span></div>
             </button>
             <button className="icon-button danger resume-card-delete" title="Delete letter" aria-label={`Delete ${letter.title}`} disabled={busy} onClick={() => void remove(letter)}><Icon name="trash" /></button>
