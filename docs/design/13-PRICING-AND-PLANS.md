@@ -19,7 +19,7 @@ The limits already exist in code: `preparation/allowance.py` (`LIMITS = {"free":
 
 | Item | Value | Source / status |
 |---|---|---|
-| One fit analysis on the school gateway (`gemma4:26b`) | about US$0.0008, 28-39 s | `docs/design/12-FIT-ANALYSIS.md`, benchmark of 4 postings and 1 demo profile; an estimate from tokens, **not** from a price page |
+| One fit analysis on the school gateway (measured on `gemma4:26b`) | about US$0.0008, 28-39 s | `docs/design/12-FIT-ANALYSIS.md`, benchmark of 4 postings and 1 demo profile; an estimate from tokens, **not** from a price page. Since 8 Nov 2026 the model is `ornith1.5:35b`: about US$0.0007 and 14–23 s per fit in a 3-case comparison, from SoCLaaS's listed prices |
 | Tailor with AI, cover letter | not measured | assumed to cost about the same as a fit analysis |
 | Free user at the limit (5 uses) | about US$0.004 / month | 5 x 0.0008 |
 | Premium user at the limit (50 uses) | about US$0.04 / month | 50 x 0.0008 |

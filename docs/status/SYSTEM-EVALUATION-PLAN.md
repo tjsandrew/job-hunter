@@ -4,7 +4,7 @@ Drafted 25 October 2026 (Singapore) by @asdxbkssl (cloud and system evaluation).
 
 ## Constraints found while planning
 
-- **Fit analysis takes 30–40 s** ([fit_analysis.py](../../backend/src/job_hunter/api/fit_analysis.py)), against the report's 30 s end-to-end target. Expect to miss it, and explain why rather than move the target.
+- **Fit analysis takes 30–40 s** on `gemma4:26b` ([fit_analysis.py](../../backend/src/job_hunter/api/fit_analysis.py); `ornith1.5:35b`, used since 8 Nov 2026, took 14–23 s for the model calls in a 3-case test and 32 s end to end through S3), against the report's 30 s end-to-end target. Expect to miss it, and explain why rather than move the target.
 - **AI requests use the monthly allowance.** Each account has 5 free uses, counted once per job and shared by fit analysis, the AI rewrite and AI cover letters. No API sets an account to premium, so spread AI runs across several free test accounts.
 - **Staging limits:**
   - API Lambda reserved concurrency 10;

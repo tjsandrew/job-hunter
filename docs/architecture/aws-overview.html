@@ -63,7 +63,7 @@ flowchart LR
   user(["Browser: jobseeker"])
   src[("Job sources: Greenhouse, Lever, MyCareersFuture, Adzuna")]
   gha["GitHub Actions: Pull jobs button"]
-  soc["NUS SoCLaaS gateway: gemma4:26b, data stays in NUS"]
+  soc["NUS SoCLaaS gateway: ornith1.5:35b, data stays in NUS"]
   subgraph AWS["AWS ap-southeast-1"]
     amp["Amplify Hosting: React app"]
     cog["Cognito: invite-only login"]
@@ -113,7 +113,7 @@ flowchart LR
     <ol style="margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px">
       <li>The web app calls <code>POST /v1/jobs/{id}/fit-analysis</code>. The API Lambda checks the monthly slot (free 5, premium 50), adds a <code>fit_analyses</code> row marked pending, and writes <code>llm-requests/&lt;analysis_id&gt;.json</code> (<code>task: fit</code>) to the private documents bucket. The file holds the job text, the job's cached requirements (if any, from <code>job_requirements</code>) and the profile evidence text, so the worker needs no database.</li>
       <li>The S3 event starts the <b>LLM worker Lambda</b> (one worker for every AI task; reserved concurrency 5). It runs outside the VPC with no database access, and uses the same container image as the API with the handler <code>job_hunter.llm_worker.handler</code>.</li>
-      <li>The worker calls the SoCLaaS gateway (<code>soclaas-api.comp.nus.edu.sg/v1</code>, model <code>gemma4:26b</code>) over the public internet: extract requirements, judge each one against the profile, suggest improvements.</li>
+      <li>The worker calls the SoCLaaS gateway (<code>soclaas-api.comp.nus.edu.sg/v1</code>, model <code>ornith1.5:35b</code>) over the public internet: extract requirements, judge each one against the profile, suggest improvements.</li>
       <li>The worker writes <code>llm-results/&lt;analysis_id&gt;.json</code> to S3. Request and result files expire after 1 day.</li>
       <li>The web app polls <code>GET /v1/fit-analyses/{id}</code>. The API Lambda reads the result and <b>checks it again</b>: it drops invented evidence ids and numbers and works out the coverage percentage in code. It then saves the result in Aurora (<code>fit_analyses</code>, per-user row-level security) and caches the job's requirements in <code>job_requirements</code>, shared by all users.</li>
     </ol>
