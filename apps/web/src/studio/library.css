@@ -17,3 +17,45 @@
 .resume-card-download { padding: 10px 12px 14px; }
 .resume-card-download .button { width: 100%; }
 .resume-card-download p { color: #b42318; font-size: 12px; overflow-wrap: anywhere; }
+/* Uploaded resumes: file-type badge, name, then "Uploaded <date> · N pages · status" grouped under the name. */
+.uploaded-resume-row { justify-content: flex-start; padding: 12px 14px; gap: 12px; }
+.uploaded-resume-type { flex-shrink: 0; width: 38px; padding: 7px 0; text-align: center; font-size: 10px; font-weight: 700; letter-spacing: .5px; color: #a3343f; background: #fdf0f1; border: 1px solid #f3cdd2; border-radius: 6px; }
+.uploaded-resume-main { flex: 1; min-width: 0; }
+.uploaded-resume-row small.uploaded-resume-meta { margin-top: 3px; font-size: 12px; }
+.uploaded-resume-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.uploaded-resume-actions .icon-button { color: #6b7a90; }
+.uploaded-resume-rename { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.uploaded-resume-rename input { flex: 1 1 220px; min-width: 0; min-height: 34px; padding: 6px 10px; border: 1px solid #c7d2e1; border-radius: 8px; font: inherit; }
+.uploaded-resume-ext { color: var(--muted); font-size: 13px; }
+.uploaded-resume-error { flex-basis: 100%; color: #a52c39; }
+@media (max-width: 600px) { .uploaded-resume-row { flex-wrap: wrap; } .uploaded-resume-actions { width: 100%; justify-content: flex-end; } }
+/* Library sections (Gestalt pass): each kind of file is one bounded region with a heading, a count and one line
+   of explanation. Resumes built here come first; uploaded originals follow. */
+.library-section { margin: 20px 0 28px; padding: 18px 20px 20px; background: #fff; border: 1px solid var(--line); border-radius: 14px; }
+.library-section-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin-bottom: 14px; }
+.library-section-head h2 { margin: 0; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+.library-section-head p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.library-count { display: inline-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--pale); color: var(--green2); font-size: 11.5px; font-weight: 700; }
+.library-section .uploaded-resume-row { border-color: #e7ecf3; background: #fbfcfe; }
+.library-show-all { margin-top: 8px; }
+.uploaded-resumes.library-section { margin-top: 0; }
+/* The resume title reads as a heading but is clearly editable: a pencil, and an outline on hover and focus. */
+.editor-title-field { display: inline-flex; align-items: center; gap: 6px; min-width: 0; padding: 2px 8px; margin-left: -8px; border: 1px solid transparent; border-radius: 8px; cursor: text; }
+.editor-title-field:hover { border-color: var(--line); background: #f8fafd; }
+.editor-title-field:focus-within { border-color: #3157ce; background: #fff; box-shadow: 0 0 0 3px #3157ce16; }
+.editor-title-field input { min-width: 6ch; }
+.editor-title-field .icon { width: 15px; height: 15px; color: #8a97ab; flex-shrink: 0; }
+.editor-title-field:hover .icon, .editor-title-field:focus-within .icon { color: #3157ce; }
+.editor-title { flex: 1; min-width: 0; }
+.editor-title-field { flex: 1 1 auto; max-width: 560px; }
+.editor-title-field input { width: 100%; text-overflow: ellipsis; }
+.editor-head .editor-title-field input { max-width: none; }
+
+/* Resume and letter editors (Gestalt pass): text boxes show their whole text, and the chrome above the form is
+   tighter, so more of the form is visible at once. */
+.editor-page .bullet-row textarea, .editor-page .point-row textarea, .editor-page .editor-scroll .field textarea { field-sizing: content; min-height: 38px; max-height: 340px; }
+.editor-page .editor-head { padding-bottom: 8px; }
+.editor-page .editor-toolbar { padding-top: 6px; padding-bottom: 6px; }
+.editor-page .editor-pane-head, .editor-page .preview-head { height: auto; min-height: 44px; padding: 6px 14px; }
+.editor-page .active-prepare-banner { padding-top: 8px; padding-bottom: 8px; margin-bottom: 8px; }
+.resume-card-rename { position: absolute; top: 8px; right: 44px; background: #fff; border: 1px solid var(--line); box-shadow: 0 2px 6px #18375814; color: #4d5c73; }

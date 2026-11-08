@@ -26,7 +26,7 @@ beforeEach(() => {
   mockApi.restoreDocument.mockImplementation(async (id) => id === 'r1' ? first : second);
 });
 afterEach(() => cleanup());
-const goToStudio = async (user: ReturnType<typeof userEvent.setup>) => user.click(within(await screen.findByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'My resumes' }));
+const goToStudio = async (user: ReturnType<typeof userEvent.setup>) => user.click(within(await screen.findByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'My documents' }));
 const titles = () => [...document.querySelectorAll('.resume-card-foot strong')].map((node) => node.textContent);
 
 describe('deleting a resume', () => {
@@ -111,12 +111,12 @@ describe('Use profile summary', () => {
 });
 
 
-it('My resumes opens the saved library even when an editor was open', async () => {
+it('My documents opens the saved library even when an editor was open', async () => {
   const user = userEvent.setup(); render(<App />); await goToStudio(user);
   await user.click(await screen.findByRole('button', {name: 'Open Backend Engineer – Stripe'}));
   expect(await screen.findByRole('textbox', {name: 'Resume title'})).toBeInTheDocument();
   await goToStudio(user);
-  expect(await screen.findByRole('heading', {name: 'My resumes'})).toBeInTheDocument();
+  expect(await screen.findByRole('heading', {name: 'My documents'})).toBeInTheDocument();
   expect(titles()).toEqual(['Backend Engineer – Stripe', 'Data resume']);
 });
 
@@ -124,10 +124,25 @@ it('My resumes opens the saved library even when an editor was open', async () =
 it('separates original uploaded files from resumes created in the app', async () => {
   mockApi.uploads.mockResolvedValue({items: [{upload_id: 'upload-1', filename: 'original.pdf', status: 'ready_for_review', page_count: 1}], next_cursor: null});
   const user = userEvent.setup(); render(<App />); await goToStudio(user);
+  const generated = await screen.findByRole('region', {name: 'Created on Job Hunter'});
+  expect(within(generated).getByRole('button', {name: 'Open Backend Engineer – Stripe'})).toBeInTheDocument();
+  expect(screen.queryByText('original.pdf')).not.toBeInTheDocument();
+  // Uploaded originals are their own tab of My documents, at their own address.
+  await user.click(screen.getByRole('tab', {name: /Uploaded files/}));
+  expect(window.location.pathname).toBe('/resumes/uploads');
   const uploaded = await screen.findByRole('region', {name: 'Uploaded resumes'});
   expect(await within(uploaded).findByText('original.pdf')).toBeInTheDocument();
   expect(within(uploaded).getByRole('button', {name: 'Download uploaded original.pdf'})).toBeEnabled();
-  const generated = screen.getByRole('region', {name: 'Created on Job Hunter'});
-  expect(within(generated).getByRole('button', {name: 'Open Backend Engineer – Stripe'})).toBeInTheDocument();
-  expect(within(generated).queryByText('original.pdf')).not.toBeInTheDocument();
+});
+
+it('renames a resume from its card without opening it', async () => {
+  mockApi.patchDocument.mockImplementation(async (_id, values) => ({ ...first, title: values.title!, revision: first.revision + 1 }));
+  const user = userEvent.setup(); render(<App />); await goToStudio(user);
+  await user.click(await screen.findByRole('button', { name: 'Rename Backend Engineer – Stripe' }));
+  const input = screen.getByRole('textbox', { name: 'New name for Backend Engineer – Stripe' });
+  await user.clear(input); await user.type(input, 'Stripe backend');
+  await user.click(screen.getByRole('button', { name: 'Save name' }));
+  expect(mockApi.patchDocument).toHaveBeenCalledWith('r1', { title: 'Stripe backend', expected_revision: first.revision });
+  await waitFor(() => expect(titles()).toContain('Stripe backend'));
+  expect(screen.queryByRole('textbox', { name: 'Resume title' })).not.toBeInTheDocument();   // still in the library
 });

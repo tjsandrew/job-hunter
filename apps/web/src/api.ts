@@ -118,6 +118,7 @@ export const api = {
   deleteProfile: (values: {confirmation: 'DELETE'; delete_settings: boolean}) => request<{deleted: boolean; bank_revision: number; profile_epoch: number}>('/profile/data', json('DELETE', values)),
   exportProfile: () => request<ProfileExport>('/profile/export.json'),
   deleteUpload: (id: string) => request<void>(`/uploads/${encodeURIComponent(id)}`, json('DELETE')),
+  renameUpload: (id: string, filename: string) => request<UploadedResume>(`/uploads/${encodeURIComponent(id)}`, json('PATCH', { filename })),
   uploads: () => request<{items: UploadedResume[]; next_cursor: null}>('/uploads'),
   downloadUpload: (id: string) => request<Blob | {url: string}>(`/uploads/${encodeURIComponent(id)}/download`),
   getPreferences: () => request<any>('/preferences'),

@@ -81,3 +81,10 @@ button.fit-chip:hover { filter: brightness(0.96); }
 .fit-chip.notrun { background: #f0f2f5; color: #687168; }
 .fit-cell-empty { color: #9aa5b5; font-weight: 700; }
 .tracker-fit-line { display: flex; align-items: center; gap: 6px; }
+/* "Check fit" is an action, not a status: outlined in the brand colour with the same spark as the fit panel. */
+.fit-chip.notrun { background: #fff; color: #3157ce; box-shadow: inset 0 0 0 1px #b9c8f5; }
+button.fit-chip.notrun:hover { background: #edf2ff; box-shadow: inset 0 0 0 1px #3157ce; filter: none; }
+/* "Check my fit" in the job window matches the tracker's "Check fit": same action, same look. */
+.button.fit-start { display: inline-flex; align-items: center; gap: 6px; color: #3157ce; border-color: #b9c8f5; background: #fff; }
+.button.fit-start:hover:not(:disabled) { background: #edf2ff; border-color: #3157ce; }
+.button.fit-start svg { width: 15px; height: 15px; }

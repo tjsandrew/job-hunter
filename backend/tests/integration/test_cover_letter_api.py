@@ -250,3 +250,19 @@ def test_a_saved_job_with_an_attached_letter_keeps_its_tracker_row_when_unsaved(
     assert attached.status_code == 200
     client.put(f"/v1/jobs/{jobs[0]}/review", json={"decision": "none"}, headers=ALICE)
     assert [row["job_id"] for row in client.get("/v1/applications", headers=ALICE).json()["items"]] == [jobs[0]]
+
+
+def test_renaming_keeps_a_reviewed_document_reviewed_but_a_content_change_does_not(world):
+    _, jobs, _ = world
+    document = create(jobs[0], mode="write").json()["document"]
+    url = f"/v1/documents/{document['id']}"
+    assert client.post(f"{url}/review", headers=ALICE, json={"expected_revision": 1}).status_code == 200
+    # Title only (the title is not printed): still reviewed, so it can be downloaded and attached without a new review.
+    renamed = client.patch(url, headers=ALICE, json={"expected_revision": 1, "title": "Stripe letter"}).json()
+    assert renamed["title"] == "Stripe letter" and renamed["revision"] == 2 and renamed["reviewed_revision"] == 2
+    # The editor's autosave sends everything; unchanged content with a new title still counts as a rename.
+    same = client.patch(url, headers=ALICE, json={"expected_revision": 2, "title": "Stripe letter v2", "content": renamed["content"],
+                                                  "layout": renamed["layout"], "template": renamed["template"]}).json()
+    assert same["reviewed_revision"] == 3
+    edited = client.patch(url, headers=ALICE, json={"expected_revision": 3, "content": {**same["content"], "paragraphs": ["New."]}}).json()
+    assert edited["revision"] == 4 and edited["reviewed_revision"] is None

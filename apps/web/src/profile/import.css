@@ -40,3 +40,32 @@
 .bank-recent-imports h3 { font-size: 13px; margin: 0 0 6px; }
 .import-point-row { display: flex; align-items: flex-end; gap: 8px; }
 .import-point-row .field { flex: 1; min-width: 0; }
+
+/* Compact import review (Gestalt pass, Nov 2026).
+   Text boxes size to their content (one-line facts look like one-line inputs; long points grow), conflicts and
+   source quotes sit tight against the field they belong to (proximity), and the kind/status pills share the title line. */
+.bank-import-review .import-candidates { gap: 14px; }
+.import-candidate { padding: 18px 20px; }
+.import-candidate-head { margin-bottom: 12px; align-items: center; }
+.import-candidate-head > div:first-child { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.import-candidate h2 { order: -1; margin: 0; font-size: 16px; }
+.bank-import-review .form-grid { gap: 10px 16px; }
+.import-field .field { margin: 0; gap: 4px; }
+.import-field .field > span { font-size: 12px; font-weight: 600; color: #3d4b61; }
+.bank-import-review .import-field textarea, .bank-import-review .import-point textarea { min-height: 40px; field-sizing: content; max-height: 260px; padding: 8px 11px; }
+.bank-import-review .import-field textarea[rows="1"] { resize: none; }
+.import-evidence { margin: 4px 0 0; padding: 2px 0 2px 9px; border-left-width: 2px; font-size: 11.5px; line-height: 1.5; }
+.import-flag { margin: 4px 0 0; padding: 3px 8px; display: inline-block; }
+.import-conflict { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 6px 10px; margin-bottom: 6px; line-height: 1.4; }
+.import-conflict label { display: flex; align-items: center; gap: 6px; margin: 0 0 0 auto; }
+.import-conflict label span { font-size: 11px; }
+.bank-import-review .import-conflict select { min-height: 0; padding: 3px 6px; font-size: 12px; }
+.import-points { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
+.import-points h3 { margin: 0 0 6px; }
+.import-point { margin-bottom: 8px; }
+.import-point-row { align-items: flex-start; }
+.import-point-row .field { margin: 0; gap: 3px; }
+.import-point-row .field > span { font-size: 11px; color: var(--muted); font-weight: 600; }
+.import-point-row .icon-button { margin-top: 20px; color: #6b7a90; }
+.import-point-row .icon-button:hover { background: #fdecee; color: #a52c39; }
+.import-json-hint { font-weight: 400; color: var(--muted); font-size: 11px; margin-left: 4px; }

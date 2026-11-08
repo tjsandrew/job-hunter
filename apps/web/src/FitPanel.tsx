@@ -123,8 +123,8 @@ export function FitPanel({ jobId, available, remaining, onUsed, onStarted }: { j
   return <section className="fit-panel" aria-label="Fit analysis">
     <div className="fit-head">
       <div className="fit-title"><span className="fit-badge"><FitIcon name="spark" /></span><div><div className="eyebrow">FIT WITH YOUR PROFILE</div><h3>How well does your profile cover this job?</h3></div></div>
-      <button type="button" className="button secondary" disabled={!available || busy || pending || loading || !hasSlot} onClick={start}>
-        {analysis?.status === 'ready' ? 'Run again' : 'Check my fit'}
+      <button type="button" className={`button secondary ${analysis?.status === 'ready' ? '' : 'fit-start'}`} disabled={!available || busy || pending || loading || !hasSlot} onClick={start}>
+        {analysis?.status !== 'ready' && <FitIcon name="spark" />}{analysis?.status === 'ready' ? 'Run again' : 'Check my fit'}
       </button>
     </div>
     {!available && <p className="fit-note">AI is not available right now.</p>}

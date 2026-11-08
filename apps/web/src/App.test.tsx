@@ -189,7 +189,7 @@ describe('Job Hunter user journey', () => {
   it('provides a manual resume path and communicates AI unavailability', async () => {
     const user = userEvent.setup(); render(<App />);
     await screen.findByText('Product Designer');
-    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'My resumes' }));
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'My documents' }));
     expect(screen.getByText(/Your resume library is empty/)).toBeInTheDocument();
     mockApi.createDocument.mockResolvedValue({ id: 'resume-1', title: 'Untitled resume', kind: 'resume', revision: 1, template: 'classic', content: { name: 'Alice Tan', email: 'alice@example.com', phone: '', location: 'Singapore', summary: '', sections: [] }, layout: { font_size: 11, margin: 18 }, reviewed_revision: null });
     await user.click(screen.getByRole('button', { name: /create your first resume/i }));
@@ -231,7 +231,7 @@ describe('Job Hunter user journey', () => {
   it('keeps local resume edits on a revision conflict and blocks account switching while dirty', async () => {
     const user = userEvent.setup(); render(<App />);
     await screen.findByText('Product Designer');
-    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'My resumes' }));
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'My documents' }));
     mockApi.createDocument.mockResolvedValue({ id: 'resume-2', title: 'Untitled resume', kind: 'resume', revision: 1, template: 'classic', content: { name: 'Alice Tan', email: '', phone: '', location: '', summary: '', sections: [] }, layout: { font_size: 11, margin: 18 }, reviewed_revision: null });
     await user.click(screen.getByRole('button', { name: /create your first resume/i }));
     await user.click(screen.getByRole('button', { name: /^Blank/ }));
@@ -252,7 +252,7 @@ describe('Job Hunter user journey', () => {
   it('rebases typing made during a slow save and autosaves it against the accepted revision', async () => {
     const user = userEvent.setup(); render(<App />);
     await screen.findByText('Product Designer');
-    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'My resumes' }));
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'My documents' }));
     const baseResume = { id: 'resume-slow', title: 'Untitled resume', kind: 'resume' as const, revision: 1, template: 'classic' as const, content: { name: 'Alice Tan', email: '', phone: '', location: '', summary: '', sections: [] }, layout: { font_size: 11, margin: 18 }, reviewed_revision: null };
     mockApi.createDocument.mockResolvedValue(baseResume);
     await user.click(screen.getByRole('button', { name: /create your first resume/i }));
@@ -530,7 +530,7 @@ describe('Discover: For you and All jobs', () => {
     expect(mockApi.jobFit).toHaveBeenCalledWith('role-3');          // the job window holds the full breakdown
   });
 
-  it('says Not run in the tracker for a job never checked, and opens the job to run it', async () => {
+  it('offers Check fit in the tracker for a job never checked, and opens the job to run it', async () => {
     const job = { id: 'role-4', title: 'Data Analyst', company: 'Cedar', location: null };
     mockApi.fitSummaries.mockResolvedValue({ items: [{ job_id: 'role-1', percent: 75, stale: false }], running: [] });     // a different job
     mockApi.applications.mockResolvedValue({ items: [{ id: 'app-4', job_id: 'role-4', status: 'saved', notes: '', applied_at: null, revision: 1, job }] });
@@ -538,7 +538,7 @@ describe('Discover: For you and All jobs', () => {
     render(<App />); await screen.findByText('Product Designer');
     await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'Application tracker' }));
     const notRun = (await screen.findAllByRole('button', { name: /Fit not run for Data Analyst/ }))[0];
-    expect(notRun).toHaveTextContent('Not run');
+    expect(notRun).toHaveTextContent('Check fit');
     await user.click(notRun);
     expect(await screen.findByRole('button', { name: 'Check my fit' })).toBeInTheDocument();       // the same window as on Discover
   });
@@ -636,7 +636,7 @@ describe('Plan and cover letters in the app', () => {
     let count = 0;
     mockApi.createDocument.mockImplementation(async (values: any) => ({ id: `r${++count}`, title: values.title, kind: 'resume', revision: 1, template: values.template, content: values.content, layout: values.layout, reviewed_revision: null }));
     render(<App />); await screen.findByText('Product Designer');
-    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'My resumes' }));
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'My documents' }));
     await user.click(screen.getByRole('button', { name: /create your first resume/i }));
     await user.click(screen.getByRole('button', { name: /^Blank/ }));
     await waitFor(() => expect(mockApi.createDocument).toHaveBeenCalledTimes(1));
@@ -727,7 +727,7 @@ describe('Plan and cover letters in the app', () => {
     mockApi.applications.mockResolvedValue({ items: [saved] });
     render(<App />); await screen.findByText('Product Designer');
     const nav = within(screen.getByRole('navigation', { name: 'Main navigation' }));
-    await user.click(nav.getByRole('button', { name: 'My resumes' }));
+    await user.click(nav.getByRole('button', { name: 'My documents' }));
     await user.click(screen.getByRole('tab', { name: /Cover letters/ }));
     expect(await screen.findByText('No cover letters yet.')).toBeInTheDocument();
     await user.click(nav.getByRole('button', { name: 'Application tracker' }));
@@ -747,7 +747,7 @@ describe('Plan and cover letters in the app', () => {
     mockApi.documents.mockResolvedValue({ items: [draft] });
     render(<App />); await screen.findByText('Product Designer');
     const nav = within(screen.getByRole('navigation', { name: 'Main navigation' }));
-    await user.click(nav.getByRole('button', { name: 'My resumes' }));
+    await user.click(nav.getByRole('button', { name: 'My documents' }));
     await user.click(screen.getByRole('tab', { name: /Cover letters/ }));
     await user.click(nav.getByRole('button', { name: 'Application tracker' }));
     await user.click(screen.getAllByRole('button', { name: 'Edit application: UX Designer' })[0]);
@@ -803,12 +803,12 @@ describe('Plan and cover letters in the app', () => {
     expect(screen.queryByRole('dialog', { name: 'Your plan' })).not.toBeInTheDocument();
   });
 
-  it('switches My resumes between resumes and cover letters, each at its own address', async () => {
+  it('switches My documents between resumes and cover letters, each at its own address', async () => {
     const user = userEvent.setup();
     mockApi.letters.mockResolvedValue({ items: [{ id: 'l1', title: 'Cover letter — UX Designer', kind: 'cover_letter', revision: 1, template: 'classic', content: { name: 'Alice', email: '', phone: '', location: '', date: '', recipient: '', greeting: '', paragraphs: ['Hello.'], closing: '', signature: '' }, layout: { font_size: 11, margin: 22 }, reviewed_revision: null, updated_at: '2026-10-25T00:00:00Z', job_id: 'role-3' }] });
     mockApi.applications.mockResolvedValue({ items: [saved] });
     render(<App />); await screen.findByText('Product Designer');
-    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'My resumes' }));
+    await user.click(within(screen.getByRole('navigation', { name: 'Main navigation' })).getByRole('button', { name: 'My documents' }));
     expect(location.pathname).toBe('/resumes');
     expect(screen.getByRole('tab', { name: /Resumes/ })).toHaveAttribute('aria-selected', 'true');
     await user.click(screen.getByRole('tab', { name: /Cover letters/ }));

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { HttpError } from '../api';
-import { Icon, Pill } from '../ui';
+import { Icon, Pill, TagInput } from '../ui';
 import type { ImportCandidate, ImportDecision, ImportEvidence, ImportResult, ProfileImport, ProfilePoint } from '../types';
 import './import.css';
 
@@ -55,7 +55,10 @@ function CandidateCard({candidate,decision,busy,onChange}:{candidate:ImportCandi
   const basics=candidate.kind==='basics';
   const points=(data.bullets || []) as ProfilePoint[];
   const updateField=(field:string,value:unknown)=>onChange({data:{...data,[field]:value}});
-  const fields=Object.keys(data).filter(field=>!hidden.has(field));
+  // Reading order (who/what, where, when, then details) instead of the parser's order.
+  const order=['name','headline','email','phone','title','qualification','role','organisation','institution','issuer','awarder','location','links','heading','category','level','grade','url','start','end','current','dates_text','summary','skills'];
+  const rank=(field:string)=>{const position=order.indexOf(field);return position<0 ? order.length : position;};
+  const fields=Object.keys(data).filter(field=>!hidden.has(field)).sort((a,b)=>rank(a)-rank(b));
   return <article className={`panel import-candidate ${decision.action==='skip' ? 'is-skipped' : ''}`} aria-label={basics ? 'Imported personal details' : title(candidate)}>
     <div className="import-candidate-head"><div><div className="bank-actions"><Pill>{candidate.kind}</Pill><Pill color={candidate.match.status==='duplicate' ? 'neutral' : 'amber'}>{candidate.match.status}</Pill></div><h2>{basics ? 'Personal details' : title(candidate)}</h2></div>{!basics && <div className="import-decisions" role="group" aria-label={`Decision for ${title(candidate)}`}>{(['add','merge','skip'] as const).map(action=><button type="button" key={action} disabled={busy || action==='merge' && !candidate.match.item_id && !candidate.match.options?.length} aria-pressed={decision.action===action} onClick={()=>onChange({action})}>{action[0].toUpperCase()+action.slice(1)}</button>)}</div>}</div>
     {candidate.match.options && decision.action==='merge' && <label className="field"><span>Merge target</span><select aria-label={`Merge target for ${title(candidate)}`} value={decision.target_item_id || ''} disabled={busy} onChange={event=>{const match=candidate.match.options!.find(option=>option.item_id===event.target.value);onChange({target_item_id:match?.item_id,expected_revision:match?.item_revision});}}><option value="">Choose an existing item…</option>{candidate.match.options.map(match=><option key={match.item_id} value={match.item_id}>{match.label} · revision {match.item_revision}</option>)}</select></label>}
@@ -66,7 +69,7 @@ function CandidateCard({candidate,decision,busy,onChange}:{candidate:ImportCandi
       return <div className="import-field" key={field}>
         {basics && !conflict && <label className="import-accept"><input type="checkbox" checked={decision.accepted_fields?.includes(field) || false} onChange={event=>onChange({accepted_fields:event.target.checked ? [...(decision.accepted_fields || []),field] : (decision.accepted_fields || []).filter(key=>key!==field)})} />Use imported {label.toLowerCase()}</label>}
         {conflict && <div className="import-conflict">Current: {display(conflict.existing)}<label><span>{label} conflict</span><select aria-label={`${label} conflict`} value={decision.accepted_fields?.includes(field) ? 'use' : 'keep'} onChange={event=>onChange({accepted_fields:event.target.value==='use' ? [...new Set([...(decision.accepted_fields || []),field])] : (decision.accepted_fields || []).filter(key=>key!==field)})}><option value="keep">Keep current</option><option value="use">Use imported</option></select></label></div>}
-        {typeof value==='boolean' ? <label className="bank-check"><input type="checkbox" checked={value} onChange={event=>updateField(field,event.target.checked)} />{label}</label> : (isList || isObject) ? <JsonField label={`${basics ? 'Imported ' : ''}${label}`} value={value} onValid={next=>updateField(field,next)} /> : <label className="field"><span>{label}</span><textarea aria-label={`${basics ? 'Imported ' : ''}${label}`} rows={field==='summary' ? 3 : 1} value={text} onChange={event=>updateField(field,event.target.value)} /></label>}
+        {typeof value==='boolean' ? <label className="bank-check"><input type="checkbox" checked={value} onChange={event=>updateField(field,event.target.checked)} />{label}</label> : isList && (value as unknown[]).every(entry=>typeof entry==='string') ? <TagInput label={`${basics ? 'Imported ' : ''}${label}`} values={value as string[]} placeholder={`Type a ${field==='links' ? 'link' : field==='skills' ? 'skill' : 'value'}, then press Enter`} onChange={next=>updateField(field,next)} /> : (isList || isObject) ? <JsonField label={`${basics ? 'Imported ' : ''}${label}`} value={value} onValid={next=>updateField(field,next)} /> : <label className="field"><span>{label}</span><textarea aria-label={`${basics ? 'Imported ' : ''}${label}`} rows={field==='summary' ? 3 : 1} value={text} onChange={event=>updateField(field,event.target.value)} /></label>}
         {field in candidate.evidence && <Evidence quote={candidate.evidence[field] as ImportEvidence | null} value={value}/>}
       </div>;
     })}</div>
@@ -78,5 +81,5 @@ function CandidateCard({candidate,decision,busy,onChange}:{candidate:ImportCandi
 
 function JsonField({label,value,onValid}:{label:string;value:unknown;onValid:(value:unknown)=>void}) {
   const [text,setText]=useState(()=>display(value)),[invalid,setInvalid]=useState(false);
-  return <label className="field"><span>{label} (JSON)</span><textarea aria-label={label} aria-invalid={invalid} rows={2} value={text} onChange={event=>{setText(event.target.value);try{onValid(JSON.parse(event.target.value));setInvalid(false);}catch{setInvalid(true);}}} />{invalid && <small role="alert">Not valid JSON yet; the last valid value is kept.</small>}</label>;
+  return <label className="field"><span>{label} <small className="import-json-hint">advanced · structured data, edit with care</small></span><textarea aria-label={label} aria-invalid={invalid} rows={2} value={text} onChange={event=>{setText(event.target.value);try{onValid(JSON.parse(event.target.value));setInvalid(false);}catch{setInvalid(true);}}} />{invalid && <small role="alert">Not valid JSON yet; the last valid value is kept.</small>}</label>;
 }

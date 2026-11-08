@@ -3,6 +3,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 import json
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import ValidationError
@@ -42,6 +43,23 @@ class ItemOrder(BankModel):
     kind: str
     item_ids: list[UUID] = Field(max_length=50)
     expected_bank_revision: int = Field(ge=0)
+
+
+class UploadRename(BankModel):
+    filename: str = Field(min_length=1, max_length=255)
+
+
+def renamed(current: str, wanted: str) -> str:
+    """The display name a user chose, as a bare file name that keeps the original extension (.pdf or .docx).
+    Only a label: imports link by upload id and the bytes stay at their storage path."""
+    name = Path(wanted.replace('\\', '/')).name.strip()
+    extension = Path(current).suffix
+    if extension and not name.lower().endswith(extension.lower()):
+        name = f'{name}{extension}'
+    base = name[:-len(extension)] if extension else name
+    if not base.strip(' .'):
+        raise HTTPException(422, detail={'code': 'INVALID_FILENAME', 'message': 'Enter a name for this resume'})
+    return name[:255]
 
 
 class PointWrite(BankModel):
@@ -153,6 +171,15 @@ def build_router(db_dependency):
         return {'items': [{'upload_id': str(row.id), 'filename': row.filename, 'status': row.status,
                           'page_count': row.page_count, 'created_at': row.created_at} for row in rows], 'next_cursor': None}
 
+    @router.patch('/uploads/{upload_id}')
+    def rename_upload(upload_id: UUID, body: UploadRename, db: Session = Depends(db_dependency, scope="function")):
+        row = db.scalar(select(Upload).where(Upload.id == upload_id, Upload.user_id == db.info['current_user'].id).with_for_update())
+        if row is None:
+            raise HTTPException(404, detail={'code': 'NOT_FOUND', 'message': 'Resource not found'})
+        row.filename = renamed(row.filename, body.filename)
+        return {'upload_id': str(row.id), 'filename': row.filename, 'status': row.status,
+                'page_count': row.page_count, 'created_at': row.created_at}
+
     @router.delete('/uploads/{upload_id}', status_code=204)
     def delete_upload(upload_id: UUID, db: Session = Depends(db_dependency, scope="function")):
         owner = db.info['current_user'].id
@@ -175,14 +202,18 @@ def build_router(db_dependency):
         if row.sha256 is None:
             raise HTTPException(409, detail={'code': 'UPLOAD_NOT_CAPTURED', 'message': 'Finish uploading this resume first'})
         docx = row.content_type == DOCX_CONTENT_TYPE
+        # The user's display name, reduced to header-safe characters (no quotes, no non-ASCII).
+        extension = 'docx' if docx else 'pdf'
+        stem = re.sub(r'[^A-Za-z0-9._ -]+', '_', Path(row.filename).stem).strip(' ._') or 'resume'
+        name = f'{stem[:120]}.{extension}'
         if row.file_path.startswith('s3://'):
-            return JSONResponse({'url': storage.download_url(row.file_path, 'resume.docx' if docx else 'resume.pdf', row.content_type)}, headers={'Cache-Control': 'no-store'})
+            return JSONResponse({'url': storage.download_url(row.file_path, name, row.content_type)}, headers={'Cache-Control': 'no-store'})
         try:
             data = storage.read(row.file_path)
         except FileNotFoundError:
             raise HTTPException(404, detail={'code': 'NOT_FOUND', 'message': 'Resource not found'})
         return Response(data, media_type=DOCX_CONTENT_TYPE if docx else 'application/pdf',
-                        headers={'Content-Disposition': f'attachment; filename="resume.{"docx" if docx else "pdf"}"'})
+                        headers={'Content-Disposition': f'attachment; filename="{name}"'})
 
     @router.get('/profile/bank')
     def bank(db: Session = Depends(db_dependency, scope="function")):

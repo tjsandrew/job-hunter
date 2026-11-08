@@ -16,10 +16,11 @@ import { activePreferences, cleanPreferences, defaultChoice, emptyPreferences, f
 import { BrandLogo, Field, Icon, Loading, Pill, SelectField, fmtDate } from './ui';
 import { emptyProfile, profileToForm } from './profile/form';
 import { ProfileView } from './profile/ProfileView';
+import { UploadsPage } from './studio/UploadsPage';
 import { Studio } from './studio/Studio';
 import { applyDefaults } from './studio/build/defaults';
 
-const pageNames: Record<Page, string> = { discover: 'Discover', profile: 'Profile', tracker: 'Application tracker', studio: 'My resumes' };
+const pageNames: Record<Page, string> = { discover: 'Discover', profile: 'Profile', tracker: 'Application tracker', studio: 'My documents' };
 const statusOptions = ['saved', 'preparing', 'applied', 'interviewing', 'offer', 'rejected', 'withdrawn'];
 
 function initials(name: string) { return name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase() || 'JH'; }
@@ -86,12 +87,12 @@ export default function App() {
   latestResumeRef.current = activeResume;
   const [previewUrl, setPreviewUrl] = useState('');
   const [studioTab, setStudioTab] = useState<'edit' | 'preview'>('edit');
-  const [section, setSection] = useState<DocumentTab>(initialRoute.tab);                 // "My resumes" shows resumes or cover letters
+  const [section, setSection] = useState<DocumentTab>(initialRoute.tab);                 // "My documents" shows resumes, cover letters or uploaded files
   const [activeLetterId, setActiveLetterId] = useState<string | null>(initialRoute.letterId);
   const [letterTarget, setLetterTarget] = useState<string | null>(null);                 // a job to start a cover letter for
   const [planOpen, setPlanOpen] = useState(false);
   const [prepareFor, setPrepareFor] = useState<Application | null>(null);               // the application a resume is being prepared for (the window)
-  const [buildRequested, setBuildRequested] = useState(false);                          // open the resume builder as soon as My resumes shows
+  const [buildRequested, setBuildRequested] = useState(false);                          // open the resume builder as soon as My documents shows
   const [saving, setSaving] = useState(false);
   const [saveLabel, setSaveLabel] = useState('Saved');
   const [history, setHistory] = useState<ResumeContent[]>([]);
@@ -306,6 +307,17 @@ export default function App() {
       announce(`"${restored.title}" restored.`);
     } catch (error) { announce((error as Error).message); }
   };
+  // Rename from the library card: title only, revision-checked; a reviewed resume stays reviewed (the server keeps it).
+  const renameResume = async (resume: Resume, title: string): Promise<string | undefined> => {
+    try {
+      const updated = await api.patchDocument(resume.id, { title, expected_revision: resume.revision });
+      setResumes((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+      announce('Resume renamed.');
+      return undefined;
+    } catch (error) {
+      return error instanceof HttpError && error.status === 409 ? 'This resume changed in another tab. Reload the page and try again.' : (error as Error).message;
+    }
+  };
   const deleteResume = async (resume: Resume) => {
     if (busyResumeAction) return;
     setBusyResumeAction(true);
@@ -459,7 +471,7 @@ export default function App() {
 
   // ---- addresses: every page, list and opened listing has its own link (routes.ts) ----
   const onLetters = page === 'studio' && section === 'letters';
-  const currentPath = routePath({ page, mode: discoverMode, jobId: jobDetail?.id ?? null, resumeId: page === 'studio' && !onLetters ? activeResume?.id ?? null : null, tab: onLetters ? 'letters' : 'resumes', letterId: onLetters ? activeLetterId : null });
+  const currentPath = routePath({ page, mode: discoverMode, jobId: jobDetail?.id ?? null, resumeId: page === 'studio' && section === 'resumes' ? activeResume?.id ?? null : null, tab: page === 'studio' ? section : 'resumes', letterId: onLetters ? activeLetterId : null });
   const address = useRef({ path: currentPath, unsaved: false, synced: false, resumeId: null as string | null, openResume });
   address.current.path = currentPath;
   address.current.unsaved = !!activeResume && saveLabel !== 'Saved';
@@ -543,7 +555,8 @@ export default function App() {
           {page === 'profile' && <ProfileView key={user} userKey={user} onChanged={() => setRefresh(value => value + 1)} onBasicsSaved={draft => setProfile(profileToForm(draft))} onOpenResume={openResume} onOpenLibrary={openResumeLibrary} preferences={preferences} setPreferences={setPreferences} savePreferences={savePreferences} savingPreferences={prefSaving} uploading={uploading} uploadMessage={uploadMessage} extractedResumeText={extractedResumeText} onUpload={uploadProfileResume} resumes={resumes} onBusyChange={setProfileBusy} />}
           {page === 'tracker' && <Tracker apps={filteredApps} loading={recordsLoading} query={trackerQuery} setQuery={setTrackerQuery} statusFilter={statusFilter} setStatusFilter={setStatusFilter} onEdit={setTrackerEdit} fitMarks={fitMarks} fitRunning={fitRunning} onOpenJob={setJobDetail} />}
           {page === 'studio' && section === 'letters' && <Letters me={me} apps={apps} resumeCount={resumes.length} activeId={activeLetterId} target={letterTarget} refresh={refresh} onOpen={openLetter} onTargetDone={letterTargetDone} onSection={switchSection} onMeChanged={refreshMe} onApplicationSaved={applicationSaved} announce={announce} />}
-          {page === 'studio' && section === 'resumes' && <Studio section={section} onSection={switchSection} startBuild={buildRequested} onBuildStarted={() => setBuildRequested(false)} onDelete={deleteResume} resumes={resumes} loading={recordsLoading} active={activeResume} attachTarget={resumeAttachTarget} tab={studioTab} setTab={setStudioTab} busy={busyResumeAction} saving={saving} saveLabel={saveLabel} history={history} future={future} onCreate={createResume} onOpen={openResume} onCreateTailoredCopy={createTailoredCopy} onTailorWithAI={(resume) => createTailoredCopy(resume, 'ai')} ai={{ available: !!me?.ai_available, remaining: me?.allowance.remaining ?? 0, limit: me?.allowance.limit ?? 5 }} onCopyResume={copyResume} onBuilt={resumeBuilt} onApplyDefaults={applyStyleDefaults} jobs={buildJobs} onAttach={attachResumeToApplication} onReturn={returnToApplication} onBack={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before leaving the editor.'); return; } setActiveResume(null); }} onUpdate={updateResume} onContent={pushContent} onUndo={undo} onRedo={redo} onDuplicate={duplicateResume} onReview={reviewResume} onExport={exportResume} onPreview={previewResume} onReload={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before reloading.'); return; } reloadResume(); }} />}
+          {page === 'studio' && section === 'uploads' && <UploadsPage onSection={switchSection} resumeCount={resumes.length} />}
+          {page === 'studio' && section === 'resumes' && <Studio section={section} onSection={switchSection} startBuild={buildRequested} onBuildStarted={() => setBuildRequested(false)} onDelete={deleteResume} onRename={renameResume} resumes={resumes} loading={recordsLoading} active={activeResume} attachTarget={resumeAttachTarget} tab={studioTab} setTab={setStudioTab} busy={busyResumeAction} saving={saving} saveLabel={saveLabel} history={history} future={future} onCreate={createResume} onOpen={openResume} onCreateTailoredCopy={createTailoredCopy} onTailorWithAI={(resume) => createTailoredCopy(resume, 'ai')} ai={{ available: !!me?.ai_available, remaining: me?.allowance.remaining ?? 0, limit: me?.allowance.limit ?? 5 }} onCopyResume={copyResume} onBuilt={resumeBuilt} onApplyDefaults={applyStyleDefaults} jobs={buildJobs} onAttach={attachResumeToApplication} onReturn={returnToApplication} onBack={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before leaving the editor.'); return; } setActiveResume(null); }} onUpdate={updateResume} onContent={pushContent} onUndo={undo} onRedo={redo} onDuplicate={duplicateResume} onReview={reviewResume} onExport={exportResume} onPreview={previewResume} onReload={() => { if (saveLabel !== 'Saved') { announce('Wait for the current changes to save before reloading.'); return; } reloadResume(); }} />}
         </>}
       </div>
     </main>
@@ -587,13 +600,14 @@ export function packetLines(application: Application): { label: string; attached
 }
 
 /** The tracker's fit cell. Every state is a button that opens the job (the same window as on Discover, where the fit
- *  breakdown and "Check my fit" live): the saved percentage, "In progress" while a check runs, or "Not run". */
+ *  breakdown and "Check my fit" live): the saved percentage, "In progress" while a check runs, or "Check fit", styled as
+ *  an action (outlined, brand colour, spark icon) so it does not read as a status label. */
 function FitCell({ application, mark, running, onOpenJob }: { application: Application; mark: FitSummary | undefined; running: boolean; onOpenJob: (job: Job) => void }) {
   const job = application.job;
   if (!job) return <span className="fit-cell-empty">-</span>;
   const open = () => onOpenJob(job);
   if (running) return <button type="button" className="fit-chip running" onClick={open} aria-label={`Fit check for ${job.title} is in progress. Open job details.`} title="The check is still running. Open the job to follow it.">In progress</button>;
-  if (!mark) return <button type="button" className="fit-chip notrun" onClick={open} aria-label={`Fit not run for ${job.title}. Open job details to check it.`} title="Open the job to check your fit.">Not run</button>;
+  if (!mark) return <button type="button" className="fit-chip notrun" onClick={open} aria-label={`Fit not run for ${job.title}. Open job details to check it.`} title="Open the job and check how well your profile covers it."><Icon name="spark" />Check fit</button>;
   const tone = mark.percent === null ? 'none' : mark.percent >= 70 ? 'high' : mark.percent >= 40 ? 'mid' : 'low';
   const score = mark.percent === null ? 'No score' : `${mark.percent}%`;
   return <button type="button" className={`fit-chip ${tone}`} onClick={open}

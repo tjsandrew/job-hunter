@@ -29,7 +29,7 @@ export function LetterEditor(props: LetterEditorProps) {
   return <div className="editor-page letter-editor" data-busy={busy ? 'true' : 'false'} aria-busy={busy}>
     <div className="editor-head">
       <button className="back-link" onClick={props.onBack}><Icon name="back" /> Cover letters</button>
-      <div className="editor-title"><input aria-label="Letter title" disabled={busy} value={letter.title} onChange={(event) => props.onTitle(event.target.value)} /><span className={`save-state ${saved ? 'saved' : ''}`}><i />{saveLabel}</span></div>
+      <div className="editor-title"><label className="editor-title-field" title="Rename this letter"><input aria-label="Letter title" placeholder="Name this letter" disabled={busy} value={letter.title} onChange={(event) => props.onTitle(event.target.value)} /><Icon name="edit" /></label><span className={`save-state ${saved ? 'saved' : ''}`}><i />{saveLabel}</span></div>
       <div className="editor-actions">
         {props.onAnother && <button className="button secondary" onClick={props.onAnother} disabled={busy}>Write another version</button>}
         <button className="icon-button danger" title="Delete letter" aria-label="Delete letter" onClick={props.onDelete} disabled={busy || !saved}><Icon name="trash" /></button>
@@ -50,14 +50,14 @@ export function LetterEditor(props: LetterEditorProps) {
       </div></details></div></div>
     <div className="editor-main letter-main" inert={busy}>
       <div className="editor-pane letter-pane">
-        {notes.length > 0 && <section className="letter-notes" aria-label="Check these before you send">
-          {/* Open when something needs a look; folded when everything was confirmed, so the fields stay in view. */}
-          <details open={notes.some((note) => note.kind === 'warn')}>
-            <summary>Check these before you send <span>{notes.filter((note) => note.kind === 'ok').length} confirmed{notes.some((note) => note.kind === 'warn') ? `, ${notes.filter((note) => note.kind === 'warn').length} to check` : ''}</span></summary>
-            <ul>{notes.map((note, index) => <li key={index} className={note.kind}>{note.kind !== 'info' && <Icon name={note.kind === 'ok' ? 'check' : 'alert'} />}<span>{note.text}</span></li>)}</ul>
-          </details>
-        </section>}
         <div className="editor-scroll">
+          {notes.length > 0 && <section className="letter-notes" aria-label="Check these before you send">
+            {/* Open when something needs a look; folded when everything was confirmed, so the fields stay in view. */}
+            <details open={notes.some((note) => note.kind === 'warn')}>
+              <summary>Check these before you send <span>{notes.filter((note) => note.kind === 'ok').length} confirmed{notes.some((note) => note.kind === 'warn') ? `, ${notes.filter((note) => note.kind === 'warn').length} to check` : ''}</span></summary>
+              <ul>{notes.map((note, index) => <li key={index} className={note.kind}>{note.kind !== 'info' && <Icon name={note.kind === 'ok' ? 'check' : 'alert'} />}<span>{note.text}</span></li>)}</ul>
+            </details>
+          </section>}
           <Field label="Addressed to" value={content.recipient} onChange={(value) => setContent({ recipient: value })} multiline />
           <div className="letter-two"><Field label="Date" value={content.date} onChange={(value) => setContent({ date: value })} /><Field label="Greeting" value={content.greeting} onChange={(value) => setContent({ greeting: value })} /></div>
           {content.paragraphs.map((paragraph, index) => <div className="letter-paragraph" key={index}>

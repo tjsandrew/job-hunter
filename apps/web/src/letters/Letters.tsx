@@ -3,16 +3,17 @@ import { api, HttpError } from '../api';
 import { downloadFile } from '../download';
 import type { DocumentTab } from '../routes';
 import type { Application, CoverLetter, LetterContent, LetterNote, LetterRequest, Me, ResumeLayout, Template } from '../types';
-import { Icon, Loading, fmtDate } from '../ui';
+import { Icon, Loading, fmtDateTime } from '../ui';
 import { DocTabs } from './DocTabs';
 import { LetterEditor } from './LetterEditor';
 import { LetterStart } from './LetterStart';
+import { RenameDialog } from '../studio/RenameDialog';
 import './letters.css';
 
 const SAVE_DELAY_MS = 700;
 type Start = { jobId: string | null; lockJob: boolean };
 
-/** The cover letters of the "My resumes" page: the list, starting a letter, and the editor with its preview. */
+/** The cover letters of the "My documents" page: the list, starting a letter, and the editor with its preview. */
 export function Letters({ me, apps, resumeCount, activeId, target, refresh, onOpen, onTargetDone, onSection, onMeChanged, onApplicationSaved, announce }: {
   me: Me | null; apps: Application[]; resumeCount: number; activeId: string | null; target: string | null; refresh: number;
   onOpen: (id: string | null) => void; onTargetDone: () => void; onSection: (section: DocumentTab) => void;
@@ -24,6 +25,7 @@ export function Letters({ me, apps, resumeCount, activeId, target, refresh, onOp
   const [notes, setNotes] = useState<Record<string, LetterNote[]>>({});
   const [saveLabel, setSaveLabel] = useState('Saved');
   const [busy, setBusy] = useState(false);
+  const [renaming, setRenaming] = useState<CoverLetter | null>(null);
   const [start, setStart] = useState<Start | null>(null);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState('');
@@ -145,6 +147,17 @@ export function Letters({ me, apps, resumeCount, activeId, target, refresh, onOp
     } catch (error) { announce((error as Error).message); }
     finally { setBusy(false); }
   };
+  // Rename from the card: title only, revision-checked; a reviewed letter stays reviewed (the server keeps it).
+  const rename = async (letter: CoverLetter, title: string): Promise<string | undefined> => {
+    try {
+      const saved = await api.patchLetter(letter.id, { title, expected_revision: letter.revision });
+      setLetters((items) => (items || []).map((item) => (item.id === saved.id ? { ...item, ...saved } : item)));
+      announce('Cover letter renamed.');
+      return undefined;
+    } catch (error) {
+      return error instanceof HttpError && error.status === 409 ? 'This letter changed in another tab. Reload the page and try again.' : (error as Error).message;
+    }
+  };
   const remove = async (letter: CoverLetter) => {
     if (!window.confirm(`Delete "${letter.title}"? A copy attached to an application stays there.`)) return;
     setBusy(true);
@@ -182,7 +195,7 @@ export function Letters({ me, apps, resumeCount, activeId, target, refresh, onOp
   const waiting = apps.filter((item) => item.job && !lettered.has(item.job_id) && !['rejected', 'withdrawn'].includes(item.status)).slice(0, 6);
   const remaining = me?.allowance.remaining ?? 0, limit = me?.allowance.limit ?? 5;
   return <div className="page-wrap letters-page">
-    <div className="page-heading"><div><div className="eyebrow">YOUR DOCUMENTS</div><h1>My resumes</h1><p>Keep your resumes and cover letters here. Open one to edit it, or prepare it for a job.</p></div>
+    <div className="page-heading"><div><div className="eyebrow">YOUR DOCUMENTS</div><h1>My documents</h1><p>Your resumes, cover letters and the original files you uploaded, in one place.</p></div>
       <button className="button primary" onClick={() => { setStart({ jobId: null, lockJob: false }); setStartError(''); }}><Icon name="plus" /> Write cover letter</button></div>
     <DocTabs section="letters" onSection={onSection} resumeCount={resumeCount} letterCount={letters?.length ?? null} />
     {loadError && <p className="letter-error" role="alert">{loadError}</p>}
@@ -195,10 +208,10 @@ export function Letters({ me, apps, resumeCount, activeId, target, refresh, onOp
           return <div className="resume-card-wrap" key={letter.id}>
             <button className="resume-card" onClick={() => onOpen(letter.id)} aria-label={`Open ${letter.title}`}>
               <div className="resume-thumb classic letter-thumb"><div className="thumb-name">{letter.content.name || 'Your Name'}</div><div className="thumb-line long" /><div className="thumb-gap" /><div className="thumb-line" /><div className="thumb-line long" /><div className="thumb-line long" /><div className="thumb-line" /><div className="thumb-gap" /><div className="thumb-line long" /><div className="thumb-line" /></div>
-              <div className="resume-card-foot"><div><strong>{letter.title}</strong><span>{jobTitleFor(letter) ? `${jobTitleFor(letter)} · ` : ''}Edited {fmtDate(letter.updated_at)}</span></div>
+              <div className="resume-card-foot"><div><strong>{letter.title}</strong><span>{jobTitleFor(letter) ? `${jobTitleFor(letter)} · ` : ''}Edited {fmtDateTime(letter.updated_at)}</span></div>
                 <span className="letter-statuses"><span className={`mini-status ${reviewed ? 'reviewed' : ''}`}>{reviewed ? 'Reviewed' : 'Draft'}</span>{packet?.document_id === letter.id && <span className="mini-status reviewed">Attached</span>}</span></div>
             </button>
-            <button className="icon-button danger resume-card-delete" title="Delete letter" aria-label={`Delete ${letter.title}`} disabled={busy} onClick={() => void remove(letter)}><Icon name="trash" /></button>
+            <button className="icon-button resume-card-rename" title="Rename letter" aria-label={`Rename ${letter.title}`} disabled={busy} onClick={() => setRenaming(letter)}><Icon name="edit" /></button><button className="icon-button danger resume-card-delete" title="Delete letter" aria-label={`Delete ${letter.title}`} disabled={busy} onClick={() => void remove(letter)}><Icon name="trash" /></button>
           </div>;
         })}</div> : <div className="empty-state"><div className="empty-art">Aa</div><h2>No cover letters yet.</h2><p>Write one for a job you saved. AI can write a first draft from your profile, or you can start blank.</p></div>}
       </section>
@@ -207,5 +220,6 @@ export function Letters({ me, apps, resumeCount, activeId, target, refresh, onOp
           <button className="button secondary small-button" onClick={() => { setStart({ jobId: item.job_id, lockJob: false }); setStartError(''); }}>Write with AI ({remaining} of {limit} left)</button></li>)}</ul></section>}
     </>}
     {startDialog}
+    {renaming && <RenameDialog kind="cover letter" title={renaming.title} onSave={(title) => rename(renaming, title)} onClose={() => setRenaming(null)} />}
   </div>;
 }
