@@ -79,3 +79,50 @@
 .bank-backups { padding: 20px 24px; margin: 24px 0; }
 .bank-backups summary { cursor: pointer; font-weight: 600; }
 .bank-backups p { color: var(--muted); margin: 12px 0; }
+
+/* Compact profile bank (Gestalt pass, Nov 2026).
+   Proximity: each item's controls sit on its title line; a point's controls sit beside its text.
+   Similarity: every row control is the same quiet icon button.
+   Figure/ground: controls recede until the row is hovered or focused (touch screens always show them). */
+.bank-page .panel { padding: 18px 20px; }
+.bank-grid, .bank-stack { gap: 16px; }
+.bank-item { padding-top: 14px; margin-top: 14px; }
+.bank-item-top { flex-wrap: nowrap; align-items: center; }
+.bank-item-head { min-width: 0; flex: 1; }
+.bank-item h3 { font-size: 14.5px; margin: 0 0 2px; }
+.bank-item-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; }
+.bank-item-title small { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.bank-item-title small:empty { display: none; }
+.bank-item-head p { margin: 0; font-size: 13px; color: var(--muted); }
+.bank-row-actions { gap: 2px; flex-wrap: nowrap; flex-shrink: 0; }
+.bank-row-actions .icon-button { width: 28px; height: 28px; border-radius: 7px; color: #6b7a90; }
+.bank-row-actions .icon-button:hover:not(:disabled) { background: #eef2f8; color: var(--ink); }
+.bank-row-actions .icon-button:disabled { opacity: .35; }
+.bank-row-actions .icon { width: 16px; height: 16px; }
+.bank-version-chip { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 7px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: #6b7a90; font-size: 11.5px; font-weight: 600; }
+.bank-version-chip .icon { width: 13px; height: 13px; }
+.bank-version-chip.has-versions { background: var(--pale); border-color: #c9d6fb; color: var(--green2); }
+.bank-version-chip:hover:not(:disabled), .bank-version-chip[aria-expanded="true"] { border-color: #9fb3ef; color: var(--green2); }
+.bank-point-group { margin-top: 8px; }
+.bank-point-group h4 { margin: 10px 0 2px; }
+.bank-point-list { list-style: none; margin: 0; padding: 0; }
+.bank-point { position: relative; padding: 6px 0 6px 16px; border-bottom: 0; border-radius: 8px; }
+.bank-point::before { content: ''; position: absolute; left: 3px; top: 15px; width: 5px; height: 5px; border-radius: 50%; background: #9aa9be; }
+.bank-point-row { gap: 10px; }
+.bank-point-row p { font-size: 13px; line-height: 1.6; }
+.bank-add-point { display: inline-flex; align-items: center; gap: 5px; margin: 4px 0 0 12px; padding-left: 4px; }
+.bank-add-point .icon { width: 14px; height: 14px; }
+.bank-tags { margin: 4px 0 0; }
+@media (hover: hover) {
+  .bank-item-top .bank-row-actions, .bank-point-row .bank-row-actions .icon-button { opacity: .38; transition: opacity .15s; }
+  .bank-item-top:hover .bank-row-actions, .bank-item-top:focus-within .bank-row-actions,
+  .bank-point:hover .bank-row-actions .icon-button, .bank-point:focus-within .bank-row-actions .icon-button { opacity: 1; }
+  .bank-point:hover { background: #f7f9fc; }
+  /* Skills: name and remove stay visible; reorder arrows appear on hover or keyboard focus. */
+  .bank-skill-chip button:nth-child(2), .bank-skill-chip button:nth-child(3) { display: none; }
+  .bank-skill-chip:hover button:nth-child(2), .bank-skill-chip:hover button:nth-child(3),
+  .bank-skill-chip:focus-within button:nth-child(2), .bank-skill-chip:focus-within button:nth-child(3) { display: block; }
+}
+.bank-skill-chips { gap: 6px; }
+.bank-skill-chip button { padding: 4px 8px; }
+.bank-skill-group h3 { margin: 12px 0 6px; }
