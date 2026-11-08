@@ -161,3 +161,18 @@ def test_an_empty_letter_still_renders_and_the_style_settings_apply():
     doc = letter_doc()
     doc.layout = {"font_size": 14, "margin": 30, "font_family": "mono", "page_size": "letter", "line_spacing": 1.6}
     assert pdf_bytes(doc).startswith(b"%PDF")
+
+
+def test_evidence_ids_copied_into_the_letter_text_are_removed():
+    # ornith1.5:35b (Nov 2026) cited ids inline; the letter must read cleanly and keep normal brackets and words.
+    evidence = {"b_324b8bc25f5859338b23a131f321e7f8": "Built REST endpoints", "education:0": "B.Comp. at Example University",
+                "summary": "Backend engineer", "skill:Python": "Python"}
+    answer = {"paragraphs": [
+        "I built REST endpoints used by about 40 staff (b_324b8bc25f5859338b23a131f321e7f8). I cut release time from "
+        "45 minutes to 10 (b_de4e5c8038f9530b863308bc1c990406, education:0).",
+        "I hold a B.Comp. (Computer Science) from Example University (education:0), and my summary is skill:Python based.",
+    ], "claims": []}
+    paragraphs, _ = check_letter(answer, evidence=evidence, known_text="Built REST endpoints 40 staff 45 minutes 10 B.Comp. Computer Science Example University Python")
+    assert paragraphs[0] == "I built REST endpoints used by about 40 staff. I cut release time from 45 minutes to 10."
+    assert paragraphs[1] == "I hold a B.Comp. (Computer Science) from Example University, and my summary is based."
+    assert "b_" not in " ".join(paragraphs)
