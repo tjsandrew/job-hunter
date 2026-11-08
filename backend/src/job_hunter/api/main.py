@@ -715,8 +715,13 @@ def patch_document(document_id: UUID, body: DocumentPatch, db: Session = Depends
     changes = body.model_dump(exclude={"expected_revision"}, exclude_unset=True)
     template = changes.get("template", item.template); content = changes.get("content", item.content); layout = changes.get("layout", item.layout)
     validate_document(template, content, layout, db, item.content, kind=item.kind)
+    # A rename does not change the PDF (the title is not printed), so a reviewed document stays reviewed. Compared by value
+    # because the editor's autosave sends title, template, content and layout together.
+    changed = {key for key, value in changes.items() if getattr(item, key) != value}
+    keep_review = item.reviewed_revision == item.revision and changed <= {"title"}
     for key, value in changes.items(): setattr(item, key, value)
-    item.revision += 1; item.reviewed_revision = None; item.updated_at = now_utc()
+    item.revision += 1; item.updated_at = now_utc()
+    item.reviewed_revision = item.revision if keep_review else None
     return doc_out(item)
 
 @app.delete("/v1/documents/{document_id}", status_code=204)

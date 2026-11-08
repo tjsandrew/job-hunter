@@ -134,3 +134,15 @@ it('separates original uploaded files from resumes created in the app', async ()
   expect(await within(uploaded).findByText('original.pdf')).toBeInTheDocument();
   expect(within(uploaded).getByRole('button', {name: 'Download uploaded original.pdf'})).toBeEnabled();
 });
+
+it('renames a resume from its card without opening it', async () => {
+  mockApi.patchDocument.mockImplementation(async (id, values) => ({ ...first, title: values.title!, revision: first.revision + 1 }));
+  const user = userEvent.setup(); render(<App />); await goToStudio(user);
+  await user.click(await screen.findByRole('button', { name: 'Rename Backend Engineer – Stripe' }));
+  const input = screen.getByRole('textbox', { name: 'New name for Backend Engineer – Stripe' });
+  await user.clear(input); await user.type(input, 'Stripe backend');
+  await user.click(screen.getByRole('button', { name: 'Save name' }));
+  expect(mockApi.patchDocument).toHaveBeenCalledWith('r1', { title: 'Stripe backend', expected_revision: first.revision });
+  await waitFor(() => expect(titles()).toContain('Stripe backend'));
+  expect(screen.queryByRole('textbox', { name: 'Resume title' })).not.toBeInTheDocument();   // still in the library
+});
