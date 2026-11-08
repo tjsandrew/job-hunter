@@ -38,3 +38,5 @@
 .bank-resumes .bank-file { grid-template-columns: 30px minmax(0,1fr) auto; }
 .bank-resumes .bank-file-import { grid-column: 3; justify-self: end; }
 .bank-recent-imports h3 { font-size: 13px; margin: 0 0 6px; }
+.import-point-row { display: flex; align-items: flex-end; gap: 8px; }
+.import-point-row .field { flex: 1; min-width: 0; }

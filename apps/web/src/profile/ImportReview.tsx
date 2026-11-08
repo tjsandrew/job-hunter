@@ -8,6 +8,11 @@ const labels: Record<string,string> = {name:'Name',headline:'Headline',email:'Em
 const hidden=new Set(['bullets','provenance','legacy_fields','angles','tags']);
 const norm=(value:string)=>value.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu)?.join(' ') || '';
 const title=(candidate:ImportCandidate)=>String(candidate.data.title || candidate.data.name || candidate.data.qualification || candidate.data.heading || candidate.kind);
+// A point whose wording was cleared counts as deleted; the server rejects blank points.
+function withoutBlankPoints(decision:ImportDecision):ImportDecision {
+  const bullets=decision.data?.bullets;
+  return Array.isArray(bullets) ? {...decision,data:{...decision.data,bullets:bullets.filter(point=>typeof point?.text!=='string' || point.text.trim())}} : decision;
+}
 function display(value:unknown) { return typeof value==='string' ? value : value == null ? '' : JSON.stringify(value); }
 function initial(candidate:ImportCandidate):ImportDecision {
   const match=candidate.match;
@@ -24,7 +29,7 @@ export function ImportReview({record,onApply,onClose,onDiscard,onReload}: {recor
   const ambiguous=record.candidates.some(candidate=>decisions[candidate.candidate_id].action==='merge' && candidate.kind!=='basics' && !decisions[candidate.candidate_id].target_item_id);
   const apply=async()=>{
     setBusy(true);setError('');
-    try {await onApply(Object.values(decisions).map(decision=>decision.candidate_id==='basics' && !decision.accepted_fields?.length ? {...decision,action:'skip' as const} : decision));}
+    try {await onApply(Object.values(decisions).map(withoutBlankPoints).map(decision=>decision.candidate_id==='basics' && !decision.accepted_fields?.length ? {...decision,action:'skip' as const} : decision));}
     catch(cause) {setError(cause instanceof HttpError && cause.status===409 ? cause.code==='PROFILE_EPOCH_CHANGED' ? 'Your profile was deleted after this review started. Nothing was applied; start a new import.' : 'Your profile changed elsewhere since this review. Nothing was applied. Reload the review and check your decisions again.' : (cause as Error).message);}
     finally {setBusy(false);}
   };
@@ -65,7 +70,7 @@ function CandidateCard({candidate,decision,busy,onChange}:{candidate:ImportCandi
         {field in candidate.evidence && <Evidence quote={candidate.evidence[field] as ImportEvidence | null} value={value}/>}
       </div>;
     })}</div>
-    {!!points.length && <div className="import-points"><h3>Points</h3>{points.map((point,index)=><div key={point.id}><label className="field"><span>Point {index+1} wording</span><textarea maxLength={4000} value={point.text} rows={2} onChange={event=>updateField('bullets',points.map((row,position)=>position===index ? {...row,text:event.target.value} : row))}/></label><Evidence quote={(candidate.evidence.bullets as Record<string,ImportEvidence | null> | undefined)?.[point.id]} value={point.text}/></div>)}</div>}
+    {!!points.length && <div className="import-points"><h3>Points</h3>{points.map((point,index)=><div key={point.id} className="import-point"><div className="import-point-row"><label className="field"><span>Point {index+1} wording</span><textarea maxLength={4000} value={point.text} rows={2} onChange={event=>updateField('bullets',points.map((row,position)=>position===index ? {...row,text:event.target.value} : row))}/></label><button type="button" className="icon-button" aria-label={`Delete point ${index+1}`} title="Delete point" onClick={()=>updateField('bullets',points.filter((_,position)=>position!==index))}><Icon name="trash" /></button></div><Evidence quote={(candidate.evidence.bullets as Record<string,ImportEvidence | null> | undefined)?.[point.id]} value={point.text}/></div>)}</div>}
     </fieldset>
     {decision.action==='merge' && !basics && <p className="bank-empty">Merge fills empty fields and adds new points. Existing facts, IDs and wordings are kept; conflicting values will be reported.</p>}
   </article>;
