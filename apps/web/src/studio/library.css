@@ -50,3 +50,11 @@
 .editor-title-field { flex: 1 1 auto; max-width: 560px; }
 .editor-title-field input { width: 100%; text-overflow: ellipsis; }
 .editor-head .editor-title-field input { max-width: none; }
+
+/* Resume and letter editors (Gestalt pass): text boxes show their whole text, and the chrome above the form is
+   tighter, so more of the form is visible at once. */
+.editor-page .bullet-row textarea, .editor-page .point-row textarea, .editor-page .editor-scroll .field textarea { field-sizing: content; min-height: 38px; max-height: 340px; }
+.editor-page .editor-head { padding-bottom: 8px; }
+.editor-page .editor-toolbar { padding-top: 6px; padding-bottom: 6px; }
+.editor-page .editor-pane-head, .editor-page .preview-head { height: auto; min-height: 44px; padding: 6px 14px; }
+.editor-page .active-prepare-banner { padding-top: 8px; padding-bottom: 8px; margin-bottom: 8px; }
