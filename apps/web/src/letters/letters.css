@@ -89,3 +89,8 @@
   .letter-pane { flex-basis: auto; }
   .letter-two { grid-template-columns: 1fr; }
 }
+/* The checks live at the top of the scrolling form (they used to sit above it and squeeze the fields). */
+.editor-scroll .letter-notes { margin: 0 0 14px; padding: 9px 12px; border-radius: 10px; }
+.letter-notes summary { font-size: 12.5px; }
+.letter-notes ul { max-height: 200px; gap: 6px; margin-top: 8px; }
+.letter-notes li { font-size: 12.5px; }

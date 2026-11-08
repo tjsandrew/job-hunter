@@ -46,3 +46,7 @@
 .editor-title-field input { min-width: 6ch; }
 .editor-title-field .icon { width: 15px; height: 15px; color: #8a97ab; flex-shrink: 0; }
 .editor-title-field:hover .icon, .editor-title-field:focus-within .icon { color: #3157ce; }
+.editor-title { flex: 1; min-width: 0; }
+.editor-title-field { flex: 1 1 auto; max-width: 560px; }
+.editor-title-field input { width: 100%; text-overflow: ellipsis; }
+.editor-head .editor-title-field input { max-width: none; }
