@@ -6,8 +6,9 @@ on:
     branches: [main]
 permissions:
   contents: read
-# A newer push to the same PR or to main cancels the older run: only the latest commit's result matters, and Deploy
-# staging runs its own tests anyway. Saves Actions minutes when several PRs merge close together.
+# A newer push to the same PR or to main cancels the older run: only the latest commit's result matters (Deploy
+# staging deploys only the latest main commit, and requires this workflow's "Checks passed" for it). Saves Actions
+# minutes when several PRs merge close together.
 concurrency:
   group: checks-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -83,10 +84,9 @@ jobs:
   lambda-package:
     needs: changes
     if: needs.changes.outputs.package == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm   # native arm64 build, no QEMU
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - name: Build production ARM64 Lambda image
         uses: docker/build-push-action@v6
