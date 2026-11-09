@@ -1,49 +1,67 @@
 # 09 — Resume editor and polished document layout
 
-## User requirement
+**Resume Studio** edits the structured resume and exports a clean PDF with LaTeX-inspired typography. A person can build and edit a resume with no job selected and no AI use.
 
-Job Hunter includes an actual resume-focused editor with polished, LaTeX-inspired typography. This is a core local POC feature, not merely a text box containing an AI response. A user can build/edit a resume without AI access, without selecting a job, and without AWS.
+The editor is the front end for the documents described in [06](06-APPLICATION-PREPARATION.md) (storage, review, export). Cover letters reuse the same document machinery ([14](14-COVER-LETTERS.md)). Resumes are assembled from the profile bank ([10](10-PROFILE-BANK.md)).
 
-Read README.md, CONTRACTS.md and DELIVERY-SCOPE.md. This brief extends components 06 (document persistence/rendering) and 07 (editor UI). The interpretation for the first POC is visual editing with LaTeX-style output; raw LaTeX source editing/compilation is an optional future capability, not required by the current request.
+Raw LaTeX source editing is not offered. The goal was LaTeX-style *output*, and a visual editor over structured content gives that without running a LaTeX compiler (see "Why structured JSON and ReportLab").
 
-## Local editor experience
+## What the person can do
 
-- Create a blank resume, initialise from a confirmed profile, or open a job-tailored draft.
-- Split view: editable content on one side, paginated document preview on the other. On narrow screens switch between editor and preview.
-- Edit contact/header, summary, experience, education, projects, skills and custom sections. Add/remove/reorder sections, entries and bullets using buttons and keyboard-accessible controls; drag-and-drop is optional.
-- Support basic inline formatting (bold, italic, links) and bullets through a constrained document schema. Do not store arbitrary executable HTML.
-- Offer two initial templates: a classic serif academic style and a clean sans-serif professional style. Keep both text-based and single-column initially, with consistent dates, headings, whitespace and readable body sizes. Do not claim guaranteed ATS compatibility.
-- Provide bounded font-size, margin, section-spacing and A4/Letter controls. Show page count/overflow; do not silently shrink text to unreadable sizes to fit a page.
-- Support undo/redo for the active session, debounced autosave, visible saving/saved/error states, and conflict handling. Never discard local edits on a failed save. Keep unsaved content in memory and warn before navigation; persistent sensitive browser drafts are not required.
-- Duplicate a resume into a separate version for a job. Editing that version must not alter the original resume or source profile.
-- Preview and export the exact reviewed revision as PDF with selectable text. Template/layout changes also invalidate review/export cache.
+- **Start a resume** in four ways: blank; **Build from my profile** (pick items and points from the profile bank, with keyword suggestions for a chosen job); **a tailored copy** of an existing resume for a job (rule-based or AI, see 06); or **Duplicate**. A copy is separate: editing it never changes the original or the profile.
+- **Edit** the header (name and contact details), summary, and any number of sections with entries and bullets: add, remove, hide and reorder them using buttons. A section can be experience, education, projects, skills, custom, certifications, awards or volunteering. Points can be picked from the profile bank per entry.
+- **See it as they type.** A live preview sits beside the editor (switched with Edit and Preview tabs on a narrow screen). It shows the page size, a page count and dashed page-break lines.
+- **Choose a style.** Three presets: *Classic serif*, *LaTeX classic* (Latin Modern, the LaTeX default typeface) and *Modern sans*. Underneath are two templates, `classic` and `modern`. Layout settings cover font size (8–16 pt), margins (10–35 mm), typeface (template default, serif, Latin Modern, sans serif, monospace), line spacing (1.0–1.8) and paper (A4 or US Letter).
+  Style settings add heading style, accent colour, bullet character, header alignment, contact separator, section spacing, skills layout and date format.
+  A person's preferred defaults are saved with their profile and applied to new resumes.
+- **Undo and redo** within the open session (up to 50 steps).
+- **Review and export.** Mark the current revision as reviewed, then download the PDF. Any later change clears the reviewed mark. **PDF preview** shows the server's PDF at any time without reviewing it.
+- **Attach** a reviewed revision to an application in the tracker.
+- **Delete and restore.** Deleting archives a resume: it leaves the library, but exports and application attachments keep working, and it can be restored.
 
-## Persistence and API extensions
+## Saving
 
-Component 02 coordinates these additions; component 06 owns document/rendering services and 07 owns editor interactions.
+The editor saves automatically about 0.7 seconds after the last edit and shows the state: *Unsaved*, *Saving…*, *Saved*, *Conflict* or *Save failed*. Each save sends the revision it was based on. If the server's copy has moved on (for example the same resume was changed in another tab), the save is refused with a conflict, the person's local edits stay on screen, and **Reload latest** fetches the server version. Edits are never silently overwritten, and a failed save never discards what was typed.
 
-Extend documents to support manual, profile-based and generated origins. A manually created resume has no required task or job ID; its owner and kind remain mandatory. Keep optional source profile/job version references and generation provenance where relevant.
+The app does not let a person walk away from unsaved changes: leaving the editor, reloading or opening the PDF preview waits for the save, and the browser's Back button is held on the same page with a message until it finishes. Drafts are not kept in browser storage, because a resume holds personal data; the server copy is the only persistent one.
 
-Add `GET /documents?kind=resume` for the user's resume library and `POST /documents` for manual/profile-based creation. Add `POST /documents/{id}/duplicate` for a separate owned copy with an optional validated job association. Manual creation, editing, duplication and PDF export do not consume an AI allowance. Existing AI creation endpoints keep their quota rules.
+## Storage and API
 
-Store versioned structured content, stable block IDs, template ID/version, layout settings and revision. Use the existing revision-checked PATCH, review and export endpoints. A content or style change increments revision. Initially undo/redo can be client-session history; avoid implementing collaborative editing or an unbounded server history system.
+A resume is a `documents` row: `kind`, `title`, `template`, `content` (JSON), `layout` (JSON), `revision`, `reviewed_revision` and an optional `job_id`. A manual resume needs no job and no AI task. Every content, template or layout change increases `revision`, and `reviewed_revision` only ever matches one exact revision.
 
-Schema validation must cover allowed blocks, marks, links and bounded style values. Preserve source fact references on unchanged generated bullets; distinguish user edits from model-grounded content. Never silently promote a user's resume edit into a verified profile fact.
+| Route | Purpose |
+|---|---|
+| `GET /v1/documents?kind=resume`, `POST /v1/documents` | The library; create a blank or manual resume |
+| `POST /v1/documents/from-bank` | Build from the profile bank (a plan of items, points, skills and an optional job) |
+| `POST /v1/resume-builds/suggest` | Suggested items and points for a job (keyword rules, no model) |
+| `GET/PATCH/DELETE /v1/documents/{id}`, `POST …/restore` | Read, revision-checked edit, archive, restore |
+| `POST …/duplicate`, `POST …/tailor` | A separate copy, optionally linked to a job; a tailored copy |
+| `POST …/review`, `POST …/exports`, `GET /v1/exports/{id}`, `GET …/preview.pdf` | Review, export, download, working preview |
 
-## Rendering choice and AWS portability
+Creating, editing, duplicating, building from the bank and exporting never use the AI allowance. Only the AI option of `tailor` does.
 
-Use structured JSON as the canonical document. Keep content separate from the template so changing appearance cannot erase text. Start with the existing deterministic Python PDF renderer and render the same saved revision for an authoritative preview. A lightweight browser layout preview may update immediately while a debounced PDF preview catches up; label any approximate preview and verify the final PDF before review/export.
+The server validates every write: allowed section kinds, bounded text lengths (bullets up to 4,000 characters, up to 30 sections and 100 entries per section), the template name, and layout values inside the ranges above. Content is plain text, not HTML, so there is nothing executable to store. Bullets copied from the profile carry a source reference (item, item revision and the profile text at the time of copying), and the server checks that it points at the caller's own profile item.
 
-If implementation testing shows that sharing a browser/PDF renderer is materially simpler or more faithful, document that decision and its future Lambda packaging/runtime implications before changing the renderer. Do not introduce a LaTeX server or a browser-rendering cluster merely to imitate a LaTeX visual style.
+A resume edit never changes the profile on its own. Saving a reworded point back to the profile is a separate, explicit action in the point's menu (see 10).
 
-PDF preview is a non-reviewed working preview; it must not mark a document reviewed or replace a reviewed export. Bound preview frequency/cache by content hash, template version and layout settings. Check ownership on preview/download endpoints. Add a preview endpoint under `/documents/{id}` if needed, coordinated in OpenAPI.
+## Why structured JSON and ReportLab
 
-## Required tests and acceptance
+The document is stored as structured JSON, kept apart from the template, so changing the look can never lose text. The PDF is drawn by a deterministic Python renderer (`preparation/rendering.py`, ReportLab) from the saved revision. Bundled fonts mean the PDF looks the same whatever is installed on the server.
 
-Unit/component tests cover block edits/reordering, formatting sanitisation, undo/redo, autosave debounce/failure/conflicts, template switching without content loss, bounded layout values, revision invalidation and duplicate-copy isolation.
+Why not LaTeX or a headless browser: either would need a large runtime in Lambda or a separate rendering service, for a visual style we can reproduce with typography choices (a serif or Latin Modern face, rules under headings, tight spacing). ReportLab runs inside the same API image as everything else.
 
-Renderer tests use synthetic one-page and multi-page resumes with long bullets, Unicode, dates and links. Inspect extracted PDF text and representative rendered pages for clipping, missing content and unintended page breaks. Do not rely on snapshots alone.
+Why two previews: the live preview in the browser is HTML laid out to match, so it updates on every keystroke, but its page breaks are approximate and it is labelled that way. The server's PDF is authoritative for export and preview: export renders it, and **PDF preview** shows it. Review marks the saved revision, not the PDF, and the preview endpoint never marks anything reviewed.
 
-Browser acceptance: create a resume without AI, type/reorder content, switch templates, save/reload, duplicate for a job, edit the copy, review and export. The original/profile remains unchanged; the PDF matches the reviewed content/layout revision. Verify keyboard controls and owned access with two local identities.
+The template does not claim guaranteed compatibility with applicant tracking systems. The PDF has selectable text and a plain structure, which is all we assert.
 
-The editor must work locally using the filesystem storage adapter and real PostgreSQL. Defer Cognito/S3 integration to the cloud milestone. Defer collaborative editing, raw LaTeX input, arbitrary PDF-layout import and large template libraries beyond this POC.
+## Tests
+
+- `apps/web/src/editor.test.ts` covers the content helpers: adding, removing and moving sections, entries and bullets, and the profile-bank sources.
+- Component tests under `apps/web/src/studio/` cover the library, the preview and its page counting, the build flow, style settings and saving a point back to the profile.
+- `backend/tests/test_resume_rendering.py` renders synthetic resumes and checks that each style setting changes the look but keeps the text. `backend/tests/integration/test_resume_build_api.py` covers building from the profile bank, defaults, other users' items being rejected, and archive and restore. `backend/tests/integration/test_tenant_isolation.py` covers a document staying invisible to another user and an application keeping a snapshot of a reviewed resume and letter.
+
+## Not built
+
+- Inline formatting (bold, italic, links) inside bullets, drag-and-drop reordering, collaborative editing, raw LaTeX input, importing a PDF's layout, and a large template library.
+- CJK (Chinese, Japanese and Korean) fonts. The bundled fonts are Latin ones.
+- Automated browser tests of the editor. See [PENDING.md](../status/PENDING.md).

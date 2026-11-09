@@ -1,70 +1,81 @@
-# 08 — Integration, evaluation and POC acceptance
+# 08 — Integration and evaluation
 
-**Current delivery scope:** [local application first; AWS-native services later](../deployment/DELIVERY-SCOPE.md). This staging rule overrides earlier cloud requirements for the local milestone.
+How we checked that Job Hunter works, and what we measured on the deployed staging environment. The tooling, how to run it and the results index are in [eval/README.md](../../eval/README.md). The numbers and findings live with the raw results under [eval/results/](../../eval/results). Most folders have a `notes.md`; the A6 results are four JSON files, and the duplicate-removal result is in `summary.md`.
 
-**Portability requirement:** follow [LOCAL-TO-AWS.md](../deployment/LOCAL-TO-AWS.md). Keep this component’s logic shared between local Docker execution and AWS; record adapter differences and unverified cloud checks in its handoff.
+Read the [design README](README.md) and [contracts](CONTRACTS.md) for the system being tested, and [../architecture/aws-overview.md](../architecture/aws-overview.md) for what runs where.
 
-Read [README](README.md) and [contracts](CONTRACTS.md). Own cross-component tests, evaluation scripts/fixtures and final evidence. Follow Section 4 of the group's report; distinguish measured outcomes from provisional targets.
+## Principles
 
-## Unit-test coordination and quality gate
+- **Measured is not the same as targeted.** The targets below come from the group's preliminary report and are not guarantees. Each result says whether a target was met or missed.
+- **A UI demo is not proof.** Tenant isolation, reliable delivery and failure handling are tested directly, not inferred from a working screen.
+- **Mocked flows only prove workflow.** Model quality was judged with the real model, on labelled or realistic cases, not with fakes.
+- **Report what was skipped.** Anything not covered is listed in [PENDING.md](../status/PENDING.md).
 
-Each feature/component must arrive with its relevant unit tests; do not defer unit testing until final integration. Require deterministic, network-free unit suites and separate commands/markers for PostgreSQL/component, cloud integration and browser end-to-end tests. Unit tests run on every change/PR alongside type checks and linting. Run affected tests during development and the complete unit suite before handing off a component.
+## Automated tests
 
-Track coverage to identify missing critical branches, especially ownership decisions, quotas, retries, version conflicts and malformed input. Do not use an arbitrary coverage percentage as proof of quality. Tests must assert observable behaviour or independently derived expectations, not merely mirror implementation code. Add a regression test for each meaningful defect fixed.
+Each component shipped with its own tests. The suites are deterministic and need no network, AWS credentials, source credentials or paid model calls.
 
-CI must not need AWS credentials, live source credentials or paid inference to run unit tests. Run database integration tests using a disposable PostgreSQL/pgvector service. Cloud smoke tests require an explicitly configured test environment; browser tests may run against local seeded services. Record skipped integration tests and reasons honestly.
-
-## Applying these gates by milestone
-
-Run local unit/database/browser gates now. Defer Cloud slice, AWS delivery/outbox/distributed lease tests, cloud load measurements and cloud costs until the AWS milestone. Keep live source discovery active locally. Model-quality evaluation requires a real model; mocked flows pass only workflow tests.
-
-## Integration gates
-
-| Gate | Evidence required |
+| Suite | Tests defined |
 |---|---|
-| Foundation | Empty DB migrates; synthetic data seeds; two-user isolation and task/quota tests pass |
-| Complete local slice | Upload/manual profile → confirm → fixture recommendations → save → track works without manual DB edits |
-| Cloud slice | Cognito/API/RDS/S3/SQS real integration smoke test; mock model/source status explicitly labelled |
-| Live discovery | One permitted live source fetches current jobs end to end; two independent live sources meet the multi-source target. Fixture-only discovery remains incomplete. |
-| Full preparation | Real or labelled fake model → analysis → editable CV/cover letter → reviewed PDF exports |
-| Recovery | Duplicate messages, queue send failure, provider timeout, expired lease, malformed output and late completion preserve state/allowance |
-| Acceptance | Representative users finish the agreed journey; critical issues resolved and affected scenarios retested |
+| Backend (pytest) | 705 |
+| Frontend (Vitest) | 342 |
+| Release and control scripts | 51 |
+| Embedder service | 22 |
+| Terraform | 5 files, 21 `run` blocks |
 
-Avoid treating a successful UI demo as proof of tenant isolation or reliable delivery. Run database/queue fault tests as well.
+The counts and commands are in the [README](../../README.md#tests). Parametrised tests run more cases than these counts.
 
-## System experiments
+The backend suite has two layers. Unit tests use fake model, storage and queue adapters, so failure cases (provider timeout, malformed output, a missing key) can be forced. Integration tests run against a disposable PostgreSQL with pgvector; they cover per-user ownership (row-level security), allowances, import and duplicate linking, and the document, fit analysis and cover letter endpoints.
 
-Retain the report's proposed levels: 1, 10, 50 and 100 concurrent users. Use Locust or equivalent with a documented mix of browse/profile/tracking requests, separate asynchronous task requests, dataset size and test duration. Reuse the same scenario for comparisons. Low POC concurrency caps may intentionally throttle; measure that result rather than raising limits blindly.
+On every push and pull request to `main`, the **Local POC checks** workflow runs the suites whose paths changed (path filter: `scripts/ci_changes.py`; a push to `main` runs the web, backend, scripts and embedder suites):
 
-Report P50/P95/P99 latency, throughput, 4xx throttles, 5xx errors and saturation. Record cold and warm API results separately and also the combined user-observed distribution. Provisional report targets: read/browse <500 ms, ranking <2 s, task acceptance <200 ms, asynchronous completion <30 s. These are targets to assess, not guaranteed SLOs. Define whether each is a percentile target before running experiments.
+- frontend tests and build;
+- backend unit and PostgreSQL integration tests, a migration check and an HTTP smoke test against the running stack;
+- a production ARM64 Lambda image build with a handler and font check;
+- the scripts tests;
+- the embedder tests.
 
-Measure async end-to-end time from accepted request through queue wait, inference, persistence and export; report stage times. Immediate outbox send should support the healthy path. A repaired send can wait up to the one-minute maintenance interval and exceeds the 30-second target; count/report recovery separately without excluding it from reliability results.
+The **Terraform validation** workflow runs the Terraform tests.
 
-Discovery evaluation: new unique jobs by source/run; malformed/rate-limited/failed requests; discovery backlog; processing latency; true/false duplicate merges. Report both duplicate precision and recall on labelled pairs. Do not claim live coverage from fixture results.
+## Checks against the deployed system
 
-Matching evaluation: keyword-only, semantic-only and hybrid on identical labelled queries/jobs. Record precision@K or nDCG@K, sample size, assessor process and disagreements. Evaluate fit/draft grounding separately from relevance. Do not equate ranking scores with hiring outcomes.
+Run against staging with six fictional evaluation accounts (`jh-eval-01` to `-06`, one persona each, on the free plan); see the README for how they are made and cleaned up.
+
+| Check | What it shows | Where |
+|---|---|---|
+| Isolation and token checks (A6) | 26 of 27 passed on 25 October 2026 and one was informational (a revoked session's access token stays valid until it expires): one user cannot read or change another's data, and token handling (including expiry) behaves. Also covers Aurora pausing and the pause and resume workflow. | `acceptance.py`, `results/a6-*` |
+| Responsiveness (B1) | Per-endpoint latency for one warm user | `locustfile.py BaselineUser`, `results/b1-baseline-*` |
+| Scalability (B3) | A step load of 1, 10, 50 and 100 users, five minutes each, run once at the normal limits and once in a short announced window with capacity raised | `locustfile.py BrowsingUser`, `results/b3-run1-*`, `results/b3-run2-*` |
+| AI tasks (B2) | Time, token counts and failures for fit analysis, the AI resume rewrite and AI cover letters, through the deployed app | `b2_ai_tasks.py`, `results/b2-ai-tasks-*` |
+| Job pipeline (B4) | Volume, failures and stage times per pull | `b4_pull.py`, `analyse_b4.py`, `results/b4-pipeline-*` |
+| Duplicate removal (B4) | Accuracy on 73 scored real pairs (of 84 labelled) | `dedup_eval.py`, `eval/dedup/`, `results/b4-dedup-*` |
+| Cost (B5) | Actual spend 1–25 October 2026, and a cost model against workload with a break-even chart | `cost_model.py`, `results/b5-cost-*` |
+
+## Why the load test is shaped this way
+
+- **Levels of 1, 10, 50 and 100 concurrent users**, from the preliminary report, using one scripted browsing mix (job lists, job detail, tracker, profile, Save and Pass) with short pauses, so runs can be compared.
+- **The load tests never call the AI endpoints.** Those spend the monthly allowance and call a shared school model, so they are timed separately in B2, one request at a time, and announced first.
+- **Two runs on purpose.** Staging runs with deliberately low limits, so run 1 shows what the deployed limits do under load; deliberate throttling is counted as throttling, not hidden. Run 2 raises the API's reserved concurrency, the gateway rate and Aurora's maximum capacity for a short window, to see where the real bottleneck is. The window is announced, recorded before and after, and restored the same day (steps in the README).
+- **Failures are labelled** as throttled (`429`), server error (`5xx`), authentication (`401`) or other, so a deliberate limit is not confused with a fault.
+- **Latency is reported as percentiles** (P50, P95, P99), server-side where possible, because the load generator is a laptop and its network adds noise to client-side timings.
+
+Targets taken from the preliminary report: read and browse endpoints under 500 ms at P95, ranked lists (For you) under 2 s, task acceptance under 200 ms, and asynchronous AI completion under 30 s. The notes in each results folder give the verdict per endpoint and say how it was judged and which targets were missed. One speed-up followed from B1 and was re-measured: `results/b1-baseline-20261027/` is the B1 re-run after the ranking speed-up. Pull tallies are in the notes of the B4 pipeline results.
+
+## Why these checks and not others
+
+- **Duplicate removal** is scored on labelled pairs from real staging data, so a wrong merge (precision) and a missed duplicate (recall) are both visible. See [04](04-JOB-INGESTION.md) for the method.
+- **AI quality** is judged on the checks in code (grounding, invented numbers and names) plus manual review of benchmark cases; see [12](12-FIT-ANALYSIS.md) and [14](14-COVER-LETTERS.md) for the cases and the models compared. Timing and token counts through the deployed app are in B2.
+- **Matching** (For you) has only a small labelled set and no claim of accuracy beyond it; see [05](05-RECOMMENDATIONS.md) and [PENDING.md](../status/PENDING.md).
+- **Cost** is evaluated against workload rather than at one point, so the chart shows where the serverless design as built meets fixed-capacity alternatives. The model treats prices, usage and measured figures as dated, separate inputs. It ignores free tiers except Cognito's 10,000 monthly users (see the top of `eval/cost_model.py`), so the serverless figures are an upper bound. Cloud credits are not counted as an advantage of the architecture.
 
 ## User evaluation
 
-Use consented or synthetic resumes; record participant count and recruitment characteristics rather than inventing them. Ask participants to upload/correct a profile, set preferences, find suitable jobs, save/dismiss, inspect fit evidence, edit/download a draft and update tracking. Include CV editing as well as cover letters because both are promised.
+The tooling in `eval/` does not include a participant study. Other open evaluation points, such as a two-account browser run, are in [PENDING.md](../status/PENDING.md). Usability findings from a small sample would be exploratory and kept apart from recommendation quality.
 
-Record task completion/time, assistance, errors, five-point usefulness/control/relevance ratings and open feedback. For a manual comparison, use equivalent tasks/data, counterbalance order where feasible and document limitations. Separate usability success from recommendation quality; small samples are exploratory.
+## Where to look next
 
-## Cost comparison required by the course
-
-Produce a worksheet for idle development, light usage and the measured load scenario. Use dated Singapore-region prices and actual resource settings. Include RDS/storage/backups, NAT hours/data, Lambda requests/duration, API Gateway, SQS, S3/CloudFront/transfer, Cognito where applicable, Secrets Manager, logging and Bedrock token/embedding usage. Include any subsequently introduced endpoints or proxy. Show credits/free-tier discounts separately from undiscounted costs.
-
-Compare with a fixed-capacity local/on-premise deployment of the same feature set and comparable measured capacity: hardware amortisation, storage/backups, electricity/network and operational assumptions. Keep external model/API expenses on both sides if both use them. Do not count cloud credits as an inherent architectural advantage or assume a desktop offers production availability.
-
-Also compare the proposed Lambda design with the preliminary Fargate + ALB design using explicit workload assumptions. The result may favour different choices at different sustained loads. Record fixed costs separately from per-request/per-user costs.
-
-## Final handoff and demonstration
-
-- One README with prerequisites, environment template, exact local commands, migrations/seeding, tests and authorised cloud deployment/cleanup steps.
-- Architecture diagram and actual differences from this proposed design.
-- Per-component completion notes with tests, limitations and mock/live status.
-- Repeatable demo fixture mode if a provider is unavailable, clearly labelled.
-- Evaluation results, known issues, source/model provenance and dated cost worksheet.
-- Course-ready code explanation and accurate AI-assistance disclosure, including how generated work was checked and what the team learned. Public repository publication is a separate user-authorised action; do not publish private data or secrets.
-
-POC acceptance requires the full core journey and honest evidence. If a dependency is unavailable, finish and test its adapter boundary and state exactly which live requirement remains incomplete.
+- [README](../../README.md): prerequisites, local commands, tests, deployment and cleanup.
+- [aws-overview.md](../architecture/aws-overview.md): the architecture as built.
+- [Deployment guide](../deployment/README.md): environments, release, pause and resume, cost.
+- [FEATURES.md](../status/FEATURES.md) and [PENDING.md](../status/PENDING.md): what is built, and what is not.
+- [eval/README.md](../../eval/README.md): the evaluation tooling and results index.

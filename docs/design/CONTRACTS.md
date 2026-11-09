@@ -1,162 +1,154 @@
-# Shared contracts: all components must follow these
+# Shared contracts
 
-**Resume editor requirement:** [09-RESUME-EDITOR.md](09-RESUME-EDITOR.md) adds a core local resume editor, manual resume creation, template/layout controls, preview, autosave and PDF export. Its document/API extensions supersede assumptions that every resume requires AI generation or a job.
+Every part of Job Hunter follows these design conventions: where code lives, how identity and storage work, the data model, the HTTP contract, how background work is handled, the allowance rule and the security boundary. The [main design](README.md) gives the overview.
 
-**Profile bank step 1:** [10-PROFILE-BANK.md](10-PROFILE-BANK.md) and its [implementation handoff](../status/10-profile-bank.md) supersede profile storage/confirmation details below. `GET/PUT /profile` serve basics; items live in the bank. Confirmation takes `expected_bank_revision` and snapshots the whole bank. The public `job_hunter.profile_bank` functions and committed snapshot fixtures are the cross-area read contract. Local keyword recommendations keep ranking live data through `build_profile_snapshot`; semantic ranking remains deferred.
+The exact API shapes are in the committed [`contracts/openapi.json`](../../contracts/openapi.json); a test fails if the running app and that file disagree.
 
-**Current delivery scope:** [local application first; AWS-native services later](../deployment/DELIVERY-SCOPE.md). This staging rule overrides earlier cloud requirements for the local milestone.
-
-Read [the main design](README.md) first. These are normative POC defaults. Change them deliberately and update dependent briefs/tests together.
-
-All components must follow [LOCAL-TO-AWS.md](../deployment/LOCAL-TO-AWS.md): share domain logic across local Docker and AWS, and switch infrastructure through explicit adapters.
-
-## 1. Repository layout and ownership
+## 1. Repository layout
 
 ```text
-apps/web/                       # 07: React application
+apps/web/                       # React single-page app (07)
 backend/src/job_hunter/
-  api/                          # 02: routes/auth/HTTP adapter
-  domain/                       # 02: common task/quota models; feature modules owned below
-  profiles/                     # 03
-  ingestion/                    # 04
-  recommendations/              # 05
-  preparation/                  # 06
-  adapters/                     # PostgreSQL, storage, model and source implementations
-  handlers/                     # AWS Lambda and local task entry points
-backend/migrations/             # 02 coordinates all schema revisions
-backend/tests/                  # unit and database integration tests
-infra/                          # 01: CDK
-contracts/                      # 02: OpenAPI export, event schemas and common fixtures
-fixtures/                       # synthetic/permitted resumes, jobs and expected results
-evaluation/                     # 08: scripts, labelled data, measurements and cost worksheet
-docs/                           # runbooks, decisions and per-component handoff notes
+  api/                          # FastAPI app and routers (02)
+  adapters/                     # auth, database connections, storage (local files or S3)
+  domain/                       # SQLAlchemy models and identity
+  profile_bank/                 # profile items, imports, snapshots, export (10)
+  preparation/                  # tailoring, cover letters, fit analysis, allowance, PDF rendering (06, 12, 14)
+  embedding/                    # embedding client, store, worker logic, For you ranking (05, 11)
+  ingestion/                    # job source readers and de-duplication (04)
+  llm/                          # model client and the shared LLM worker's tasks (12)
+  *_worker.py, migrate_aws.py   # Lambda entry points: embed, LLM, discovery, import, migrate
+backend/migrations/             # Alembic migrations (17)
+backend/tests/                  # unit tests; integration/ holds the PostgreSQL tests
+services/embedder/              # the embedding service used by local Docker Compose
+contracts/openapi.json          # committed API description
+infra/aws/  infra/state/        # Terraform: the app stack and the state bucket
+infra/local/                    # local database role setup
+scripts/                        # deployment, operator and smoke-test scripts
+eval/                           # evaluation scripts and results (08)
+docs/                           # this documentation
 ```
 
-Generate the TypeScript API client/types from committed OpenAPI. Commit JSON schemas for events and AI outputs. Do not independently invent API shapes in frontend mocks.
+The frontend API client types follow the OpenAPI file; do not invent API shapes in frontend mocks.
 
 ## 2. Identity, versions and storage
 
-- Opaque UUIDs for domain IDs; UTC ISO-8601 timestamps; monetary amounts as decimal values with currency and period, never unlabelled floats.
-- One job seeker is one tenant in this POC. Cognito `sub` maps to internal `users.id`. No organisations/team tenancy.
-- Browser requests never select their own tenant via a body/header. Derive it from verified authorizer claims.
-- Profile and job content versions are immutable. Each version stores content hash, creation time, schema version and model/prompt provenance where applicable.
-- Tasks capture exact input version IDs. Editing a profile or updating a listing does not mutate an in-flight task's inputs.
-- Private object prefix: `users/{user_id}/{resource_type}/{resource_id}/...`. Server chooses keys. Persist object keys/version IDs, not expiring signed URLs.
-- Shared job records contain source listing data only; no resumes or private generated material.
+- Opaque UUIDs for domain IDs. Timestamps are UTC ISO-8601 in the API. Salaries carry a currency and a period (for example SGD per year), never a bare number.
+- One job seeker is one tenant. There are no organisations or teams.
+- The user ID is derived on the server: in AWS from the verified Cognito claims (a UUID5 of issuer and `sub`), locally from the dev user. A browser never selects its own tenant through a body field or header.
+- Profile content is versioned. The profile bank (`profile_items`) is editable; **confirming** the profile takes `expected_bank_revision` and stores an immutable snapshot in `profile_versions` (with a content hash). Fit analysis, letters and ranking read the confirmed snapshot, so editing the bank does not change an analysis that already ran.
+- Jobs are shared. A job is identified by `(source, source_board, external_id)`, and a repeat import refreshes the row rather than creating a new one. A posting that appears on two sources keeps one row per source, linked by `canonical_job_id` (see [04](04-JOB-INGESTION.md)).
+- Private files live in the documents bucket as `uploads/<user_id>-<id>.<ext>` and `exports/<user_id>-<id>.pdf`. The server chooses every key. The database stores the object reference with its S3 version ID, never an expiring signed URL. Upload size is capped at 10 MiB.
+- Shared job records hold listing data only: no resumes and no private generated material.
 
 ## 3. Data model
 
-These are logical tables; 02 writes concrete Alembic migrations, foreign keys, indexes and RLS policies. JSONB is appropriate for variable structured content, not a substitute for searchable status/ownership fields.
+These are the tables the migrations create (`backend/src/job_hunter/domain/models.py` plus raw SQL for the embedding tables). JSON columns hold variable structured content; ownership, status and revision are real columns. Tables marked private have row-level security keyed on `user_id`; see [02](02-BACKEND-AND-DATA.md).
 
-| Entity | Required data and constraints |
+| Table | Purpose and key constraints |
 |---|---|
-| `users` | UUID, unique `auth_subject`, plan, timestamps; plan is server-managed |
-| `profiles` | user ID, current draft JSON, draft revision, active confirmed version ID |
-| `profile_versions` | ID, user ID, confirmed structured facts with stable evidence IDs, content hash, embedding/vector metadata, processing status |
-| `preferences` | user ID, revision, roles, locations, work modes, seniority, salary constraint with currency/period, unknown-value policy |
-| `uploads` | ID, user ID, key, immutable S3 object version ID after completion, size/type/checksum, status, timestamps |
-| `jobs` | ID, active version ID, open/closed status, canonical key, first/last seen |
-| `job_versions` | ID, job ID, normalised source fields, cleaned text, content hash, extracted requirements/evidence, embedding metadata, readiness; unique `(job_id, content_hash)` |
-| `job_sources` | ID, job ID, source name, external ID, URL, last seen, source content hash; unique `(source_name, external_id)` |
-| `discovery_runs` | source, run ID, cursor/window, lease, counters, status, timestamps/error; checkpoint only committed progress |
-| `job_reviews` | user ID, job ID, `saved`/`dismissed`, timestamps; unique `(user_id, job_id)` |
-| `applications` | ID, user ID, job ID, status, notes, applied time, revision; unique `(user_id, job_id)` |
-| `tasks` | ID, nullable user ID for system work, type, exact inputs/hash, state, attempts, lease expiry/token, result reference, error code, timestamps, deadline, unique dedupe key |
-| `outbox` | ID, task ID, queue kind, payload version, send status, send lease, attempts, next attempt time; unique logical event key |
-| `usage_months` | user ID, Singapore calendar month, allowance and counters; unique `(user_id, month)`; lock for reservations |
-| `usage_jobs` | user ID, month, job ID, reservation/consumption state; unique tuple; records completed and pending actions |
-| `analyses` | ID, user ID, task ID, job/profile version IDs, structured evidence-linked analysis; unique successful task result |
-| `documents` | ID, user ID, task ID, kind, input version IDs, current editable JSON, revision, review status; unique task/kind |
-| `document_exports` | ID, user ID, document ID/revision, object key/version, status, task ID |
+| `users` (private) | UUID, unique `auth_subject`, display name, `plan` (`free` or `premium`, server-managed) |
+| `profiles` (private) | One row per user: basics draft, `revision`, `bank_revision`, confirmed revision |
+| `profile_items` (private) | The profile bank: experience, projects, skills and so on, each with bullets, wordings, tags, origin, `revision` and `archived_at` |
+| `profile_imports` (private) | A resume import awaiting review: source, parser, candidate items, status, applied result |
+| `profile_versions` (private) | Immutable confirmed snapshot; unique `(user_id, revision)`; content hash |
+| `preferences` (private) | Roles, locations, work modes, seniority, salary minimum with currency and period; `revision` |
+| `user_settings` (private) | Resume defaults; `revision` |
+| `uploads` (private) | Uploaded resume file: object reference, declared size, content type, status, page count, extracted text, SHA-256 |
+| `jobs` | Shared listing: title, company, location, work mode, description, skills, source, board and external ID, status, category, seniority, salary, posted and expiry dates, `canonical_job_id`, `match_key`, `also_seen_on`. Unique per source, board and external ID, and unique `dedup_key` |
+| `job_embeddings`, `profile_embeddings` | `vector(512)` per text version, with model, dimensions, input hash and status. Profile rows are private |
+| `job_match_features` | Seniority and other features of a job that sit outside the vector |
+| `job_requirements` | Requirements read from a posting by the model; shared by all users and reused while the posting is unchanged |
+| `job_reviews` (private) | `saved` or `dismissed` per user and job; unique `(user_id, job_id)` |
+| `applications` (private) | Tracker row: status, notes, applied date, attached resume and cover letter, `revision`; one per user and job |
+| `documents` (private) | A resume or cover letter: template, content, layout, `revision`, `reviewed_revision`, optional job |
+| `document_exports` (private) | A rendered PDF of one reviewed revision of a document |
+| `ai_tailor_uses` (private) | The allowance: one row per user and job for the month the slot was used |
+| `fit_analyses` (private) | One latest analysis per user and job: status, profile revision, checked result, error code |
 
-Start with one embedding column `vector(512)` for both profile/job versions if the selected model supports that configuration. Store model ID, dimensions and preprocessing version; do not compare incompatible vectors. A model change requires a migration/backfill strategy.
+Embeddings use one 512-dimension space (`jinaai/jina-embeddings-v2-small-en`) for jobs and profiles. Every row records the model, dimensions and text version, so incompatible vectors are never compared; a model change needs a backfill.
 
 ## 4. HTTP contract
 
-Base path `/v1`. JSON uses snake_case. Collection response: `{ "items": [], "next_cursor": null }`. Default page size 20, maximum 100. Error: `{ "error": { "code": "...", "message": "...", "request_id": "...", "details": {} } }`. Never expose stack traces or another user's resource existence.
-
-| Method/path | Purpose and response |
-|---|---|
-| `GET /health` | Public minimal liveness only; no DB/secret details |
-| `GET /me` | Current identity, plan and allowance summary; provision internal user idempotently |
-| `POST /uploads` | `{filename, content_type, size_bytes}` → 201 `{upload_id, upload_url, fields, expires_at}` for constrained presigned POST |
-| `POST /uploads/{id}/complete` | Validate object, freeze version → 202 `{task_id, status_url}` for resume extraction |
-| `GET /profile` | Editable draft, revision, confirmed version and extraction state |
-| `PUT /profile` | Save draft with expected revision; does not silently confirm it |
-| `POST /profile/confirm` | Expected draft revision → new immutable confirmed version and 202 embedding task |
-| `GET/PUT /preferences` | Read/update validated preferences, with revision checking |
-| `GET /recommendations` | Ranked cards, evidence, ranking/profile/preference versions, cursor, degraded-mode flag |
-| `GET /jobs/{id}` | Shared job details, source links, freshness and requirements |
-| `PUT /jobs/{id}/review` | `{decision: saved\|dismissed\|none}`; `none` removes decision |
-| `GET /applications` | Current user's tracked jobs |
-| `PUT /applications/{job_id}` | Upsert status/notes/applied_at, revision check on existing record |
-| `POST /jobs/{id}/analysis` | Capture confirmed profile/current ready job versions → 202 task or 200 existing result |
-| `POST /jobs/{id}/documents` | `{kind: resume\|cover_letter}` → 202 task or 200 existing draft |
-| `GET /tasks/{id}` | State, safe error, result reference, `retryable`; owned tasks only |
-| `POST /tasks/{id}/retry` | Terminal retryable task only; starts a new attempt using captured inputs and existing quota reservation rules |
-| `GET /analyses/{id}` | Owned structured fit analysis |
-| `GET/PATCH /documents/{id}` | Read/edit draft; patch requires expected revision and schema-valid content |
-| `POST /documents/{id}/review` | Mark exact revision reviewed |
-| `POST /documents/{id}/exports` | Reviewed revision → 202 export task, or 200 cached export |
-| `GET /exports/{id}` | Status and short-lived download URL if complete and owned |
-| `DELETE /uploads/{id}` | Delete original object versions after dependent extraction finishes; keep confirmed facts unless explicitly deleted |
-
-Application states: `saved`, `preparing`, `applied`, `interviewing`, `offer`, `rejected`, `withdrawn`. Saving a job ensures a `saved` application exists; dismissing a card never destroys tracking history. Allow corrections/backward transitions explicitly; do not infer submission from a click.
-
-Use `Idempotency-Key` on task-creating POSTs. Persist `(user, route, key, request_hash, response)` transactionally, using a dedicated request table or equivalent unique records; mismatched reuse returns 409. Resource revision conflicts also return 409. Invalid data is 422; unknown/foreign private resources are 404; exhausted allowance is 403 `QUOTA_EXCEEDED`; rate limits are 429.
-
-## 5. Tasks, queues and transaction boundaries
-
-Two standard SQS queues: `job-processing` and `personal-tasks`, each with a DLQ. Queue payloads contain identifiers and version, never full resumes:
+Base path `/v1`. JSON uses snake_case. Collections return `{"items": [...]}`; lists that can be long take `limit` (default 20, maximum 100) and `offset` and return `next_offset` (null on the last page). Errors have one shape:
 
 ```json
-{"schema_version":1,"event_id":"uuid","task_id":"uuid","task_type":"GENERATE_COVER_LETTER","user_id":"uuid-or-null","input_hash":"sha256","trace_id":"uuid"}
+{"error": {"code": "...", "message": "...", "request_id": "...", "details": {}}}
 ```
 
-Types: `PROCESS_JOB_VERSION`, `EXTRACT_RESUME`, `EMBED_PROFILE_VERSION`, `ANALYSE_FIT`, `GENERATE_RESUME`, `GENERATE_COVER_LETTER`, `EXPORT_DOCUMENT`.
+No response exposes a stack trace or reveals whether another user's resource exists: unknown and foreign private resources both return 404.
 
-States: `queued → running → succeeded`; transient errors use `retry_wait → running`; terminal states `failed` and `cancelled`. `retry_wait` means the queue will retry, not that the browser should resubmit.
+| Area | Routes |
+|---|---|
+| Health and identity | `GET /health` (public, no database) · `GET /me` (identity, plan, monthly allowance, which AI features are available) |
+| Profile | `GET/PUT /profile` (basics, with `expected_revision`) · `POST /profile/confirm` · `GET /profile/bank` · `POST /profile/items`, `GET/PATCH/DELETE /profile/items/{id}`, bullets, alternatives, `revert`, `PUT /profile/items/order` · `GET/PUT /settings` · `GET /profile/export.json` · `DELETE /profile/data` |
+| Resume import | `GET/POST /uploads`, `GET/PATCH/DELETE /uploads/{id}`, `GET /uploads/{id}/download` · `PUT /uploads/{id}/content` (local) or a presigned S3 URL then `POST /uploads/{id}/finalize` (AWS) · `GET/POST /profile/imports`, `GET /profile/imports/{id}`, `apply`, `discard`, `retry` |
+| Preferences | `GET/PUT /preferences` (with `expected_revision`) · `GET /preferences/seniority-options` |
+| Discover | `GET /recommendations` (keyword ranking) · `GET /recommendations/for-you` (semantic ranking; 404 `FOR_YOU_DISABLED` when off) · `GET /jobs/{id}` · `PUT /jobs/{id}/review` (`saved`, `dismissed` or `none`) · `GET /jobs/reviewed` |
+| Tracking | `GET /applications` · `PUT /applications/{job_id}` (status, notes, attached resume and letter, with `expected_revision`) |
+| Fit analysis | `POST /jobs/{id}/fit-analysis` (202) · `GET /fit-analyses/{id}` · `GET /jobs/{id}/fit-analysis` · `GET /fit-analyses` |
+| Documents | `GET/POST /documents` · `POST /documents/from-bank` · `POST /resume-builds/suggest` · `GET/PATCH/DELETE /documents/{id}` · `restore`, `duplicate`, `tailor`, `review`, `preview.pdf`, `exports` · `GET /exports/{id}` |
+| Cover letters | `POST /jobs/{id}/cover-letter` (modes `write`, `improve` or `blank`) |
 
-1. API validates ownership/input readiness. In one DB transaction, reserve any quota, capture immutable inputs, create task and outbox entry, and record idempotency response.
-2. After commit, attempt SQS send with a short bounded timeout. Mark sent only after acknowledgement. If sending fails, return the persisted task; maintenance retries due unsent entries every minute. Do not lose accepted work or roll back a completed DB transaction conceptually.
-3. Outbox delivery is at least once. A crash between sending and marking sent may duplicate the event; handlers must tolerate this. Do not hold a DB transaction open during external calls. Use short leases and row locks to claim outbox entries.
-4. Worker loads the persisted task, validates envelope/type/owner/hash, and claims it atomically with a lease and fencing token. Only the current token may publish results or alter quota. Completed/cancelled duplicates are acknowledged. A duplicate with an active lease is retried rather than treated as completed work.
-5. Keep DB transactions short. Invoke Bedrock/read S3 outside transactions; then commit results, task success and usage changes together. Use immutable result keys/uniqueness to avoid duplicate visible results. Retry can still incur repeated model charges if a crash occurs after inference but before persistence; do not claim exactly-once inference.
-6. Persist intermediate extraction/generation output before later stages such as PDF rendering. Retry resumes from valid checkpoints where possible.
-7. Maintenance retries outbox entries, repairs expired leases, and handles tasks that exceed their deadline. Default task deadline 30 minutes, above normal queue retry intervals. When terminalising, fence the old attempt and release quota only if no successful/pending action still needs it. Late workers cannot overwrite terminal state. Drain/inspect DLQs through an operator command; alarm on any messages.
+Application statuses are `saved`, `preparing`, `applied`, `interviewing`, `offer`, `rejected` and `withdrawn`. Saving a job creates a `saved` tracker row; un-saving removes it only if it is still untouched (no notes, no attachments, no status change), so dismissing never destroys tracking history. Corrections and backwards transitions are allowed, and a click never marks a job as applied.
 
-Default function timeout: API 15 seconds; discovery 240 seconds; both queue workers 120 seconds; maintenance 30 seconds. SQS batch size 1, batch window 0, visibility 720 seconds, redrive after 5 receives, source retention 4 days, DLQ retention 14 days. Enable partial-batch failure reporting. Treat these as tunable POC settings, not performance guarantees. [AWS SQS configuration](https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html)
+Status codes:
 
-The outbox closes the failure gap between database commits and message publication. [AWS outbox guidance](https://docs.aws.amazon.com/en_en/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html)
+- 401 `AUTH_REQUIRED`: no valid sign-in.
+- 404 `NOT_FOUND`: unknown or foreign resource.
+- 409: a revision conflict (`REVISION_CONFLICT`) or a failed precondition such as `PROFILE_NOT_CONFIRMED` or `REVIEW_REQUIRED`.
+- 422: invalid input.
+- 402 `AI_LIMIT_REACHED`: the monthly allowance is used up.
+- 503 `AI_NOT_CONFIGURED` or `AI_UNAVAILABLE`: the model cannot be used.
+
+Concurrent edits are handled with revisions: an update sends the revision it read and gets 409 if it is stale. We do not use idempotency keys; the AI actions are protected instead by the one-slot-per-job rule and by refusing to start a second analysis while one is pending.
+
+An export needs the current revision of the document to have been **reviewed** first, so the user always sees what is exported. The export renders a PDF in the request and stores it in the bucket; in AWS `GET /exports/{id}` returns a short-lived signed download URL as `{"url": ...}` (uncached), and locally it returns the PDF.
+
+## 5. Background work
+
+There is no generic task table or queue. Three small patterns cover all slow work; the reasoning is in [02](02-BACKEND-AND-DATA.md).
+
+1. **Embedding.** After the profile is confirmed or preferences are saved, or after a job import, the API or the import function writes an empty flag object to S3. S3 sends it to SQS, and the embed Lambda embeds whatever is pending. The flag carries no data, so duplicate or merged flags are harmless. Failures retry up to five times, then land in a dead-letter queue and raise an alarm. See [11](11-EMBEDDING-WORKER.md).
+2. **Fit analysis.** The API writes `llm-requests/<id>.json`, the LLM worker writes `llm-results/<id>.json`, and the web app polls `GET /fit-analyses/{id}`. A pending analysis with no answer after 5 minutes is reported as failed. See [12](12-FIT-ANALYSIS.md).
+3. **AI resume rewrite and cover letters.** The same request and result files, but the API waits inside the request for at most 25 seconds. On a slow or failed worker, tailoring returns the rule-based copy, a cover letter is not created, and no allowance is used.
+
+A request file has this shape, where `input` contains only what that task needs:
+
+```json
+{"request_id": "...", "task": "fit | tailor | cover_letter", "input": {}}
+```
+
+Request and result files expire from the bucket after one day because they hold profile text. The LLM worker has no database access, and the API checks every answer before it is saved or shown.
+
+Locally the fit analysis runs as a background task in the API process and the other AI calls run inline; the states the web app sees are the same. A pause (reserved concurrency 0 on the API, embed and discovery functions) stops the API, embedding and job pulls in AWS without touching the database.
 
 ## 6. Allowance semantics
 
-Follow the report's “up to five jobs per month”, not five individual inference calls. Use Singapore calendar months, stored as `YYYY-MM` derived on the server. Default free allowance 5 distinct job IDs/month; premium allowance configurable (POC seed default 50), with no paid checkout.
+The allowance counts **jobs**, not model calls. A user has 5 (free) or 50 (premium) jobs per Singapore calendar month, stored as the month the slot was used and computed on the server.
 
-- First premium action on a job reserves one monthly slot under a locked `usage_months` row. Concurrent requests for the same job share one reservation.
-- Fit analysis, one resume and one cover-letter generation for that job share the slot. Default maximum is one successful generation of each kind per job/month, across profile versions; manual editing and repeated export are free. A later profile version requires an explicit regenerate policy change, not an accidental new charge bypass.
-- Record exact inputs of the first request for an action. If another request uses new inputs while that monthly action already exists, return the existing action plus a clear `INPUT_VERSION_CHANGED` explanation or 409; never silently present stale output as freshly generated.
-- A successful action consumes the slot; technical failures alone do not. Release a reservation only after all its actions are terminal and none succeeded. Retries reuse the action record/reservation. Month rollover does not move accepted work into a new month.
-- Enforce application rate limits for free operations too (upload/confirm/export), separately from the commercial allowance. Proposed dev defaults: 10 uploads and 20 profile confirmations/user/day; document these operational protections in configuration.
+- The first successful AI action on a job takes one slot. Fit analysis, AI tailoring and AI cover letters for that same job in that month share the slot, so doing all three costs one.
+- A slot is spent only when the model returns a usable result that passes our checks. A failed or discarded result costs nothing.
+- A fit analysis that is still running counts against the limit, so starting several at once cannot go over it.
+- Manual editing, rule-based tailoring, blank letters, review and export are free.
+- Premium is a plan value an operator sets (`scripts/set_plan.py`); there is no payment or checkout. See [13](13-PRICING-AND-PLANS.md).
 
 ## 7. Security and AI boundary
 
-Use Cognito authorization-code flow with PKCE for the SPA, no client secret. Require a custom API scope (e.g. `jobhunter/access`) on protected API Gateway routes and validate the issuer/client audience. Explicitly reject ID tokens by checking access-token claims in the backend. Local test authentication is enabled only in local mode and must fail deployment validation if enabled in AWS. [AWS JWT authorizers](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-jwt-authorizer.html)
-
-All private tables have user ownership and RLS. Runtime roles are not owners/superusers and have no `BYPASSRLS`. Set user context transaction-locally; missing context denies access. See 02 for role separation. Never trust a body-supplied user ID or use the migration role in request handlers.
-
-Resume/job text is untrusted data, including instructions embedded in documents. Model prompts separate instructions from quoted data, use bounded inputs, allow no tools/network actions, require schema-valid output and source evidence IDs. Unsupported personal facts are rejected. User-edited text is clearly distinct from model-grounded content.
+- The browser signs in with Cognito using the authorisation-code flow with PKCE (Proof Key for Code Exchange, which protects the code without a client secret) and no client secret. Accounts are created by an operator; there is no public sign-up or social login. API Gateway requires the `jobhunter/use` scope on every route except `GET /health` and the CORS preflight, and the backend checks the issuer, client, token type, expiry and scope again, rejecting ID tokens.
+- `X-Dev-User` works only with `AUTH_MODE=local`, and the app refuses to start in that mode outside `local` or `test`.
+- Private tables have forced row-level security; runtime roles are not owners and have no `BYPASSRLS`. User context is set transaction-locally and a missing context returns no rows. Never trust a body-supplied user ID or use the migration role in a request handler.
+- Resume and job text is untrusted data, including any instructions inside it. Prompts keep instructions separate from quoted data, give the model no tools or network actions, and ask for structured output. Before anything is stored, the code drops evidence IDs that were not supplied, and any number or name that is not in the source material; the fit coverage percentage is computed in code, not by the model. User-edited text is kept distinct from AI-written text.
 
 ## 8. Shared test conventions
 
-- Python unit tests: `backend/tests/unit/`; database/component tests: `backend/tests/integration/`, with explicit markers for external dependencies.
-- Frontend tests: colocated `*.test.ts` / `*.test.tsx`; browser journeys in a separate end-to-end directory.
-- Infrastructure tests: `infra/test/` with CDK template assertions.
-- Inject clocks, UUID generators where deterministic IDs matter, model clients, source clients and storage/queue boundaries. Do not patch away the business logic under test.
-- Commit synthetic/permitted fixtures with documented expected outputs. Tests must not contain real resumes, tokens or secrets.
-- Bootstrap scripts must expose documented unit, database integration and end-to-end commands; use separate opt-in commands for live cloud/provider checks.
-- Unit suites must succeed offline with no cloud credentials. Test normal, edge, invalid and failure paths. Record test results and remaining gaps in every component handoff.
+- Python unit tests are in `backend/tests/` and database tests in `backend/tests/integration/` (enabled with `RUN_DB_INTEGRATION=1`). Unit tests run offline with no cloud credentials.
+- Frontend tests are colocated `*.test.ts` and `*.test.tsx` files, run with Vitest.
+- Terraform has `terraform test` files in `infra/aws/tests/` and `infra/state/tests/`.
+- Clocks, model clients and storage are injected so business logic can be tested without patching it away. Fixtures are synthetic or permitted, and tests contain no real resumes, tokens or secrets.
+- Cloud and live-provider checks are separate, opt-in commands (`scripts/smoke.py`, the `eval/` scripts), never part of the offline suite.
+- `make test` runs the frontend tests, backend tests and the smoke test against the local stack.
 
 ## 9. Source references
 
-The group's submitted preliminary report is the scope source. The course specification requires a working web service, system/user evaluation, cloud/on-premise cost comparison and documentation of AI use. Defaults here fill implementation gaps; they are not quotations from those documents.
+Scope follows the preliminary report; the implementation choices here are ours.

@@ -1,125 +1,117 @@
 # Job Hunter
 
-Job Hunter helps job seekers in Singapore discover openings, shortlist them against their profile, check how well they fit, prepare a tailored resume and cover letter, and track applications. This repository holds the application (React + FastAPI + PostgreSQL), the local Docker stack, and the Terraform and GitHub Actions setup for the staging deployment on AWS. It was built for the NUS CS5224 Cloud Computing project (Group 15).
+Job Hunter helps job seekers in Singapore find openings that fit them and apply with less effort. Instead of checking several job boards and rewriting a resume for every posting, a user builds one profile. Job Hunter ranks Singapore jobs from several sources against that profile, shows how well each job fits, helps prepare a tailored resume and cover letter, and tracks every application in one place.
 
-> **Status:** the application runs end to end locally and a **staging deployment is live on AWS** at **https://main.d3u7qeowlfzmzj.amplifyapp.com**. It is fully serverless: Amplify, Cognito, API Gateway + Lambda, Aurora Serverless v2, S3, an SQS-triggered embedding Lambda, a shared LLM worker Lambda, and a job pull that loads new listings twice a day. Sign-up is invite-only; graders' login details are in the final report (Section 6). The design differs from the original proposal, so read [Deploying to AWS](#deploying-to-aws) for what actually runs.
+Built for NUS CS5224 Cloud Computing (Group 15). It runs serverless on AWS in Singapore (`ap-southeast-1`).
+
+## Live prototype
+
+[main.d3u7qeowlfzmzj.amplifyapp.com](https://main.d3u7qeowlfzmzj.amplifyapp.com)
+
+Sign-up is invite-only. Grader accounts are listed in the project report.
 
 ## Features
 
-- Singapore job discovery from four sources (MyCareersFuture, Adzuna, and public Greenhouse and Lever employer feeds), pulled twice a day with cross-source duplicate detection. Search, save and pass; the Discover page has For you, All jobs, Saved and Passed tabs, a Posted filter and a "Hide expired listings" box
-- Profiles and preferences. The profile is built from an uploaded PDF or Word resume (reviewed by the user before it is applied) or entered by hand, kept as a structured profile bank, and confirmed explicitly
-- Recommendations: an explainable keyword/skill/role ranker, and a semantic "For you" list built on an embedding model
-- **Job fit analysis:** a language model extracts the posting's requirements, judges each one against the confirmed profile with cited evidence, and the app re-checks every answer and computes a coverage percentage in code, plus suggestions. See [design brief 12](docs/design/12-FIT-ANALYSIS.md)
-- Resume Studio: structured editor, autosave, undo/redo, two templates, build from the profile bank, server-rendered PDF export
-- Resume tailoring: a rule-based reorder (always available) and an optional AI rewrite
-- Cover letters: an AI-written draft for a job from the confirmed profile, an editor with checks, and delete with Undo
-- My documents: resumes, uploaded files and cover letters in one library, with rename
-- Application tracker with an attached reviewed resume PDF and cover letter
-- Every page, job list, opened listing and resume has its own address (`/discover/saved`, `/jobs/<id>`, `/resumes/<id>`, ...), so a refresh, the Back button and a pasted link land where you were; signing in returns you to the page you opened (`apps/web/src/routes.ts`)
-- Sign-in with Amazon Cognito in the deployed app; free and premium plans with a monthly AI allowance (5 or 50 jobs per Singapore month, one use per job shared by fit analysis, AI tailoring and cover letters)
+- **Singapore job discovery:** jobs from MyCareersFuture, Adzuna, and employer job boards hosted on Greenhouse and Lever, pulled twice a day, with duplicates across sources shown once. Search, save and pass; filter by posting date and hide expired listings.
+- **Profile from a resume:** upload a PDF or Word (.docx) resume, review what was extracted, and apply it to a structured profile (or enter it by hand).
+- **Two ranked lists:** *All jobs* ranks by keyword, skill and role matches and shows why each job matched. *For you* also matches by meaning: the profile and each job are turned into vectors, and the closest jobs rank higher.
+- **Job fit analysis:** a language model extracts the posting's requirements and judges each one against the profile with cited evidence. The app re-checks every answer and works out, in code, what share of the requirements the profile covers.
+- **Resume Studio:** structured editor with autosave, undo and redo, two templates, build from the profile, and PDF export generated on the server.
+- **Resume tailoring:** a free rule-based pass that moves the bullets matching the job to the top (always available), and an optional AI rewrite that may not add new numbers or names.
+- **Cover letters:** an AI-written draft from the profile and the job, an editor with checks, and PDF export.
+- **Documents and tracker:** resumes, uploads and cover letters in one library; an application tracker with the exact reviewed resume PDF and cover letter attached.
+- **Plans:** a free and a premium plan with a monthly AI allowance (5 or 50 AI-assisted jobs per Singapore calendar month). Fit analysis, AI tailoring and an AI cover letter for the same job share one slot. Premium is a demo plan for now: an operator switches an account to it, and taking payments (for example through a payment gateway) is future work.
 
-Not built: payments (Premium is a demonstration entitlement), swipe gestures (Save and Pass are buttons), public sign-up. The full list and its gaps are in [docs/status/FEATURES.md](docs/status/FEATURES.md) and [docs/status/PENDING.md](docs/status/PENDING.md).
+## Architecture
 
-Fit analysis, the AI resume rewrite and cover letters use the school's SoCLaaS model gateway (`ornith1.5:35b` since 8 November 2026, when `gemma4:26b` was withdrawn; figures measured earlier on gemma are labelled as such). Locally it runs inside the API process (`MODEL_BACKEND=hosted` plus `LLM_*` settings in a git-ignored `.env`, see `.env.example`). In AWS the API writes a request file to S3 and the shared LLM worker Lambda outside the VPC calls the model. Locally the fit button stays disabled until a model is configured; in AWS it is enabled whenever the S3 worker route is configured, even if the worker has no key yet.
+The React frontend is served by **Amplify Hosting**, and users sign in with **Cognito** (invite-only). Requests go through an **API Gateway** HTTP API with a JWT authorizer to the FastAPI backend, which runs as a container-image **Lambda** inside a private VPC with no internet access. Data lives in **Aurora PostgreSQL Serverless v2** (scales to zero, pgvector for embeddings, row-level security for tenant isolation) and documents in a private **S3** bucket. Background work starts with a small file in S3. An **SQS**-triggered embedding Lambda turns profiles and jobs into vectors. A shared **LLM worker** (large language model) Lambda outside the VPC calls the school's SoCLaaS model gateway (`ornith1.5:35b`) for fit analysis, AI tailoring and cover letters. An **EventBridge** schedule starts a job pull at 06:00 and 20:00 Singapore time: a Discovery Lambda outside the VPC reads the job feeds, and an Import Lambda inside the VPC loads them into Aurora. There is no NAT gateway, load balancer or always-on server. The AI features use SoCLaaS because Amazon Bedrock isn't available on the course AWS account, so no language model is hosted on AWS.
 
-A standalone embedder service in `services/embedder/` starts with the stack (`make up`). The backend embeds the confirmed
-profile after "Update my matches" and after saving preferences (best effort: a failed embed never fails the save), and
-`GET /v1/recommendations/for-you` ranks jobs semantically, falling back to the keyword ranker (which stays the default
-`/v1/recommendations`) when there is no profile vector. Job vectors are filled by `make backfill` until ingestion calls
-`embed_job(s)`. A job's role family and seniority are set at ingestion (`jobs.category`, `jobs.seniority`); the `0013`
-migration adds seniority columns and retires the old match-features table. After migrating existing jobs or changing the
-keyword tables, run `make reclassify-jobs` and inspect the classification report (`python -m job_hunter.embedding.backfill
---classification-report`). Backfill makes vectors but does not classify jobs. Switches: `FOR_YOU_ENABLED`, `FOR_YOU_FUSION`, `EMBED_ON_SAVE`
-(both default on in compose). See
-[embedder status](docs/status/11-embedder-service.md), [backend client status](docs/status/12-embedding-client.md) and
-[embedding preparation](docs/status/13-embedding-preparation.md).
+Diagram, request flows and design reasons: **[docs/architecture/aws-overview.md](docs/architecture/aws-overview.md)** ([styled HTML](docs/architecture/aws-overview.html)).
 
-Ingestion can call `job_hunter.job_classification.classify_job(title, stated_seniority=None)` before saving a job; it returns the six category/seniority columns. Job preferences keep free-text target roles. The seniority dropdown loads canonical keys and labels from `GET /v1/preferences/seniority-options`; `PUT /v1/preferences` saves a canonical key (`intern`, `junior`, `mid`, `senior`, `lead`, `executive`; the old `entry` key and the old labels are accepted and converted). The match checks treat `lead` and `executive` as one step for now. If the options endpoint is unavailable, only the seniority selector is disabled and can be retried.
+## Code by function
 
-## Quick start
+| Area | What it does | Key paths |
+|---|---|---|
+| Auth and tenant isolation | In AWS the user comes only from the Cognito token claims that API Gateway verified. Every database transaction sets `app.user_id`, and PostgreSQL row-level security limits every user-owned table to that user's rows; the shared job tables are readable by all. | [`adapters/auth.py`](backend/src/job_hunter/adapters/auth.py), [`adapters/database.py`](backend/src/job_hunter/adapters/database.py), [`migrations/versions/`](backend/migrations/versions) |
+| Profile and resume import | PDF or Word upload, extraction into a review screen, then a structured profile bank (items, points, skills) that the user confirms. | [`profile_bank/`](backend/src/job_hunter/profile_bank), [`api/profile_bank.py`](backend/src/job_hunter/api/profile_bank.py), [`apps/web/src/profile/`](apps/web/src/profile) |
+| Job ingestion and dedup | Source adapters for the four sources used in staging (Singapore only; a SmartRecruiters adapter also exists), role and seniority classification, and cross-source duplicate linking by listing link or by matching employer, title, place and near-identical description. | [`ingestion/discovery.py`](backend/src/job_hunter/ingestion/discovery.py), [`ingestion/dedup.py`](backend/src/job_hunter/ingestion/dedup.py), [`job_classification.py`](backend/src/job_hunter/job_classification.py), [`discovery_worker.py`](backend/src/job_hunter/discovery_worker.py), [`import_worker.py`](backend/src/job_hunter/import_worker.py) |
+| Ranking | *All jobs* (`GET /v1/recommendations`) is a TF-IDF, skill and role ranker. *For you* (`GET /v1/recommendations/for-you`) ranks by embedding similarity (`jinaai/jina-embeddings-v2-small-en`, 512 dimensions), fused with the keyword ranking, and falls back to it when there is no profile vector. | [`recommendations.py`](backend/src/job_hunter/recommendations.py), [`embedding/`](backend/src/job_hunter/embedding), [`services/embedder/`](services/embedder), [`embed_worker.py`](backend/src/job_hunter/embed_worker.py) |
+| AI features | Fit analysis, AI tailoring and cover letters run as tasks on one LLM client: inline locally, through S3 and the LLM worker in AWS. Model answers are checked in code before they are saved. The allowance module enforces the monthly limit. | [`preparation/fit/`](backend/src/job_hunter/preparation/fit), [`api/fit_analysis.py`](backend/src/job_hunter/api/fit_analysis.py), [`preparation/ai_tailoring.py`](backend/src/job_hunter/preparation/ai_tailoring.py), [`api/cover_letters.py`](backend/src/job_hunter/api/cover_letters.py), [`llm/`](backend/src/job_hunter/llm), [`llm_worker.py`](backend/src/job_hunter/llm_worker.py), [`preparation/allowance.py`](backend/src/job_hunter/preparation/allowance.py) |
+| Documents and tracker | Resumes and cover letters are documents with autosave and revision checks. A reviewed export is an immutable PDF, so an application keeps the exact version attached. | [`api/main.py`](backend/src/job_hunter/api/main.py), [`preparation/rendering.py`](backend/src/job_hunter/preparation/rendering.py), [`apps/web/src/studio/`](apps/web/src/studio), [`apps/web/src/letters/`](apps/web/src/letters) |
+| Frontend | React + TypeScript + Vite. Every page, list and document has its own address, so refresh, Back and shared links work. | [`apps/web/src/`](apps/web/src), [`routes.ts`](apps/web/src/routes.ts) |
+| Infrastructure | Terraform for the whole staging stack (table below). The remote state bucket is bootstrapped separately. | [`infra/aws/`](infra/aws), [`infra/state/`](infra/state) |
+| CI/CD | GitHub Actions for checks, Terraform validation, release, job pulls and pause/resume. | [`.github/workflows/`](.github/workflows), [`scripts/deploy_aws.py`](scripts/deploy_aws.py) |
+| Evaluation | Load tests, AI task timing, job-pull pipeline timing, dedup accuracy, acceptance checks and a cost model, with raw results. | [`eval/`](eval) ([README](eval/README.md)) |
+
+### Terraform files
+
+| File | AWS resources |
+|---|---|
+| [`infra/aws/main.tf`](infra/aws/main.tf) | Amplify app and branch; Cognito user pool, app client and domain; ECR repositories; GitHub OIDC provider and release IAM role; the backend module |
+| [`infra/aws/backend/main.tf`](infra/aws/backend/main.tf) | VPC, private subnets and S3 gateway endpoint; Aurora Serverless v2 cluster; documents bucket; API and migration Lambdas; API Gateway HTTP API with JWT authorizer |
+| [`infra/aws/backend/embedder.tf`](infra/aws/backend/embedder.tf) | SQS queue and dead-letter queue, bucket notification, embedding Lambda, alarms |
+| [`infra/aws/backend/llm_worker.tf`](infra/aws/backend/llm_worker.tf) | LLM worker Lambda, S3 invoke permission, alarm |
+| [`infra/aws/backend/discovery.tf`](infra/aws/backend/discovery.tf) | Discovery and Import Lambdas, EventBridge schedule, error alarm |
+| [`infra/aws/backend/activity_alarm.tf`](infra/aws/backend/activity_alarm.tf) | Aurora activity alarm and SNS topic |
+| [`infra/aws/budget.tf`](infra/aws/budget.tf), [`permissions.tf`](infra/aws/permissions.tf) | Budget alert; IAM policies |
+
+## Run locally
 
 Prerequisites: [Docker Desktop](https://www.docker.com/products/docker-desktop/) (with Compose) and Git.
 
 ```sh
 git clone https://github.com/tjsandrew/job-hunter.git
 cd job-hunter
-make up          # or: docker compose up --build -d
+make up
 ```
 
 - App: http://localhost:5173
 - API docs: http://localhost:8000/docs
 
-The first start runs database migrations and seeds two fictional development users (Alice and Casey). Switch between them in the app header. Alice has a populated demo profile, resume and application.
+The first start runs the database migrations (17) and seeds two fictional development users, Alice and Casey; switch between them in the app header. Local mode needs no AWS account. The AI features need a model configured in a git-ignored `.env` (see [`.env.example`](.env.example)); everything else works without one.
 
-Run `make` to list every command (`make logs`, `make down`, `make test`, `make import-jobs`, `make reset-demo`, …). `make reset` **permanently deletes** the local database and documents. More detail: [docs/LOCAL-DEVELOPMENT.md](docs/LOCAL-DEVELOPMENT.md).
+Run `make` to list every command (`make logs`, `make down`, `make import-jobs`, `make reset-demo`, …). `make reset` **permanently deletes** the local database and documents. More: [docs/LOCAL-DEVELOPMENT.md](docs/LOCAL-DEVELOPMENT.md).
 
-## Resume editor
-
-The resume editor is the most complete part of the app and a good place to start building:
-
-| Piece | Where |
-|---|---|
-| Editor UI (Resume Studio, preview, layout controls) | [apps/web/src/App.tsx](apps/web/src/App.tsx), [styles.css](apps/web/src/styles.css) |
-| Pure editing helpers (sections, entries, bullets), with tests | [apps/web/src/editor.ts](apps/web/src/editor.ts), [editor.test.ts](apps/web/src/editor.test.ts) |
-| API: `/v1/documents` CRUD, duplicate, review, `preview.pdf`, exports | [backend/src/job_hunter/api/main.py](backend/src/job_hunter/api/main.py) |
-| PDF rendering (ReportLab, Latin Modern fonts, templates) | [backend/src/job_hunter/preparation/rendering.py](backend/src/job_hunter/preparation/rendering.py) |
-| Design and behaviour spec | [docs/design/09-RESUME-EDITOR.md](docs/design/09-RESUME-EDITOR.md) |
-
-Documents autosave with revision checks. A PDF is exported from a reviewed revision and stays immutable, so an application keeps the exact resume that was attached.
-
-## Repository layout
-
-```
-apps/web/          React + TypeScript + Vite frontend
-backend/           FastAPI API, domain logic, Alembic migrations, tests
-  src/job_hunter/    api/, adapters/, domain/, ingestion/, embedding/, llm/, preparation/ (incl. fit/),
-                     profile_bank/, recommendations.py, and the Lambda entry points
-                     (api/lambda_handler.py, migrate_aws.py, embed_worker.py, llm_worker.py)
-services/embedder/ Standalone embedding service and its Lambda packaging
-infra/local/       Local PostgreSQL role setup
-infra/aws/         Terraform for the staging deployment (infra/state bootstraps the remote state bucket)
-scripts/           Smoke tests, demo-workspace reset, release and deployment scripts
-eval/              System evaluation: load tests, AI-task timing, dedup accuracy, acceptance, cost model, raw results
-contracts/         Generated OpenAPI contract (openapi.json)
-.github/workflows/ Local POC checks, Deploy staging, Pull jobs, pause/resume of the backend, Terraform validation
-docs/              Design, deployment and status (see docs/README.md)
-compose.yaml       Local stack: PostgreSQL/pgvector, API, embedder, web
-Makefile           Shortcuts for common tasks (run `make`)
-```
-
-## Running the checks
+## Tests
 
 ```sh
-make test        # frontend tests + build, backend tests, HTTP smoke (stack must be running)
+make test        # frontend tests + build, backend tests, HTTP smoke test (stack must be running)
 ```
 
-Or run them separately with `make test-web`, `make test-backend` and `make smoke`.
+Or run `make test-web`, `make test-backend`, `make smoke` and `make test-embedder` separately.
 
-GitHub Actions runs the same checks on every push and pull request, choosing the jobs by which files changed: the *Local POC checks* workflow ([.github/workflows/checks.yml](.github/workflows/checks.yml)), whose *Checks passed* job is the overall result. It covers about 690 backend tests, about 350 frontend tests, 65 script and embedder tests and the Lambda image builds; *Terraform validation* runs the 4 Terraform test files.
+| Suite | Location | Tests defined |
+|---|---|---|
+| Backend (pytest) | `backend/tests` | 705 |
+| Frontend (Vitest) | `apps/web/src` | 342 |
+| Release and control scripts | `scripts/tests` | 51 |
+| Embedder service | `services/embedder/tests` | 22 |
+| Terraform | `infra/**/tests` | 5 files, 21 `run` blocks |
 
-## Deploying to AWS
+Counts are test definitions; parametrised tests run more cases (for example, the frontend's 342 definitions run as 371 tests). GitHub Actions runs the affected suites on every push and pull request to `main` (**Local POC checks**, whose *Checks passed* job is the overall result) and **Terraform validation** runs the Terraform tests.
 
-The staging stack is defined in Terraform (`infra/aws`) and released by GitHub Actions. **Merging to `main` does not deploy**: run **Actions → Deploy staging → Run workflow** on `main`. The release requires the commit's *Checks passed* result, pushes content-addressed images to ECR, runs migrations, then updates each Lambda and the Amplify site, restoring the previous API image if the health check fails (`scripts/deploy_aws.py`). GitHub signs in to AWS through OIDC, so no AWS keys are stored. Terraform changes are applied by hand by an operator with AWS access; CI only validates them.
+## Deploy
 
-What runs in `ap-southeast-1`: Amplify Hosting (React build), Cognito (invite-only sign-in), API Gateway HTTP API with a JWT authorizer, the API as a container-image Lambda in a VPC, Aurora PostgreSQL Serverless v2 (0–1 ACU, auto-pause, row-level security), a private S3 documents bucket, an S3 → SQS → Lambda embedding worker, and the shared LLM worker Lambda (fit analysis, AI resume rewrite, cover letters) outside the VPC. The job pull adds a Discovery Lambda outside the VPC and an Import Lambda inside it, started twice a day (06:00 and 20:00 Singapore time) by an EventBridge schedule or by hand with the *Pull jobs* workflow; the pause workflow also stops scheduled pulls. There is no NAT gateway, ALB, Fargate or Bedrock: the proposal's design was replaced by this serverless one. The architecture page is [docs/architecture/aws-overview.html](docs/architecture/aws-overview.html).
+Merging to `main` does not deploy. A release is started by hand: **Actions → Deploy staging → Run workflow** on `main`. It requires the commit's *Checks passed* result and pushes images to ECR, pinned by digest. It then runs migrations, updates each Lambda and the Amplify site, and restores the previous API image if the health check fails. GitHub signs in to AWS through **OIDC**, so no AWS keys are stored in the repository.
 
-Start here:
+Terraform changes are applied by hand by an operator with AWS access; CI only validates them. Other workflows: **Pull jobs** (an extra job pull on demand) and **Pause or resume staging backend** (sets the API, embedding and Discovery Lambdas to zero concurrency so nothing wakes Aurora).
 
-1. [Deployment guide](docs/deployment/README.md): the deployed architecture, credentials, cost model, release and pause/resume workflows, Terraform state
-2. [Fit analysis design](docs/design/12-FIT-ANALYSIS.md): includes the runbook for the LLM worker (section 11) and how to add a task (section 12)
-3. [Embedding worker](docs/design/11-EMBEDDING-WORKER.md) and its [rollout notes](docs/deployment/EMBEDDING-WORKER-ROLLOUT.md)
+Full guide: [docs/deployment/README.md](docs/deployment/README.md).
 
-The earlier proposals ([cloud handoff](docs/deployment/CLOUD-DEPLOYMENT-HANDOFF.md), [Lambda notes](docs/deployment/LAMBDA-NOTES.md), [portability rules](docs/deployment/LOCAL-TO-AWS.md), [delivery scope](docs/deployment/DELIVERY-SCOPE.md)) are kept as design history and do not describe the deployed resources.
+## Documentation
 
-Passing local tests does not verify AWS permissions, event delivery or deployment.
+| Where | What |
+|---|---|
+| [docs/architecture/](docs/architecture/aws-overview.md) | What runs where on AWS |
+| [docs/deployment/](docs/deployment/README.md) | Deployment guide, release, cost, job pull and embedding worker runbooks |
+| [docs/design/](docs/design/README.md) | Design briefs 01–14 and the reasons behind each decision |
+| [docs/status/](docs/status/FEATURES.md) | Feature list against the proposal, and what is still open |
+| [eval/](eval/README.md) | System evaluation scripts and results |
 
-## Contributing
+The full index is [docs/README.md](docs/README.md).
 
-The team is split into six areas: see [docs/WORK-SPLIT.md](docs/WORK-SPLIT.md).
+## Team and acknowledgements
 
+NUS CS5224 Cloud Computing, Group 15.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch and pull-request workflow and the rules on private data.
-
-## AI assistance
-
-AI coding assistants helped with implementation and tests. The team reviews generated code and records actual verification. Scaffolding and mocked tests are not claims of production readiness or AI quality.
+We used AI tools, including Claude Code, ChatGPT and Codex, to help write code, tests, infrastructure configuration and documentation.

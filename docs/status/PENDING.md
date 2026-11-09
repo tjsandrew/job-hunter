@@ -1,54 +1,40 @@
-# Product status and remaining work
+# Known limitations and future work
 
-Updated 24 October 2026 (Singapore). The authentication, AI, matching, profile-extraction and cloud rows below were refreshed against the code on that date; the remaining rows keep their 5 October wording and still need a final audit. This list distinguishes what is built from the target preliminary-report design. Component design briefs describe intended behaviour, not proof that every feature exists.
+What Job Hunter does not do yet, or does only partly, as of 9 November 2026. For what is built, see the [README](../../README.md) and [FEATURES.md](FEATURES.md).
 
-## Authentication: implemented, with acceptance checks still open
+## Authentication
 
-Sign-in uses Amazon Cognito (authorization code with PKCE, admin-created accounts only, no public sign-up). The deployed API takes the user only from the claims that API Gateway's JWT authorizer verified (issuer, client, access-token type, expiry, scope). The Alice/Casey `X-Dev-User` header works only with `AUTH_MODE=local`, and the API refuses to start with that mode unless `APP_ENV` is `local` or `test`. Ownership checks and PostgreSQL row-level security are tested.
+Sign-in uses Amazon Cognito (authorisation code with PKCE, admin-created accounts only, no public sign-up). The deployed API takes the user only from the claims that API Gateway's JWT authorizer verified. The local Alice/Casey `X-Dev-User` header works only with `AUTH_MODE=local`, and the API refuses to start in that mode unless `APP_ENV` is `local` or `test`. On 25 October 2026, 26 of 27 isolation and token checks against the staging API passed and one was informational (`eval/results/a6-*`).
 
-Still open: a browser acceptance run with two real accounts (cross-user denial, expiry, logout), Cognito MFA (not enabled), and the cloud display name, which is always "Job seeker". See [final pending-work notes](FINAL-PENDING-NOTES.md) for the checklist.
+Open points:
 
-## Working baseline
+- No full browser acceptance run with two real accounts (cross-user denial, expiry, logout), including a check that all private UI state clears on logout or account switch.
+- A revoked session's access token stays valid until it expires (at most 60 minutes).
+- Cognito MFA is not enabled (Lite tier).
+- The display name in the cloud is always "Job seeker".
+- Invitations expire after seven days, so test participants need accounts created shortly before they test.
 
-Docker PostgreSQL, tenant isolation, Cognito sign-in in the cloud and two local demo identities, profiles with PDF/Word import and review, a structured profile bank, explicit profile confirmation, manual preferences, TF-IDF/skill/role ranking, a semantic "For you" list, job fit analysis, server search/pagination, live source import, job save/pass, application status/notes/dates, structured resume editing, autosave, two PDF templates, review-gated export, rule-based tailoring and an optional AI rewrite. The first live import has 70 Singapore-location source listings across four employers; synthetic examples do not count. A staging deployment is live on AWS but holds no job listings.
+## Product
 
-## Current tracker work
-
-The initial tracker did not store a resume or cover letter. The current change adds a reviewed resume PDF snapshot and a manual cover letter to each application record. The stored PDF identifies the exact exported revision, independent of later edits to the original resume. These are user-maintained records of application materials; the app does not submit applications or verify what an employer received. Final test evidence is recorded in the component handoffs.
-
-## Pending local product work
-
-| Area | Still missing or limited | Next useful step |
+| Area | Limitation | Possible next step |
 |---|---|---|
-| Job coverage | 70 source listings, below the 300–500 intermediate / 1,000 Singapore target; employer/category bias remains | Add permitted sources and employers with explicit Singapore coverage; cache responses and stop on rate limits |
-| Job lifecycle | Cloud pulls start by hand (workflow) or by an optional schedule that is off; cross-provider deduplication is built; still no robust expiry reconciliation or immutable job-content versions | Record source-specific freshness/closure rules and test repeat imports/changed/removed postings |
-| Discovery | Full source descriptions and text search are available; comprehensive category/salary/seniority/work-mode filters remain incomplete | Add filters only where normalized source facts support them; preserve unknown values |
-| Matching | Semantic "For you" exists (embedding model, keyword fusion, embedding worker live in staging); still pending: independent relevance labels on a larger job set, job-vector refresh from ingestion, and a decision on caching or a pgvector query (recommendations are recomputed per request). Evidence-grounded fit analysis is built (see AI preparation) | Evaluate against labelled examples; do not present keyword scores or raw similarity as match percentages |
-| Profile extraction | PDF and Word import with a review step before anything is applied (heuristic parsing by default; the model path is a placeholder); no OCR, so scanned PDFs are rejected | Add OCR if scanned resumes matter |
-| Profile depth | Profile bank (structured items, points/versions, skills, reviewed snapshots, explicit saves) and resume build from the bank (`/v1/documents/from-bank`) are implemented | Check the profile-bank handoffs for remaining limits; see [step 2 handoff](10-profile-bank.md#step-2--profile-page-and-step-1-follow-ups) |
-| Resume editor | No inline bold/italic/link editing, entry/bullet reordering controls, section-spacing UI, exact paginated live HTML preview or CJK font coverage | Add bounded schema/UI controls and inspect representative PDF pages; server PDF is authoritative |
-| Resume history | Current revision and immutable exported PDFs; no complete document revision history or conflict merge interface | Provide recoverable edits/explicit conflict resolution before collaborative use |
-| Cover letters | Manual application text is supported by the current tracker change; no reusable standalone cover-letter library, template PDF export or AI generation | Expand document kinds/rendering when implementing preparation workflows |
-| Application history | Current status and saved materials; no timeline of every change, reminders, interview events or proof of external submission | Add revisioned activity history and clearly separate draft materials from recorded sent materials |
-| AI preparation | Done: job fit analysis (requirement extraction, evidence-cited judgement, grounding checks, coverage in code, suggestions) and a monthly allowance (5 free / 50 premium, one use per job shared with tailoring); optional AI resume rewrite with a fact-safety check. Missing: AI cover-letter generation; the rewrite supports only fake and Ollama models, so it cannot run in the cloud; no labelled accuracy set for fit analysis | Decide whether tailoring moves onto the shared worker; keep unavailable states honest |
-| Tasks | Fit analysis runs as a background task locally and as an S3 request/result file handled by a worker Lambda in AWS, polled by the web app. There is no general task table, retry UI or outbox | Add a generic task layer only if more AI features need it |
-| Data management | Profile item archive/Undo, profile JSON export and profile-data deletion are implemented; export-all, broader retention/recovery and durable file-cleanup retries remain pending | Define lifecycle across uploads, profile versions, documents, applications and backups before a real personal-data pilot |
-| Quality evidence | Focused unit, PostgreSQL and manual browser checks exist; comprehensive automated browser/accessibility/visual/load evaluation is pending | Add critical end-to-end scenarios, keyboard/modal checks and representative data-scale tests |
+| Job coverage | Four sources (MyCareersFuture, Adzuna, Greenhouse and Lever boards), Singapore only; coverage is biased towards the employers and searches configured | Add permitted sources and employers with explicit Singapore coverage |
+| Job lifecycle | Listings that expire or go unseen for 21 days are closed, but there are no per-source closure rules and no versioned job content | Record source-specific freshness rules |
+| Adzuna descriptions | Adzuna returns only a snippet, so jobs found only there may be too short for fit analysis | Duplicate detection already prefers the employer's own posting when a job is on both |
+| Duplicate detection | Recall is 0.36: 7 of 11 real duplicates were missed because the employer and title keys differ (for example "Google LLC" and "GOOGLE ASIA PACIFIC PTE. LTD."). Precision is 1.00 and no jobs were wrongly merged (`eval/results/b4-dedup-20261026/summary.md`) | Match on normalised employer names plus description similarity |
+| Discovery filters | Text search, posting date, expired, salary, seniority and work-mode filters exist. There is no category filter, and only some sources state the work mode, so that filter misses jobs | Add a category filter only where normalised source facts support it |
+| Matching | No independent relevance evaluation of "For you" or All jobs was done; similarity is computed in memory over a per-instance copy of the job vectors, not with a pgvector index | Label a job set to measure relevance; move ranking into SQL with an index if the job pool grows large |
+| Fit analysis | No labelled accuracy set; the checks catch invented evidence and numbers, not every wrong judgement | Build a labelled set of postings and profiles |
+| Profile extraction | Heuristic parsing by default. A local Ollama model adapter exists; only the Bedrock path is a stub, because Bedrock isn't available on the course AWS account. There is no OCR, so scanned PDFs are rejected | Add OCR if scanned resumes matter |
+| Resume editor | No inline bold/italic/link editing, drag-and-drop reordering (up and down buttons exist), exact paginated live preview or CJK (Chinese, Japanese and Korean) fonts | Add bounded controls; the server PDF stays authoritative |
+| Document history | Current revision plus immutable exported PDFs; no full revision history or conflict merge | Recoverable edits before any collaborative use |
+| Application history | Current status and attached materials; no timeline, reminders or interview events; the app does not submit applications | Add an activity history |
+| Payments | Premium is a demo plan for now: an operator switches an account to it | Add a payment gateway (checkout, subscriptions, receipts) |
+| Data management | Profile export and deletion exist; export-all, retention rules and durable file-cleanup retries do not | Define a data lifecycle before a real pilot |
+| Testing | Unit, PostgreSQL, Terraform and acceptance tests plus load tests exist; no automated end-to-end browser, accessibility or visual tests | Add end-to-end scenarios for the main journeys |
 
-## Cloud status
+## Cloud
 
-Deployed in staging (Terraform, GitHub Actions release): Cognito, API Gateway and the API Lambda, Aurora Serverless v2 with row-level security, private S3 uploads and downloads, the S3 → SQS → Lambda embedding worker, the shared LLM worker Lambda (fit analysis, AI resume rewrite), IAM through GitHub OIDC, budget and activity alarms, and pause/resume of the backend. See [deployment/README.md](../deployment/README.md).
+Not built: CloudFront or WAF (a web application firewall) in front of the site, and a Content-Security-Policy header. Amplify already sends Strict-Transport-Security, X-Frame-Options, X-Content-Type-Options and Referrer-Policy (`infra/aws/main.tf`). The AI features use the school's SoCLaaS gateway, as Amazon Bedrock isn't available on the course AWS account. Measured latency, load, pipeline, dedup and cost results are in [eval/](../../eval/README.md).
 
-Built, waiting for the Terraform apply and a deploy: loading jobs into staging (Pull jobs workflow, Discovery and Import Lambdas; the VPC still has no NAT gateway) and cross-source duplicate links. Not built or not decided: a schedule that is on by default, Bedrock (blocked by the university account policy), CloudFront/WAF, security headers such as CSP and HSTS, and measured latency, load and cost numbers. Local tests cannot establish AWS behaviour.
-
-Raw LaTeX source editing, collaboration, large template libraries and automatic application submission are not required for this POC.
-
-## Additions requested during this review
-
-- Application → prepare a job-specific resume → edit/review → attach the exact PDF revision → download.
-- Editable manual cover letter saved with its application, with text download; AI generation and PDF letter templates remain separate follow-ups.
-- Full job-detail reading and role-focused excerpts; improve visibility of existing source descriptions without inventing requirements.
-- A small local content-based recommender using TF-IDF/cosine and explicit skill/role overlap, with synthetic SQL analyst and ML engineer cases. This is a baseline, not semantic-model acceptance or a calibrated fit percentage.
-- Resume font family, size, line spacing and A4/Letter controls, reflected in actual PDF export, plus long-editor footer/scroll fixes.
-
-These additions are implemented. Backend verification when they were added (5 October): 75 tests; frontend: 15 tests and production build. By 24 October the suites had grown to roughly 836 backend and 279 frontend tests. Desktop browser checks confirmed customization autosave and application preparation → review → PDF attachment with manual cover-letter persistence. Use component handoffs for limits and further evidence.
+Out of scope for this prototype: swipe gestures (Save and Pass are buttons), public sign-up, raw LaTeX editing, collaborative editing, large template libraries and automatic application submission.

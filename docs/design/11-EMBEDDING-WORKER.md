@@ -1,14 +1,14 @@
 # 11 — Embedding worker (AWS)
 
-Status: **design agreed, implementation in progress.** Nothing in this document has been run on AWS. Dollar figures are estimates from public price pages and third-party summaries; check them in the AWS pricing calculator before relying on them.
+Status: **deployed and running in staging** (since 24 October 2026; operating notes and the set-up checklist for a new environment are in [EMBEDDING-WORKER-ROLLOUT.md](../deployment/EMBEDDING-WORKER-ROLLOUT.md)). The semantic "For you" list is on (`FOR_YOU_ENABLED=1`, `embed_on_save = "queue"` in `infra/aws/staging.tfvars`). Dollar figures are estimates from public price pages and third-party summaries; check them in the AWS pricing calculator before relying on them.
 
 This brief covers how vectors are produced in the deployed (AWS) environment. Locally nothing changes: Docker Compose keeps the standalone HTTP embedder (`services/embedder`) and the synchronous `EMBED_ON_SAVE` hook.
 
 ## 1. Problem and constraints
 
 - Jobs and confirmed profile versions need a 512-dimension vector (`job_embeddings`, `profile_embeddings`) before the semantic "For you" ranking can use them.
-- Embedding is CPU-heavy. Measured locally with the baked Jina v2 small model, one long job description takes about 2.3 s at 2 GB (see `services/embedder/LAMBDA.md`), so a 64-job batch takes 147 s at 2 GB or 102 s at 3 GB. That does not fit the API function (1 GB, 29 s timeout, concurrency shared with users).
-- The API and migration functions run in a **private VPC with no NAT gateway**. From that VPC the only AWS service reachable without paying is S3, through a **gateway endpoint** (AWS charges nothing for gateway endpoints). Calling another Lambda or SQS from inside the VPC needs a paid interface endpoint (about $9.5 a month per endpoint, figure from the infrastructure owner) or a NAT gateway (about $0.059 per hour plus $0.059 per GB in ap-southeast-1, roughly $43 a month).
+- Embedding is CPU-heavy. Measured locally with the baked Jina v2 small model, one long job description takes about 2.3 s at 2 GB (see `services/embedder/LAMBDA.md`), so a 64-job batch takes 147 s at 2 GB (about 2.3 s per job) or 102 s at 3 GB. That does not fit the API function (2,048 MB, 29 s timeout, concurrency shared with users).
+- The API and migration functions run in a **private VPC with no NAT gateway**. From that VPC the only AWS service reachable without paying is S3, through a **gateway endpoint** (AWS charges nothing for gateway endpoints). Calling another Lambda or SQS from inside the VPC needs a paid interface endpoint (about $9.5 a month per endpoint, an estimate) or a NAT gateway (about $0.059 per hour plus $0.059 per GB in ap-southeast-1, roughly $43 a month).
 - The account has a small shared budget. Anything that bills while idle needs a reason.
 
 ## 2. Decision
@@ -30,7 +30,7 @@ profile confirmed / preferences saved / ingestion batch finished
 
 Principles:
 
-- **The flag carries no information.** It only means "something may need embedding, go and look". What needs work is recomputed from database state on every run (level-triggered reconciliation). A lost, duplicated, late or reordered message cannot cause a missed or wrong embedding; the next run recomputes.
+- **The flag carries no information.** It only means "something may need embedding, go and look". What needs work is recomputed from database state on every run (level-triggered reconciliation). Duplicated, late or reordered messages are safe, because every run recomputes the pending set. A lost flag only delays the work until the next save or import writes another flag.
 - **One embedder implementation.** The worker uses the same embedder backend code as the standalone service (`embedder_service.backends`), in-process. The API never loads the model.
 - **Backfill is the same code path.** Uploading any object under `embed-requests/` (or invoking the function with an empty event) embeds everything missing.
 - **A forced re-embed is never requested through the flag.** An operator invokes the function directly with `{"force": true}`; events that arrive from SQS are ignored for `force`.
@@ -39,17 +39,17 @@ Principles:
 
 | Option | Network cost | Notes |
 |---|---|---|
-| S3 flag → SQS → worker (chosen) | about $0 | S3 gateway endpoint is free; S3 notifications and Lambda's SQS polling are service-side; SQS has a free tier (verify) |
+| S3 flag → SQS → worker (chosen) | about $0 | S3 gateway endpoint is free; S3 notifications and Lambda's SQS polling are service-side; SQS has a free tier of 1,000,000 requests a month |
 | API sends to SQS directly | about $9.5 a month for an SQS interface endpoint | one hop fewer; failed sends visible in the request |
 | API invokes the embed Lambda directly | about $9.5 a month for a Lambda interface endpoint, or NAT | profile saves would wait on a cold start inside the 29 s API limit |
 | NAT gateway | about $43 a month plus data | gives general internet access; not justified for the embedder alone |
-| EC2 embedder in the VPC | about $15 to $16 a month, running 24/7 | outside the pause workflow |
+| EC2 embedder in the VPC | about $15 to $16 a month, running 24/7 | outside the "Pause or resume staging backend" workflow |
 
 A NAT or endpoint would not make the system sturdier by itself. A direct call can still time out, hit a cold start, be throttled or fail in the embedder, so the database-driven "pending rows" reconciliation and a retry path would still be needed. Reliability comes from the queue (retries, dead-letter queue, alarms), not from the network path.
 
 ### Design consideration: switch to a direct SQS send if a NAT or SQS endpoint is provisioned anyway
 
-If the project later provisions a **NAT gateway** (for example because ingestion must fetch job boards from inside the VPC) or an **SQS interface endpoint** for another reason, replace the S3 flag write with a direct `sqs:SendMessage` from the API and ingestion. That is the simpler, more conventional design: one hop fewer, no S3 notification or flag lifecycle rule, and an enqueue failure is visible in the request. The worker, queue and database reconciliation do not change; only the producer does (`embedding/flag.py`).
+If a **NAT gateway** (for example because ingestion had to fetch job boards from inside the VPC) or an **SQS interface endpoint** is ever provisioned for another reason, replace the S3 flag write with a direct `sqs:SendMessage` from the API and ingestion. That is the simpler, more conventional design: one hop fewer, no S3 notification or flag lifecycle rule, and an enqueue failure is visible in the request. The worker, queue and database reconciliation do not change; only the producer does (`embedding/flag.py`).
 
 Rules of thumb:
 
@@ -67,16 +67,16 @@ Rules of thumb:
 | Lambda entry point | `embed_worker.py` (`job_hunter.embed_worker.handler`) | lazy model load, no work means no model load |
 | Image | `backend/Dockerfile.embed-lambda` | backend code, `embedder_service` and the baked model; arm64 |
 | DB role | `jobhunter_embedder` | least privilege, see section 5 |
-| Infrastructure | `infra/aws/backend/embedder.tf` | ECR repo, queue, dead-letter queue, notification, lifecycle rule, function, alarms |
+| Infrastructure | `infra/aws/backend/embedder.tf` | Queue, dead-letter queue, notification, lifecycle rule, function, alarms. The ECR repository is in `infra/aws/main.tf` |
 
-Function settings (initial values, tune after measuring on real Lambda):
+Function settings as deployed (chosen from local measurements; the memory size has not been tuned on Lambda):
 
 | Setting | Value | Why |
 |---|---|---|
 | Memory | 3,008 MB | local measurements give about the same cost per job as 2 GB (about 4.6 to 4.7 GB-seconds) and about 30% faster; peak memory is about 1 GB at batch size 1 |
 | Timeout | 900 s | Lambda maximum; the worker stops early and chains (below) |
 | Reserved concurrency | 2 | must be at least the queue mapping's maximum concurrency or messages are throttled |
-| Queue mapping | batch size 10, batching window 0, maximum concurrency 2 | up to 10 flags that are already waiting share one invocation, so a burst of saves does not cost one invocation each. Safe because every flag means the same thing and the worker ignores their contents. The window is 0 so a lone save is never delayed: the worker starts as soon as a flag arrives, and flags that pile up while it runs are drained together. A positive window (say 5 s) would collapse bursts further but delay every save by that long. The retry unit is the whole batch, which is harmless because the pass is idempotent |
+| Queue mapping | batch size 10, batching window 0, maximum concurrency 2 | Up to 10 flags that are already waiting share one invocation, so a burst of saves does not cost one invocation each.<br>This is safe because every flag means the same thing and the worker ignores their contents.<br>The window is 0, so a lone save is never delayed. The worker starts as soon as a flag arrives, and flags that pile up while it runs are drained together.<br>A positive window (say 5 s) would collapse bursts further but delay every save by that long.<br>The retry unit is the whole batch, which is harmless because the pass is idempotent |
 | Queue visibility timeout | 6 x function timeout (+ the batching window, 0) | AWS guidance for SQS event sources |
 | Dead-letter queue | after 5 receives | alarm on depth > 0 |
 | VPC | same private subnets and security group as the API | needs Aurora; needs no internet (model baked in, `HF_HUB_OFFLINE=1`) |
@@ -90,8 +90,8 @@ Flag writers (always after the database commit; `get_db` already runs post-commi
 |---|---|
 | Profile confirmed | `confirm_profile` in `api/main.py` |
 | Preferences saved | `update_preferences` in `api/main.py` |
-| Ingestion run finished | end of the ingestion/import run (one flag per run, not per row) |
-| Embedding settings changed (text version or model bumped) | one flag after the deploy |
+| Ingestion run finished | end of the import step of the job pull (`import_worker.py`; one flag per run, not per row, and only when the pull added new jobs). The pull runs twice a day, 06:00 and 20:00 Singapore time, so new jobs get vectors a few minutes after each import |
+| Embedding settings changed (text version or model bumped) | Nothing in the deploy writes a flag. An operator writes one (see the last row) |
 | Worker ran out of time with work left | the worker writes a new flag itself |
 | Operator | upload any object under `embed-requests/`, or invoke the function |
 
@@ -107,7 +107,7 @@ A stored vector is current only if its status is `ready` and its text version, i
 | `no_content` rows | retried only when the job changes |
 | Force everything | operator invokes the function with `{"force": true}` |
 
-A full re-embed of about 1,800 jobs is roughly 70 minutes of compute at 2 GB (about $0.11 by estimate), spread across several runs.
+A full re-embed costs about 2.3 s of compute per job (measured locally at 2 GB). It is spread across several runs, because each run stops before the 900 s timeout. The deployed function has 3,008 MB.
 
 ## 5. Database role and row-level security
 
@@ -126,26 +126,25 @@ The worker must find users whose confirmed profile needs embedding, which the no
 - **Concurrency safety:** a Postgres advisory lock makes overlapping runs safe. A run that cannot take the lock exits successfully; the running worker releases the lock and then checks for pending work once more, so rows saved just before the release are still picked up.
 - **No runaway chaining:** the worker writes a new flag only if time ran out, work remains and this run embedded at least one previously pending row. Every chained run must therefore make progress, and progress is bounded by the finite pending set.
 - **Profiles first, jobs in small batches:** before every job batch (4 jobs by default, `EMBED_BATCH_JOBS`) the worker looks at the confirmed profiles, so a profile saved during a long ingestion waits for the current batch (a few seconds), not for the whole run. This matters because a flag that arrives while a run holds the lock exits at once as "busy"; the profile is picked up by the running pass, not by that flag. If batches ever grow long, or ingestion volume makes this insufficient, split profiles and jobs into two queues and two functions (separate locks); that is not needed at the current scale.
-- **Queue polling cost:** Lambda polls the queue continuously with long polling. With the queue mapping's maximum concurrency set, AWS documents that it keeps about five pollers at low traffic (the reduction to two pollers is not available). Assuming 20 second waits that is roughly 650,000 receive requests a month while idle, about two thirds of SQS's free 1,000,000 requests, or about $0.26 a month beyond the free tier (estimate; AWS does not publish the exact poller behaviour).
+- **Queue polling cost:** Lambda polls the queue continuously with long polling. With the queue mapping's maximum concurrency set, AWS documents that Lambda then keeps about five pollers at low traffic, instead of scaling down to two. Assuming 20 second waits, that is roughly 650,000 receive requests a month while idle. That is within SQS's free 1,000,000 requests, so the cost is $0 while the free tier covers it (about $0.26 a month at list price; AWS does not publish the exact poller behaviour).
 - **Cheap no-op runs:** if nothing is pending the function exits before loading the model.
-- **Pause:** the pause/resume control also pauses the embed function (reserved concurrency 0). Flags that arrive while paused return to the queue and, after five receives, land in the dead-letter queue (alarm). That is harmless: the database is the source of truth, so after resuming, clear the dead-letter queue and write one flag.
+- **Pause:** the "Pause or resume staging backend" workflow also pauses the embed function (reserved concurrency 0). Flags that arrive while paused return to the queue and, after five receives, land in the dead-letter queue (alarm). That is harmless: the database is the source of truth, so after resuming, clear the dead-letter queue and write one flag.
 - **Aurora cost:** the flag is written right after a save, so the database is already awake. Do not add a frequent poller; it would stop Aurora pausing to zero. An optional once-a-day reconcile schedule is deliberately off.
-- **Deploy safety:** the new steps in the deploy workflow and `scripts/deploy_aws.py` are skipped unless the embed variables are set, so merging this change deploys nothing new by itself.
+- **Deploy safety:** the new steps in the "Deploy staging" workflow and `scripts/deploy_aws.py` are skipped unless the embed variables are set, so an environment that has not set them deploys as before.
 
-## 7. Rollout (staged, each step reviewable and near-free)
+## 7. Setting up a new environment
 
-The step-by-step checklist, with the commands, is [EMBEDDING-WORKER-ROLLOUT.md](../deployment/EMBEDDING-WORKER-ROLLOUT.md). In outline:
+This was done for staging in October 2026, in small reviewable steps (the first two stages cost nothing while idle). The checklist with the commands is [EMBEDDING-WORKER-ROLLOUT.md](../deployment/EMBEDDING-WORKER-ROLLOUT.md). In outline:
 
 1. `terraform plan` only, reviewed by a human. Then apply the first stage: ECR repository, queue and dead-letter queue, queue policy, lifecycle rule, IAM, alarms. No function yet.
 2. Set the GitHub variables for the embed repository and function; Deploy staging builds and pushes the embed image.
 3. Set `embed_image_uri`, plan and apply the second stage: function, queue mapping and bucket notification.
 4. Run the operator bootstrap with the new role's password, then Deploy staging so the grants and policy exist.
 5. Upload one flag object by hand against a small data set and watch the function logs, the queue and the dead-letter queue.
-6. Only then set `EMBED_ON_SAVE=queue` and, when ingestion exists, `FOR_YOU_ENABLED=1`.
+6. Then set `EMBED_ON_SAVE=queue` (so saves and job imports write the flag) and `FOR_YOU_ENABLED=1` (so the semantic list is served).
 
-## 8. Not yet verified
+## 8. Verification
 
-- The S3 to SQS to Lambda path inside this account and VPC, including retry behaviour under the reserved-concurrency cap.
-- Cold start of the container image on real Lambda (local model load is about 7 s), and ARM64 speed (local timings are x86).
-- That the migration role can set the new role's session limits and grant to it exactly as it already does for the application role (not run against Aurora).
-- All dollar figures above.
+- Verified on staging: the S3 to SQS to Lambda path runs in this account and VPC, and a cold start took 17 s including about 7 s of model load (26 October, `eval/results/b4-pipeline-20261026/notes.md`).
+- Not separately measured: retry behaviour under the reserved-concurrency cap, and ARM64 speed.
+- The worker's database role works against Aurora: the 26 October pull embedded the new jobs (`eval/results/b4-pipeline-20261026/notes.md`). The bootstrap's exact grant and session-limit statements were not checked one by one.
