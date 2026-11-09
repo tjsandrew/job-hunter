@@ -1,87 +1,95 @@
 # 04 — Job discovery, normalisation and shared processing
 
-**Current delivery scope:** [local application first; AWS-native services later](../deployment/DELIVERY-SCOPE.md). This staging rule overrides earlier cloud requirements for the local milestone.
+How real Singapore job postings reach the shared job pool, and how the same posting found on two sites is kept to one card. This is one pool for every user, not a per-user scraper. The operating steps (switching pulls on, checking logs) are in the [job pull runbook](../deployment/JOB-PULL-ROLLOUT.md); the AWS picture is in [what runs where](../architecture/aws-overview.md). Shared names and paths: [CONTRACTS](CONTRACTS.md).
 
-**Portability requirement:** follow [LOCAL-TO-AWS.md](../deployment/LOCAL-TO-AWS.md). Keep this component’s logic shared between local Docker execution and AWS; record adapter differences and unverified cloud checks in its handoff.
+## Approach and why
 
-Read [README](README.md) and [contracts](CONTRACTS.md). Own `ingestion/`, `discover_jobs` and `process_job` handlers. This implements the report's shared job pool rather than a per-user scraper.
+- **Several kinds of source, because each has a different gap.** Employer boards (Greenhouse, Lever, SmartRecruiters) give complete, current postings from the employers we list, but only those employers. MyCareersFuture, the national job portal, gives breadth across Singapore employers. Adzuna is an aggregator that adds another view and overlaps with the others, which makes cross-source duplicates a real case to handle. No combination is comprehensive: coverage is biased towards the employers and searches we configure, and the app says so rather than promising everything.
+- **Only documented, public endpoints.** The adapters call each provider's published job API. Sources that refuse automated access are not used.
+- **Singapore only.** A job is kept only if its source location text includes Singapore. A Singapore mention in the description, an employer headquartered in Singapore, or "remote worldwide" does not count.
+- **Fetching and importing are split across two Lambdas.** The database sits in a private VPC with no internet; the job feeds are on the internet. One function can reach one or the other, never both, so a *discovery* function outside the VPC fetches and an *import* function inside it writes to the database. Why this beats a NAT gateway or paid VPC endpoints: it costs nothing extra. See [01 Infrastructure](01-INFRASTRUCTURE.md).
+- **Each pull imports a bounded batch.** Instead of per-source cursors, leases and resumable checkpoints, every pull re-reads its sources and loads the next batch of jobs that are not stored yet. Whatever does not fit is still listed at the source, so the next pull picks it up. There is nothing to get stuck or to lose.
+- **Duplicates are linked, never deleted, and only on exact evidence.** A wrong merge hides a real job from users, while a missed duplicate only shows one extra card. The design therefore prefers to miss a duplicate (see the measured numbers below).
+- **Closing a job needs proof.** A source that failed, was cut short or was not polled never closes anything.
 
-## Live discovery is a POC priority
+## As built
 
-Build live discovery early, before polishing recommendations or generation. The minimum live-discovery milestone is one working, permitted source fetching current job listings end to end; the target is two independent live sources to demonstrate the preliminary report's multi-source discovery. One source is an intermediate milestone, not completion of the multi-source commitment.
+### Sources
 
-The implementer should actively investigate and test access, not stop at fixture adapters:
+| Source | How it is read | In staging |
+|---|---|---|
+| Greenhouse | public board API, whole board at once | Stripe, Cloudflare, Coinbase |
+| Lever | public postings API | Lalamove |
+| SmartRecruiters | public company API | adapter exists, not configured |
+| MyCareersFuture | keyword search, up to five pages of 100 per search, no key | 21 keyword searches (tech, data and product, then finance, marketing, people and operations, consulting and design) |
+| Adzuna | Singapore keyword search, one request per keyword (up to 50 jobs), needs `ADZUNA_APP_ID` and `ADZUNA_APP_KEY` | one keyword, "data engineer" |
 
-1. Investigate the report's proposed Adzuna and MyCareersFuture sources first using current official documentation and permitted access methods. Verify Singapore coverage rather than assuming it from the provider name.
-2. Run a small live retrieval proof before building the full adapter: fetch a page, inspect actual fields, confirm usable application links and record retrieval time. Distinguish listing publication dates from retrieval timestamps.
-3. If credentials or source approval are needed, document the exact setup and request the missing access while continuing other integration work. Do not silently mark a source as implemented using fixture responses.
-4. If a proposed source is unavailable or unsuitable, investigate documented employer ATS feeds/APIs such as Greenhouse or Lever for selected employers with Singapore roles. Confirm current access rules and actual coverage. Explain that selected employer feeds provide narrower coverage than a job aggregator; do not promise comprehensive discovery.
-5. Once a source works, run it through normalisation, persistence, processing and recommendations. Trigger discovery manually for verification and then verify the scheduled path. Capture source name, live record count, run time, sample provenance and failures in the handoff.
+The code is `backend/src/job_hunter/ingestion/discovery.py`. Adzuna's free plan allows very few calls a day, and its description is only a snippet. The keys are GitHub secrets written into the Discovery function by the **Deploy staging** workflow; they are never in Terraform, a snapshot or a log.
 
-Fixtures keep development and demonstrations reproducible. They do not satisfy the live-discovery milestone. If no live source can be enabled, report live discovery as incomplete with the specific external blocker; complete the tested adapter boundary and remaining POC work without claiming the live requirement passed.
+Each adapter produces the same normalised record:
 
-## Sources and access
+- **Identity:** source, board and external ID, and the listing URL.
+- **Posting:** title, employer, location, work mode and description.
+- **Salary**, when stated: minimum, maximum, currency and period.
+- **Times:** posting and closing times when given, and the time it was fetched.
 
-MCF and Adzuna are proposed sources in the report, not verified working integrations. For each adapter record API documentation, access/credentials, Singapore coverage, pagination, rate limits and allowed use. Do not treat an undocumented endpoint as guaranteed public access. Keep a source disabled until a permitted access path is verified. Provide labelled fixtures for two source schemas and at least one live permitted adapter when available; report the actual live source count honestly.
+Anything a source does not state stays empty rather than guessed, and the posting date is kept apart from the fetch time.
 
-Adapter interface: `fetch_page(cursor, changed_since, limit) -> {records, next_cursor, exhausted}`. Each record includes source/external ID, source URL, title, employer, location/work mode, description, salary/currency/period if stated, posting/expiry times if available, and fetch time. Preserve missing values as null.
+### The pull path in AWS
 
-## Discovery algorithm
+1. An **EventBridge schedule** (06:00 and 20:00 Singapore time) or the **Pull jobs** GitHub workflow invokes the **Discovery Lambda**.
+2. Discovery reads every configured source, keeps Singapore jobs, and writes one snapshot, `imports/<pull_id>.json`, to the private documents bucket.
+3. It invokes the **Import Lambda** directly and waits for its counts. The Import Lambda runs inside the VPC and reads the snapshot over the free S3 gateway endpoint.
+4. The import **mixes the sources** so a small batch is not all one employer. It takes jobs round-robin over each board or search, newest postings first within each. It then inserts up to N jobs that are not stored yet, as the `jobhunter_app` database role. Jobs already stored are refreshed.
+5. It links duplicates, closes listings that have expired or gone unseen (below), and, after the commit, writes the **embed flag** so the embed worker gives the new jobs vectors ([11](11-EMBEDDING-WORKER.md)).
 
-1. EventBridge invokes discovery every six hours. Each enabled source receives its own run record, lease/checkpoint and bounded request budget. One failed source does not discard another's progress.
-2. Default POC cap: 10 pages/source/run and 100 listings/page, subject to provider limits. Stop before the 240-second Lambda budget, persist a continuation cursor, and resume on the next scheduled run. Record backlog/incomplete state; do not claim full coverage. Cursor expiration must have an adapter-specific restart/window strategy.
-3. For each page, validate and normalise records. Use transactional upserts and stable source identities so retried pages are safe. Commit jobs/versions/tasks/outbox before advancing the checkpoint.
-4. Immediate-send new processing tasks through the shared outbox mechanism. Record discovered/updated/unchanged/malformed/failed counts, API throttles and run latency.
-5. Handle 429 and temporary errors with bounded backoff and provider guidance. Do not sleep through the remaining invocation or spin aggressively. Persist progress for the next run.
+N is 150 for scheduled pulls, 100 by default for the workflow, and never more than 200. Discovery asks each source with a 15-second request timeout. A board or search that times out or answers 5xx or 429 is retried once. After three such failures in a row, that source's remaining searches are skipped for the pull. A source that is down therefore cannot use up the function's time. A scheduled pull is never retried, because a retry would pull twice. Every pull writes one `pull_finished` JSON log line with its counts, and a failed pull raises an alarm.
 
-A larger ingestion backlog may later justify a discovery queue for per-page continuation. Add it only when the bounded scheduled run is demonstrably inadequate; it is not required for the first POC.
+Locally there is no schedule: `make import-jobs` runs the same code by hand and saves a snapshot, and `make replay-jobs` re-imports the last snapshot without contacting any source ([local development](../LOCAL-DEVELOPMENT.md)).
 
-## Canonicalisation and deduplication
+### Classification at ingestion
 
-First deduplicate `(source, external_id)`. Across sources, auto-merge only high-confidence exact evidence: same canonical employer application URL/requisition identity, or matching normalised employer/title/location plus identical cleaned description hash. Similar job titles alone must not merge records. Keep source provenance and source links for every merged record.
+Each job gets a role family (`category`) and a seniority level when it is imported, from its title and any level the source states (`job_classification.py`). Matching uses them for its role and level checks ([05](05-RECOMMENDATIONS.md)). The category is always inferred and keeps the title phrase it matched. The seniority is marked "stated" when the source gives a level, and inferred from the title otherwise.
 
-Prefer an explicit employer/original listing as the canonical content source; otherwise use a stable configured source priority, then freshness within that source. Do not alternate canonical content simply because sources are polled in different order. A changed canonical description creates a new immutable job version. Retain previous versions used by user analyses.
+### Deduplication
 
-Close a job on explicit expiry/closure or a documented source-specific stale policy. A missed/partial discovery run is not proof that a job closed. Show fetched time and stale state to users.
+`(source, source_board, external_id)` identifies a row within a source, so repeating a pull creates no new row. Across sources, `ingestion/dedup.py` links rows that are the same posting without deleting any of them:
 
-## Shared processing
+- `jobs.match_key` is the normalised employer, title and location. Legal words such as "Pte Ltd" are ignored; level words in the title are kept, so "Senior Data Engineer" and "Data Engineer" stay different.
+- `jobs.canonical_job_id` is empty on the row users see and points to that row on its duplicates.
+- `jobs.also_seen_on` lists the other sources on the canonical row. The app shows it as "Also on …".
 
-One task processes a new version: clean/validate text → extract structured requirements → generate embedding → commit readiness. Extract hard/soft skills, seniority, domain, and explicitly requested application documents, each with evidence spans in the source text. “Not stated” is valid. Use schema validation and bounded text; do not invent requirements.
+Two rows from **different** sources are linked only if they share a listing URL, or share the `match_key` **and** their descriptions are near-identical text (word-set similarity of 0.6 or more, which also accepts an aggregator's shortened copy). Similar titles alone never merge, and rows of one source never merge.
 
-Deduplicate processing by `(job_version_id, pipeline_version)`; reuse persisted completed stages on retry. A content-hash match avoids new inference. Track model/prompt versions and inference usage. Initial embedding candidate is Titan V2 at 512 dimensions, subject to preflight. Respect input limits and document truncation/segmentation; do not silently embed arbitrarily truncated listings.
+The canonical row is an open one if any is open, then the most authoritative source (employer board, then MyCareersFuture, then Adzuna), then the earlier posting date, then the ID. The result therefore does not depend on which source was polled first. Discover, For you and embedding skip duplicates; saving a duplicate hides its canonical row for that user. The migration is `0016`; `python -m job_hunter.import_jobs --relink` fills links for older rows.
 
-## Unit tests required during implementation
+**Measured accuracy** (`eval/dedup_eval.py`, results in `eval/results/b4-dedup-20261026/`, labelled pairs in `eval/dedup/staging_pairs.json`):
 
-Use pytest and checked-in synthetic provider responses for each adapter's field mapping, null handling, salary currency/period handling, pagination cursor logic, rate-limit/error classification and request-budget stopping. Test normalisation/content hashes, source identity, cross-source duplicate/nonduplicate decisions, stable canonical-source preference, changed-content detection and expiry/staleness rules. Test malformed extraction output and processing checkpoint reuse with fake model/repository adapters.
+- Staging pulls gave 84 labelled pairs, each labelled by reading both postings. On the 73 scored (11 duplicates, 62 look-alikes) it made **no false merges** (precision 1.00) and found 4 of the 11 duplicates (recall 0.36).
+- The missed duplicates are mostly the same posting under differently written employer names ("IG Group" against "IG Asia Pte. Ltd."), so their `match_key` differs although the descriptions match.
+- The alternative of matching on description text alone would find more duplicates but at precision 0.34 with the same threshold, which means it would hide many different jobs. We accepted the low recall to avoid that.
+- The 16 synthetic pairs in `backend/tests/fixtures/dedup_pairs.json` score 1.00 and 1.00. They are a regression guard that the threshold was tuned on, not a measure of real-world accuracy.
 
-No unit test should call a live job API. Live retrieval and scheduled ingestion are separately marked integration tests; fixture success never proves a live source works.
+### Changed and closing listings
 
-## Acceptance
+A listing whose content changes is updated in place and queued for re-embedding. There are no separate job versions.
 
-- Repeating the same discovery page creates no new canonical job/version/task.
-- A real content update creates one new version; prior analyses still reference the old version.
-- Cross-source duplicates merge with provenance; distinct same-title openings remain distinct.
-- Source failure, timeout or partial pagination preserves progress and does not close unseen jobs.
-- At least one permitted live source fetches current jobs into the shared pool and exposes them through the user workflow; two independent live sources are the multi-source acceptance target. Record which milestone actually passed.
-- Two fixture adapters exercise the same pipeline as live adapters; UI/evaluation labels fixture data.
-- Job processing occurs once per unchanged content version in the healthy path; retry behaviour and repeated-inference risk are documented.
-- Malformed model output fails safely; prompt instructions inside listings do not alter task behaviour.
-- Produce a labelled deduplication set with true duplicate and nonduplicate pairs for 08.
+Every pull closes open jobs past their closing date, and jobs their source has not listed for 21 days (judged by `fetched_at`). The 21-day rule applies only where the pull read the source in full: an employer board fetched without error and not cut short, or a keyword source (MyCareersFuture, Adzuna) whose searches all ran without error. A board that failed, was truncated or was not polled closes nothing. A closed job that a source lists again reopens. Closing does apply to saved and applied jobs: they stay in Saved and the tracker and can still be opened by ID. A closed canonical row hands over to an open copy from another source. Discover and For you also hide a job the moment its closing date passes, since pulls are only twice a day. Each job card shows when it was posted and when the source was last checked.
 
-Handoff includes source access status, seeded commands, enabled sources, cursor semantics, limits and known coverage gaps.
+### What ingestion does not do
 
-## Collection sizing agreed during implementation
+- **No requirement extraction at ingestion.** A job's requirements are extracted on demand by fit analysis and cached for all users ([12](12-FIT-ANALYSIS.md)). This way only jobs a user actually opens cost a model call.
+- **No per-source run records or checkpoints**, for the reason given above. The `pull_finished` log line is the record of each pull's counts.
+- **Vectors are not made here.** Import only sets the flag; the embed worker does the work.
 
-Target approximately 1,000 live Singapore-location listings across employers and role categories. First useful milestone is 300–500; report the actual achieved count and any shortfall. Count only records whose source location explicitly includes Singapore. Multi-location jobs including Singapore are labelled; description mentions, employer headquarters and worldwide-remote eligibility alone do not qualify. Use bounded documented public feeds, reuse recent retrieved data, stop a source on rate limiting, and do not pad the collection with global jobs or fixtures. Separate synthetic 5,000–10,000-record datasets may be used for load tests and never counted as live coverage. JustPostedJobs returned 429 during its limited review; no further requests in this collection pass.
+## Known limits
 
-## As built (October 2026)
+- Coverage is limited to the configured boards and searches. MyCareersFuture is sometimes slow, which is why the morning pull moved from 08:00 to 06:00.
+- Adzuna gives short descriptions and very few calls a day, so it is a small part of the pool.
+- Work mode is mostly unstated: in the 25 October 2026 evaluation only Lever listings stated one ([evaluation notes](../../eval/README.md)).
+- Duplicate detection misses postings whose employer name is written differently on two sites.
 
-The brief above describes the target. What exists today, and where it differs:
+## Tests and evaluation
 
-- **Sources:** Greenhouse, Lever, SmartRecruiters and MyCareersFuture (keyword search, no key) and Adzuna (keyword search, needs `ADZUNA_APP_ID` and `ADZUNA_APP_KEY`; its description is only a snippet, and Singapore coverage must be confirmed with the first real call). Adapters are in `backend/src/job_hunter/ingestion/discovery.py`.
-- **Cloud path:** not an every-six-hours Lambda with checkpoints. A Discovery Lambda outside the VPC reads the feeds and stores one snapshot in S3; an Import Lambda inside the VPC loads the next N new jobs (100 in staging, newest postings first) and sets the embed flag. The **Pull jobs** GitHub workflow and an EventBridge schedule (twice a day) start it. Discover's **Posted** filter (default: last 14 days, at most the past year) narrows the lists before ranking. See [JOB-PULL-ROLLOUT.md](../deployment/JOB-PULL-ROLLOUT.md).
-- **Deduplication:** `(source, source_board, external_id)` identifies a row within a source. Across sources, `ingestion/dedup.py` links rows that are the same posting without deleting any: `jobs.match_key` (normalised employer, title, location), `jobs.canonical_job_id` (NULL on the row users see) and `jobs.also_seen_on` (on the canonical row). Two rows of different sources are linked only when they share a listing URL, or share the `match_key` and their descriptions are near-identical text (word-set similarity of 0.6 or more, which also accepts an aggregator's shortened copy). Similar titles alone never merge and rows of one source never merge. The canonical row is chosen by authority (employer board, then MyCareersFuture, then Adzuna), then the earlier posting date, then the id, so the result does not depend on polling order. Discover, For you and embedding skip duplicates; saving a duplicate hides its canonical row for that user.
-- **Labelled set:** `backend/tests/fixtures/dedup_pairs.json` has 16 pairs (8 true duplicates, 8 look-alikes that are different postings). The test `test_the_labelled_set_has_no_false_merges_and_finds_the_duplicates` prints precision and recall (currently 1.00 and 1.00 on this small set; it is a regression guard, not a measure of real-world accuracy).
-- **Closing listings:** every pull closes open jobs past their closing date (`expires_at`), and jobs not listed by their source for 21 days (`STALE_AFTER` in `import_jobs.py`, judged by `fetched_at`). The 21-day rule only applies where the pull read the source in full: an employer board fetched without an error and not truncated, or a keyword-search source (MyCareersFuture, Adzuna) whose searches all ran without an error. A board that failed, was cut short, or was not polled closes nothing. A closed job that a source lists again reopens. Closing never touches saved or applied jobs (they stay openable by id), and a closed canonical row hands over to an open copy from another source. Discover and For you also hide a job the moment its closing date passes (`listed_jobs()` in `domain/models.py`), since pulls are occasional.
-- **Not built:** per-source run records and checkpoints, structured requirement extraction at ingestion (fit analysis does it on demand), the 1,000-listing collection target.
-
+- Pytest with checked-in synthetic provider responses covers each adapter's field mapping, pagination and error handling (`test_ingestion.py`, `test_adzuna.py`), the import, closing and relinking rules (`test_import_jobs.py`, `test_job_pull.py`), classification (`test_job_classification.py`) and deduplication (`test_dedup.py`). Unit tests do not call a live job API.
+- Live retrieval and pulls are measured separately in the evaluation scripts `eval/b4_pull.py` and `eval/analyse_b4.py` (pull volume, failures and stage times); see the [evaluation README](../../eval/README.md).

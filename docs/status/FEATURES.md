@@ -1,54 +1,48 @@
-# Job Hunter feature list and project alignment
+# Features against the preliminary report
 
-Updated 5 October 2026 (Singapore); rows on fit analysis, tailoring, the free allowance, multi-tenancy and the cloud services refreshed 24 October 2026. Baseline: the group's submitted preliminary report, Sections 1.2–1.3 (product/business model), 2 (cloud design), 3 (implementation) and 4 (evaluation). This is a delivery map, not a claim that all report commitments are finished. The feature table below describes the local application as of 5 October; the Discover tabs (For you, All jobs, Saved, Passed), job fit analysis, profile import and the profile bank have been added since (see [PENDING.md](PENDING.md)).
+This page compares the delivered prototype (9 November 2026) with the commitments in the group's preliminary report. It covers Sections 1.2–1.3 (product and business model), 2 (cloud design), 3 (implementation) and 4 (evaluation). For limitations, see [PENDING.md](PENDING.md).
 
-## Local feature list
+## Feature list
 
-| Feature | Scope |
+| Feature | What it does |
 |---|---|
-| Singapore job discovery | Bounded public employer feeds, normalized source/location/provenance fields and idempotent imports; 70 live source listings currently |
-| Job reading and shortlisting | Search/pagination, full source description view, role-focused excerpt, source links, Save/Pass |
-| Personal profile | Editable contact, headline, summary, skills and preferences; explicit save and confirmation; PDF text extraction as a review candidate |
-| Local recommendation baseline | Explainable content similarity and explicit skills/role relevance, location eligibility, cold-start fallback; no large-model runtime needed. Shown as "All jobs" and used as the fallback for "For you" |
-| Semantic "For you" recommendations | Embedding-based list: eligibility filters, then role and seniority checks, then similarity ranking; profile embedded on confirm and preferences save, jobs embedded by `make backfill`; falls back to the keyword list. See [13-embedding-preparation.md](13-embedding-preparation.md) |
-| Synthetic demo cases | One populated fictional Alex Tan profile and complete application resume; no sample chooser. QA resumes are archived out of the library. |
-| Resume Studio | Manual creation, job-specific copies, sections/entries/bullets, autosave, revision checks, undo/redo, two templates |
-| Resume tailoring | Rule-based: bullets reordered to match the job, with matched/missing skills (free, unlimited). AI: an optional rewrite through the `MODEL_BACKEND` model (hosted SoCLaaS or local Ollama) or, in AWS, the shared LLM worker, limited per Singapore month (5 free, 50 premium) with one use per job shared with fit analysis; reworded bullets that add numbers or names are discarded, and any model failure falls back to the rule-based result |
-| Resume customization | Font family and size, margins, line spacing, A4/Letter; honored by server PDF output |
-| PDF lifecycle | Approximate live HTML preview plus authoritative server PDF preview; review current revision; export/download immutable PDF |
-| Application preparation | Open an application, create/copy a resume for that job, edit/review it, attach its exact exported revision, then return to the application |
-| Application materials | Saved resume PDF title/revision and download; manual cover letter and text download; omission preserves existing attachments |
-| Tracking | Status, applied date, notes and application materials; records are maintained by the user, not proof of external submission |
-| Local persistence | PostgreSQL for structured content/current revisions; Docker document volume for uploaded and exported PDFs; files remain owned and private |
-| Test evidence | Unit/component tests, PostgreSQL RLS and migrations, snapshot integrity checks, browser layout/workflow checks; latest counts in component handoffs |
+| Singapore job discovery | Jobs from MyCareersFuture, Adzuna and public Greenhouse and Lever employer boards, Singapore only, pulled twice a day in AWS. Search, pagination, full description, source links, Save and Pass, Posted filter and "Hide expired listings" |
+| Duplicate detection | A job found on two sources is linked to one canonical row and shown once, with "Also on …" |
+| Profile | Built from an uploaded PDF or Word resume (reviewed before it is applied) or by hand; kept as a structured profile bank and confirmed explicitly; preferences with canonical seniority levels |
+| All jobs | Explainable TF-IDF, skill and role ranking with location eligibility and a cold-start fallback |
+| For you | Embedding-based list: eligibility filters, role and seniority checks, then vector similarity, fused with the keyword ranking; falls back to All jobs when there is no profile vector |
+| Job fit analysis | Requirement extraction, evidence-cited judgement for each requirement, grounding checks and a coverage percentage computed in code, plus suggestions |
+| Resume Studio | Manual creation, job-specific copies, build from the profile bank, sections/entries/bullets, autosave with revision checks, undo/redo, two templates, font/size/margins/line spacing/A4 or Letter |
+| Resume tailoring | Rule-based reorder with matched and missing skills (free, unlimited); optional AI rewrite that discards any bullet adding new numbers or names |
+| Cover letters | AI draft from the confirmed profile and the job, improve an existing letter, or start blank; editor with checks; PDF export |
+| PDF lifecycle | Live HTML preview plus the authoritative server PDF; reviewed exports are immutable |
+| Documents and tracker | Resumes, uploads and cover letters in one library; application status, dates, notes and the exact attached resume PDF and cover letter |
+| Plans and allowance | Free (5) and premium (50) AI jobs per Singapore calendar month; fit analysis, AI tailoring and an AI cover letter for the same job share one slot; premium is a demo plan for now, switched on by an operator |
+| Sign-in and isolation | Cognito, invite-only; identity only from verified token claims; PostgreSQL row-level security on per-user tables |
+| Addresses | Every page, list and document has its own URL, so refresh, Back and shared links work |
 
-Implemented and tested locally: job detail, ranking, application preparation/materials and font controls. Backend: 75 passing tests; frontend: 15 passing tests and production build (counts on 5 October; by 24 October roughly 836 backend and 279 frontend tests). See component handoffs for validation limits.
+## Preliminary report commitments
 
-## Requirements comparison and what to leave out
+| Preliminary report commitment | Delivered |
+|---|---|
+| Multi-source Singapore jobs, periodic retrieval | Four sources pulled twice a day by an EventBridge schedule (up to 150 new jobs per pull) and on demand by the Pull jobs workflow; expired and long-unseen listings are closed. A SmartRecruiters adapter exists but is not configured in staging |
+| Normalise, deduplicate, process each job once | Source identity upsert plus cross-source duplicate links (`ingestion/dedup.py`, migration 0016); measured on 73 scored real cross-source pairs (of 84 labelled): precision 1.00, recall 0.36 (4 of 11 real duplicates found; [eval](../../eval/README.md), B4) |
+| Keyword and semantic matching | Both built: All jobs (keyword) and For you (embeddings with keyword fusion) |
+| Swipe-based review | Save and Pass buttons instead of gestures |
+| AI fit and gap analysis | Built and deployed on the shared LLM worker (SoCLaaS `ornith1.5:35b` since 8 November 2026, `gemma4:26b` before; the course staff confirmed a shared key may be used). Timings and token counts in [eval](../../eval/README.md) (B2) were measured on `gemma4:26b` and not repeated on `ornith1.5:35b` |
+| AI-tailored CV and cover letter, editable | Built: AI resume rewrite and AI cover letters on the same worker, with fact checks in code; both stay editable |
+| Application tracking | Status, dates, notes and exact attached materials; no reminders or full activity timeline |
+| Freemium: 5 assisted jobs a month | Per-Singapore-month allowance, 5 free and 50 premium (`preparation/allowance.py`); premium is a demo plan for now, and a payment gateway is future work |
+| Multi-tenant cloud SaaS | Cognito sign-in, verified-claims identity and row-level security in staging; 26 of 27 isolation and token checks passed on 25 October 2026, and one was informational (A6) |
+| Fargate API and workers behind an ALB | Replaced by API Gateway and Lambda: no always-on compute and no load balancer to pay for at prototype traffic |
+| SQS, EventBridge, S3, RDS, Bedrock | S3, SQS with a dead-letter queue, EventBridge schedule and Aurora Serverless v2 (instead of provisioned RDS, so it can pause when idle). The LLM worker uses the school's SoCLaaS gateway, as Bedrock isn't available on the course AWS account; no language model is hosted on AWS |
+| Form prefilling (optional) | Not built; the app does not submit applications |
+| System evaluation (Section 4.2) | Responsiveness, step load to 100 users, AI task timing, job-pull pipeline, dedup accuracy and cost model, measured on staging ([eval](../../eval/README.md)) |
 
-| Preliminary report commitment | Current gap | Decision |
-|---|---|---|
-| Multi-source Singapore jobs, periodic retrieval | Greenhouse, Lever, SmartRecruiters and MyCareersFuture adapters work; an Adzuna adapter is written and needs a free key (snippet-only descriptions). Cloud pulls run in staging: the "Pull jobs" workflow on demand and an EventBridge schedule twice a day (100 new jobs per run, newest first). Expired and long-unseen listings close; Discover's Posted filter defaults to the last 14 days | Keep broadening permitted coverage and add refresh/expiry before a live pilot. MCF/Adzuna are examples, not a reason to block on an unverified API |
-| Normalize/deduplicate and process each job once | Source identity upsert exists. Cross-source dedup is built (`ingestion/dedup.py`, migration 0016: duplicates are linked to a canonical row, shown once with "Also on"; 16-pair labelled set, no wrong links); content versions and richer skills/seniority extraction incomplete | Keep as core work; test against labelled duplicate fixtures, not just same-ID re-import |
-| Keyword + semantic matching | Keyword baseline and a local-embedding semantic list both run locally; semantic quality is evaluated only on assistant-labelled data, so no accuracy claim yet | Build/evaluate baseline now. Keep semantic matching for a later real embedding adapter; do not label TF-IDF as semantic |
-| Swipe-based review | Save/Pass buttons support the decision flow | Keep buttons for POC; gesture animation can be left out unless user tests identify a need |
-| AI fit/gap analysis | Implemented and deployed (SoCLaaS `ornith1.5:35b` since 8 Nov 2026; `gemma4:26b` before): endpoints, web panel, grounding checks, coverage in code, monthly allowance. The worker Lambda runs in staging (the course staff confirmed a shared key may be used); it is verified by a direct S3 test, but not yet through the web app because staging has no jobs | Load jobs into staging and test end to end; keep numbers (latency, tokens, cost) for the report. See design brief 12 |
-| AI-tailored CV and cover letter, editable | Manual editing/materials work. An optional AI resume rewrite exists (fake/Ollama model only, so not in the cloud); AI cover-letter generation is not implemented | Decide whether to build cover-letter generation. Manual cover letters and job-specific copies cover the flow meanwhile |
-| Application tracking | Status and materials; full activity history/reminders absent | Keep core tracking and exact materials; defer calendar/reminder integrations and exhaustive timeline |
-| Freemium 5 distinct assisted jobs/month | Implemented as a per-Singapore-month allowance, 5 distinct jobs for free and 50 for premium, shared by fit analysis and AI tailoring (`preparation/allowance.py`). No payments; the premium price is undecided | Leave paid checkout/billing out of the POC, use test tiers |
-| Multi-tenant cloud SaaS | Cognito sign-in, verified-claims identity and PostgreSQL RLS are deployed in staging. A two-account browser acceptance run is still to do | Run the acceptance checks in [FINAL-PENDING-NOTES.md](FINAL-PENDING-NOTES.md) |
-| Fargate API/workers + ALB | Current local FastAPI; simplified cloud plan uses API Gateway/Lambda | Leave Fargate/ALB out by default; revisit only for measured workload/runtime limitations. Preserve shared service code |
-| SQS/EventBridge/S3/RDS/Bedrock | Deployed in staging: S3, SQS with a dead-letter queue and the embedding Lambda, Aurora Serverless v2 (not provisioned RDS). The job-pull Lambdas (discovery outside the VPC, import inside) with an EventBridge schedule twice a day. Bedrock is blocked by the university account policy, so the LLM worker uses the SoCLaaS gateway | Apply the job pull (docs/deployment/JOB-PULL-ROLLOUT.md) so staging has jobs. Leave LocalStack, local Cognito/S3/queue replicas out |
-| Form prefilling (Section 3, optional) | Not implemented | Leave out of initial POC; avoid automatic job submission or browser-automation integrations |
-| User evaluation (Section 4.1) | No participant study yet | Keep: profile, discovery, review, fit guidance and tailored-letter tasks, relevance/usefulness ratings, effort/time and feedback |
-| System evaluation (Section 4.2) | Focused correctness tests; no measured latency/load/cost report | Keep baseline profiling and 1/10/50/100-user load evaluation, pipeline/dedup metrics and cloud-vs-fixed-capacity comparison. Do not invent measurements |
+Left out on purpose: large self-hosted language models, collaborative editing, a LaTeX editor, a template marketplace, full document history and OCR for scanned resumes.
 
-Also leave out for now: large local language models, collaborative resume editing, a full LaTeX compiler/editor, large template marketplace, exhaustive document history and OCR for scanned resumes. These are not prerequisites to validating the current core workflow. CJK font support matters for a wider Singapore pilot and should be added before promising multilingual output.
+## Saving, versions and files
 
-## Saving, versions and filesystem
+The browser debounces edits and sends a PATCH with the expected document revision. PostgreSQL stores the structured content, layout and current revision; a conflicting edit is rejected rather than silently overwritten. This is persistent autosave, not real-time collaboration.
 
-The browser debounces edits and sends a PATCH with the expected document revision. PostgreSQL stores structured content, layout and the current revision; conflicts are rejected rather than silently overwriting another edit. This is persistent autosave, not collaborative real-time editing or a full historical revision store.
-
-The API renders PDFs from saved data. Preview bytes are returned to the browser. Reviewed exports are written into the Compose `document_data` volume under `/data/exports`, and owned export rows record the document/revision/file reference. A tracker attachment references that immutable export, so editing the source document later does not rewrite the attached PDF. Uploaded PDFs are captured separately under `/data/uploads`. Docker restarts preserve these named volumes; deleting volumes deletes the data. Git backs up code, not uploaded files or database contents.
-
-For AWS, PostgreSQL maps to RDS and document storage maps to S3. Use S3 uploads/presigned download transport and keep the same ownership/revision rules; do not use Lambda's temporary filesystem as permanent storage.
+The API renders PDFs from saved data. A reviewed export is stored as an immutable file with an owned export row recording the document, revision and file. A tracker attachment references that export, so editing the resume later does not change the attached PDF. In AWS, uploads and exports live in the private S3 bucket and are transferred with short-lived presigned URLs; locally they live in the Compose `document_data` volume. Lambda's temporary filesystem is never used for permanent storage.
