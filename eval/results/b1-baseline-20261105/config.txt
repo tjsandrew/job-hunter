@@ -1,0 +1,10 @@
+B1 rerun on main 63b8ff5 (performance PRs #40, #46, #48, #49, #50, #51 since the last B1)
+deployed commit: 63b8ff5 (Deploy staging 2026-11-02 16:35 UTC)
+api lambda: arm64, 2048 MB (was 1024), 29 s timeout, reserved concurrency 10
+aurora serverless v2: min 0, max 1 ACU, auto-pause 1800 s
+job pool: 5,905 open listings ranked by All jobs (518 on 27 Oct, 508 on 25 Oct)
+accounts reset first (eval/reset_reviews.py): no saved or passed jobs
+client: operator laptop (macOS) on home Wi-Fi, caffeinate; Locust 2.47.0, single user, 0.1 s between requests
+same scenario and analysis as eval/results/b1-baseline-20261025
+measured run start: 2026-11-04T16:55:13Z
+measured run end: 2026-11-04T17:15:13Z

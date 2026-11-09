@@ -66,17 +66,20 @@ ALWAYS_ON_ADMIN_HOURS = 2                      # assumption: OS patching of EC2 
 
 # --- Measured in this evaluation.
 MEASURED = {
-    "api_gb_s_per_request": 0.80,      # B3: mean API function duration 0.68–0.94 s at 1,024 MB below saturation
+    "api_gb_s_per_request": 1.70,      # B3, 5 Nov: mean API function duration 0.82–0.89 s at 2,048 MB, every step
+    "request_seconds": 0.83,           # the same mean duration: how long one request holds a function instance
     "log_bytes_per_request": 550,      # gateway access line (~220 B) + Lambda START/END/REPORT (~330 B)
-    "acu_floor_when_awake": 1.0,       # B1/B3: one active user holds Aurora at 1 ACU (65–72% CPU)
-    "acu_per_rps": 0.19,               # B3 run 2: 18.2 req/s used 86% of 4 ACU
+    "acu_floor_when_awake": 0.5,       # B3, 5 Nov: one active user holds Aurora at 0.5 ACU
+    "acu_per_instance": 0.1,           # B3 run 2, 5 Nov: ACU follows open connections (one per warm instance), not CPU:
+                                       # 9 instances -> 1.5 ACU, 28-48 -> 3.4 ACU (CPU only 15-23%)
     "pause_after_hours": 0.5,          # Aurora auto-pause after 1,800 s idle (A6)
-    # AI tasks (B2): worker GB-s (model time x 0.5 GB), API GB-s (time held in the request x 1 GB), tokens
-    "ai": {"fit": {"worker_gb_s": 12.3, "api_gb_s": 2.6, "tokens_in": 3253, "tokens_out": 1141},
-           "cover_letter": {"worker_gb_s": 4.9, "api_gb_s": 11.4, "tokens_in": 1054, "tokens_out": 516},
-           "tailor": {"worker_gb_s": 1.5, "api_gb_s": 4.4, "tokens_in": 872, "tokens_out": 86}},
-    "pull_gb_s": 0.5 * 167 + 0.5 * 13 + 3.0 * 17,   # B4: discovery 167 s, import 13 s at 512 MB; embedding 17 s at 3,008 MB
-    "fixed_secrets": 2, "fixed_ecr_gb": 8.1, "aurora_storage_gb": 1.0,
+    # AI tasks (B2, 5 Nov): worker GB-s (model time x 0.5 GB), API GB-s (time held in the request x 2 GB), tokens
+    "ai": {"fit": {"worker_gb_s": 11.9, "api_gb_s": 5.2, "tokens_in": 3160, "tokens_out": 1136},
+           "cover_letter": {"worker_gb_s": 4.6, "api_gb_s": 20.6, "tokens_in": 991, "tokens_out": 497},
+           "tailor": {"worker_gb_s": 1.5, "api_gb_s": 8.4, "tokens_in": 821, "tokens_out": 84}},
+    # B4, 1-4 Nov scheduled pulls: discovery ~450 s and import ~45 s at 1 GB; embedding ~100 s at 3,008 MB for 150 jobs
+    "pull_gb_s": 1.0 * 450 + 1.0 * 45 + 3.0 * 100,
+    "fixed_secrets": 2, "fixed_ecr_gb": 8.1, "aurora_storage_gb": 0.1,   # VolumeBytesUsed 0.1 GB, 4 Nov
 }
 # --- Usage assumptions (per active user per month unless stated).
 USAGE = {
@@ -112,7 +115,8 @@ def serverless(users: int) -> dict:
     ai_requests = users * sum(USAGE["ai_tasks"].values())
     hours = database_hours(users)
     peak_rps = requests / (USAGE["waking_hours_month"] * 3600) * USAGE["peak_factor"]
-    acu = max(MEASURED["acu_floor_when_awake"], MEASURED["acu_per_rps"] * peak_rps)
+    instances = peak_rps * MEASURED["request_seconds"]
+    acu = MEASURED["acu_floor_when_awake"] + MEASURED["acu_per_instance"] * instances
     lines = {
         "API function": (requests * MEASURED["api_gb_s_per_request"] + ai_api_gb_s) * PRICES["lambda_gb_s_arm"]
                         + (requests + ai_requests) * PRICES["lambda_request"],
@@ -150,11 +154,12 @@ def admin_usd(hours: float) -> float:
 
 
 def always_on(users: int, peak: bool) -> float:
-    """Peak-sized: 3 x c7g.xlarge (12 vCPU, the ~11 vCPU B3's 27.5 req/s peak used) behind an ALB, and db.m7g.large
-    (8 GiB, about Aurora's 4 ACU). Minimum: one t4g.medium, no load balancer, db.t4g.medium."""
+    """Peak-sized: 8 x c7g.xlarge (32 vCPU) behind an ALB, for B3 run 2's 36.7 req/s at 0.83 s each (about 30 busy
+    single-threaded workers), and db.m7g.large (8 GiB, about Aurora's 3.4 ACU). Minimum: one t4g.medium, no load
+    balancer, db.t4g.medium."""
     hours = 730
     if peak:
-        compute = 3 * PRICES["ec2_c7g_xlarge_hour"] * hours + PRICES["alb_hour"] * hours + 1 * PRICES["alb_lcu_hour"] * hours
+        compute = 8 * PRICES["ec2_c7g_xlarge_hour"] * hours + PRICES["alb_hour"] * hours + 1 * PRICES["alb_lcu_hour"] * hours
         database = PRICES["rds_pg_m7g_large_hour"] * hours + 20 * PRICES["rds_gp3_gb_month"]
     else:
         compute = PRICES["ec2_t4g_medium_hour"] * hours
@@ -207,10 +212,12 @@ def chart(path: Path, curves: dict[str, list[float]], marks: dict[str, int | Non
         y = curves["Serverless (as built)"][CHART_USERS.index(low)]
         ax.annotate(f"Break-even vs minimum always-on: ≈{low:,} users", (low, y), xytext=(10, -22), textcoords="offset points",
                     fontsize=8, color="#52514e")
-    high = [marks.get("Break-even vs peak-sized"), marks.get("Break-even vs on-premise")]
-    if all(high):
-        y = curves["Serverless (as built)"][CHART_USERS.index(high[0])]
-        ax.annotate(f"Break-even vs peak-sized cloud ≈{high[0]:,}\nand vs on-premise ≈{high[1]:,} users", (high[0], y),
+    peak, prem = marks.get("Break-even vs peak-sized"), marks.get("Break-even vs on-premise")
+    upper = [f"vs peak-sized cloud ≈{peak:,}" if peak else None, f"vs on-premise ≈{prem:,} users" if prem else None]
+    anchor = peak or prem
+    if anchor:
+        y = curves["Serverless (as built)"][CHART_USERS.index(anchor)]
+        ax.annotate("Break-even " + "\nand ".join(text for text in upper if text), (anchor, y),
                     xytext=(-12, 22), textcoords="offset points", ha="right", fontsize=8, color="#52514e")
     ax.set_xscale("log")
     ax.set_yscale("log")

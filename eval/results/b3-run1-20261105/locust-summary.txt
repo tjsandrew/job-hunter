@@ -1,0 +1,71 @@
+[2026-11-05 01:27:27,115] Bobs-MacBook-Pro-2/INFO/locust.main: Starting Locust 2.47.0
+[2026-11-05 01:27:27,117] Bobs-MacBook-Pro-2/INFO/locust.runners: Shape test starting.
+[2026-11-05 01:27:27,117] Bobs-MacBook-Pro-2/INFO/locust.runners: Shape worker starting
+[2026-11-05 01:27:27,117] Bobs-MacBook-Pro-2/INFO/locust.runners: Shape test updating to 1 users at 5.00 spawn rate
+[2026-11-05 01:27:30,825] Bobs-MacBook-Pro-2/INFO/locust.runners: Ramping to 1 users at a rate of 5.00 per second
+[2026-11-05 01:27:30,827] Bobs-MacBook-Pro-2/INFO/locust.runners: All users spawned: {"BrowsingUser": 1} (1 total users)
+[2026-11-05 01:33:31,223] Bobs-MacBook-Pro-2/INFO/locust.runners: Shape test updating to 10 users at 5.00 spawn rate
+[2026-11-05 01:33:31,224] Bobs-MacBook-Pro-2/INFO/locust.runners: Ramping to 10 users at a rate of 5.00 per second
+[2026-11-05 01:33:32,232] Bobs-MacBook-Pro-2/INFO/locust.runners: All users spawned: {"BrowsingUser": 10} (10 total users)
+[2026-11-05 01:39:31,629] Bobs-MacBook-Pro-2/INFO/locust.runners: Shape test updating to 50 users at 5.00 spawn rate
+[2026-11-05 01:39:31,630] Bobs-MacBook-Pro-2/INFO/locust.runners: Ramping to 50 users at a rate of 5.00 per second
+[2026-11-05 01:39:38,691] Bobs-MacBook-Pro-2/INFO/locust.runners: All users spawned: {"BrowsingUser": 50} (50 total users)
+[2026-11-05 01:45:30,853] Bobs-MacBook-Pro-2/INFO/locust.runners: Shape test updating to 100 users at 5.00 spawn rate
+[2026-11-05 01:45:30,855] Bobs-MacBook-Pro-2/INFO/locust.runners: Ramping to 100 users at a rate of 5.00 per second
+[2026-11-05 01:45:39,955] Bobs-MacBook-Pro-2/INFO/locust.runners: All users spawned: {"BrowsingUser": 100} (100 total users)
+[2026-11-05 01:51:31,704] Bobs-MacBook-Pro-2/INFO/locust.runners: Shape test stopping
+[2026-11-05 01:51:31,746] Bobs-MacBook-Pro-2/INFO/locust.main: Shape test completed, shutting down
+[2026-11-05 01:51:31,746] Bobs-MacBook-Pro-2/INFO/locust.main: Shutting down (exit code 1)
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      /applications                                                                   1718 1157(67.35%) |     22       8      78     18 |    1.19        0.80
+GET      /jobs/reviewed                                                                  1772 1214(68.51%) |     22       8     133     18 |    1.23        0.84
+GET      /jobs/{id}                                                                      5259 3509(66.72%) |     22       8      82     18 |    3.64        2.43
+GET      /me                                                                             1808 1238(68.47%) |     21       7      94     18 |    1.25        0.86
+GET      /profile/bank                                                                   1827 1237(67.71%) |     26       8    2621     18 |    1.26        0.86
+GET      /recommendations                                                                5532 3723(67.30%) |    663       7    9405     18 |    3.83        2.58
+GET      /recommendations/for-you                                                        5225 3553(68.00%) |    741       8   11530     18 |    3.62        2.46
+PUT      PUT /jobs/{id}/review                                                           1744 1187(68.06%) |     24       8     139     18 |    1.21        0.82
+PUT      PUT /jobs/{id}/review (undo)                                                    1744 1185(67.95%) |     23       8     224     18 |    1.21        0.82
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                     26629 18003(67.61%) |    297       7   11530     18 |   18.43       12.46
+
+Response time percentiles (approximated)
+Type     Name                                                                                  50%    66%    75%    80%    90%    95%    98%    99%  99.9% 99.99%   100% # reqs
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+GET      /applications                                                                          18     25     36     37     43     46     49     52     78     79     79   1718
+GET      /jobs/reviewed                                                                         18     23     35     37     41     45     48     51    100    130    130   1772
+GET      /jobs/{id}                                                                             18     28     33     35     39     42     45     48     68     82     82   5259
+GET      /me                                                                                    18     22     31     33     38     41     45     49     88     95     95   1808
+GET      /profile/bank                                                                          18     25     36     38     44     46     50     54   2500   2600   2600   1827
+GET      /recommendations                                                                       18     30   1900   1900   2100   2200   2300   2300   2600   9400   9400   5532
+GET      /recommendations/for-you                                                               18     24   2100   2200   2400   2500   2600   2600   4800  12000  12000   5225
+PUT      PUT /jobs/{id}/review                                                                  18     24     38     40     47     51     56     60    120    140    140   1744
+PUT      PUT /jobs/{id}/review (undo)                                                           18     23     35     37     43     47     52     55    120    220    220   1744
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+         Aggregated                                                                             18     25     37     40   1900   2200   2400   2500   2700  11000  12000  26629
+
+Error report
+# occurrences      Error                                                                                               
+------------------|---------------------------------------------------------------------------------------------------------------------------------------------
+1407               GET /jobs/{id}: 5xx server error                                                                    
+1517               GET /recommendations: 5xx server error                                                              
+496                GET /me: 5xx server error                                                                           
+1438               GET /recommendations/for-you: 5xx server error                                                      
+417                GET /applications: 5xx server error                                                                 
+481                GET /profile/bank: 5xx server error                                                                 
+486                GET /jobs/reviewed: 5xx server error                                                                
+480                PUT PUT /jobs/{id}/review: 5xx server error                                                         
+486                PUT PUT /jobs/{id}/review (undo): 5xx server error                                                  
+756                GET /profile/bank: 429 throttled                                                                    
+2102               GET /jobs/{id}: 429 throttled                                                                       
+2115               GET /recommendations/for-you: 429 throttled                                                         
+2206               GET /recommendations: 429 throttled                                                                 
+728                GET /jobs/reviewed: 429 throttled                                                                   
+740                GET /applications: 429 throttled                                                                    
+707                PUT PUT /jobs/{id}/review: 429 throttled                                                            
+742                GET /me: 429 throttled                                                                              
+699                PUT PUT /jobs/{id}/review (undo): 429 throttled                                                     
+------------------|---------------------------------------------------------------------------------------------------------------------------------------------
+
+signed in 6 evaluation accounts in 3.7s

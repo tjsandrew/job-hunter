@@ -1,0 +1,57 @@
+[2026-11-05 01:57:13,559] Bobs-MacBook-Pro-2/INFO/locust.main: Starting Locust 2.47.0
+[2026-11-05 01:57:13,561] Bobs-MacBook-Pro-2/INFO/locust.runners: Shape test starting.
+[2026-11-05 01:57:13,561] Bobs-MacBook-Pro-2/INFO/locust.runners: Shape worker starting
+[2026-11-05 01:57:13,561] Bobs-MacBook-Pro-2/INFO/locust.runners: Shape test updating to 1 users at 5.00 spawn rate
+[2026-11-05 01:57:17,229] Bobs-MacBook-Pro-2/INFO/locust.runners: Ramping to 1 users at a rate of 5.00 per second
+[2026-11-05 01:57:17,230] Bobs-MacBook-Pro-2/INFO/locust.runners: All users spawned: {"BrowsingUser": 1} (1 total users)
+[2026-11-05 02:03:17,563] Bobs-MacBook-Pro-2/INFO/locust.runners: Shape test updating to 10 users at 5.00 spawn rate
+[2026-11-05 02:03:17,564] Bobs-MacBook-Pro-2/INFO/locust.runners: Ramping to 10 users at a rate of 5.00 per second
+[2026-11-05 02:03:18,569] Bobs-MacBook-Pro-2/INFO/locust.runners: All users spawned: {"BrowsingUser": 10} (10 total users)
+[2026-11-05 02:09:17,756] Bobs-MacBook-Pro-2/INFO/locust.runners: Shape test updating to 50 users at 5.00 spawn rate
+[2026-11-05 02:09:17,758] Bobs-MacBook-Pro-2/INFO/locust.runners: Ramping to 50 users at a rate of 5.00 per second
+[2026-11-05 02:09:24,808] Bobs-MacBook-Pro-2/INFO/locust.runners: All users spawned: {"BrowsingUser": 50} (50 total users)
+[2026-11-05 02:15:18,151] Bobs-MacBook-Pro-2/INFO/locust.runners: Shape test updating to 100 users at 5.00 spawn rate
+[2026-11-05 02:15:18,153] Bobs-MacBook-Pro-2/INFO/locust.runners: Ramping to 100 users at a rate of 5.00 per second
+[2026-11-05 02:15:27,212] Bobs-MacBook-Pro-2/INFO/locust.runners: All users spawned: {"BrowsingUser": 100} (100 total users)
+[2026-11-05 02:21:17,916] Bobs-MacBook-Pro-2/INFO/locust.runners: Shape test stopping
+[2026-11-05 02:21:17,950] Bobs-MacBook-Pro-2/INFO/locust.main: Shape test completed, shutting down
+[2026-11-05 02:21:17,950] Bobs-MacBook-Pro-2/INFO/locust.main: Shutting down (exit code 1)
+Type     Name                                                                          # reqs      # fails |    Avg     Min     Max    Med |   req/s  failures/s
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+GET      /applications                                                                   1410     0(0.00%) |     40      25    2175     37 |    0.98        0.00
+GET      /jobs/reviewed                                                                  1414     0(0.00%) |     44      25    2589     38 |    0.98        0.00
+GET      /jobs/{id}                                                                      4201     2(0.05%) |     41      18    2296     38 |    2.91        0.00
+GET      /me                                                                             1430     0(0.00%) |     39      26    2575     37 |    0.99        0.00
+GET      /profile/bank                                                                   1421     1(0.07%) |     47      22    2611     42 |    0.98        0.00
+GET      /recommendations                                                                4208     1(0.02%) |   2022      19    9650   2000 |    2.91        0.00
+GET      /recommendations/for-you                                                        4141     8(0.19%) |   2275      15   11113   2300 |    2.87        0.01
+PUT      PUT /jobs/{id}/review                                                           1336     0(0.00%) |     53      32    2603     46 |    0.92        0.00
+PUT      PUT /jobs/{id}/review (undo)                                                    1336     0(0.00%) |     47      30    2699     45 |    0.92        0.00
+--------|----------------------------------------------------------------------------|-------|-------------|-------|-------|-------|-------|--------|-----------
+         Aggregated                                                                     20897    12(0.06%) |    884      15   11113     46 |   14.47        0.01
+
+Response time percentiles (approximated)
+Type     Name                                                                                  50%    66%    75%    80%    90%    95%    98%    99%  99.9% 99.99%   100% # reqs
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+GET      /applications                                                                          37     39     40     40     42     46     53     65   2200   2200   2200   1410
+GET      /jobs/reviewed                                                                         38     39     40     41     44     47     56     86   2200   2600   2600   1414
+GET      /jobs/{id}                                                                             38     40     41     41     43     46     52     70   2000   2300   2300   4201
+GET      /me                                                                                    37     39     39     40     42     45     54     67    200   2600   2600   1430
+GET      /profile/bank                                                                          42     44     45     46     48     51     59     73   2100   2600   2600   1421
+GET      /recommendations                                                                     2000   2100   2100   2200   2300   2300   2400   2800   9000   9700   9700   4208
+GET      /recommendations/for-you                                                             2300   2300   2400   2500   2500   2600   2700   4000   9300  11000  11000   4141
+PUT      PUT /jobs/{id}/review                                                                  46     49     51     52     55     58     68     95   2500   2600   2600   1336
+PUT      PUT /jobs/{id}/review (undo)                                                           45     47     49     49     52     55     66     81    150   2700   2700   1336
+--------|--------------------------------------------------------------------------------|--------|------|------|------|------|------|------|------|------|------|------|------
+         Aggregated                                                                             46   1800   2000   2100   2300   2400   2500   2600   8600  11000  11000  20897
+
+Error report
+# occurrences      Error                                                                                               
+------------------|---------------------------------------------------------------------------------------------------------------------------------------------
+8                  GET /recommendations/for-you: 5xx server error                                                      
+2                  GET /jobs/{id}: 5xx server error                                                                    
+1                  GET /recommendations: 5xx server error                                                              
+1                  GET /profile/bank: 5xx server error                                                                 
+------------------|---------------------------------------------------------------------------------------------------------------------------------------------
+
+signed in 6 evaluation accounts in 3.7s

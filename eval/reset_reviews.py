@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -20,8 +22,14 @@ import cognito_tokens as ct  # noqa: E402
 def call(token: str, method: str, path: str, body=None):
     request = Request(ct.API_BASE + path, method=method, data=None if body is None else json.dumps(body).encode(),
                       headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
-    with urlopen(request, timeout=60) as response:
-        return json.loads(response.read() or b"null")
+    for attempt in range(6):        # straight after a load test the gateway may still answer 429 for a while
+        try:
+            with urlopen(request, timeout=60) as response:
+                return json.loads(response.read() or b"null")
+        except HTTPError as exc:
+            if exc.code not in (429, 503) or attempt == 5:
+                raise
+            time.sleep(2 ** attempt)
 
 
 def main() -> int:

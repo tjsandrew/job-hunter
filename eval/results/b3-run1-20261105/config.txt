@@ -1,0 +1,8 @@
+B3 run 1 (rerun): scalability at the current limits, main 63b8ff5
+api lambda: arm64, 2048 MB, reserved concurrency 10; api gateway 20 req/s, burst 40; aurora 0-1 ACU
+job pool: 5,905 open listings
+scenario: BrowsingUser; each Save/Pass is undone straight away, so the pool stays constant (fixed after the 26 Oct runs); accounts reset before and after
+shape: 1 -> 10 -> 50 -> 100 users, 360 s per step, spawn rate 5/s; analysis uses the last 300 s of each step
+client: operator laptop on home Wi-Fi, caffeinate, Locust 2.47.0
+measured run start: 2026-11-04T17:27:26Z
+measured run end: 2026-11-04T17:51:31Z

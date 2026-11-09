@@ -1,0 +1,5 @@
+recorded: 2026-11-04T18:24:26Z
+api reserved concurrency: 10
+gateway $default stage throttle (rate burst): 20.0	40
+aurora scaling (min max autopause): 0.0	1.0	1800
+terraform plan with staging.tfvars only: No changes
