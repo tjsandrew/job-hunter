@@ -1,5 +1,7 @@
-"""Password schema releases and explicit one-time operator bootstrap; no HTTP route."""
+"""Password schema releases, explicit one-time operator bootstrap, and plan changes; no HTTP route."""
+import logging
 import os
+import uuid
 
 from alembic import command
 from alembic.config import Config
@@ -26,14 +28,49 @@ def grant_runtime(connection):
     grant_embedder(connection)
 
 
+MAX_SET_PLAN_IDS = 20
+
+logger = logging.getLogger(__name__)
+
+
+def validate_set_plan(event):
+    """Exact shape only: a plan from the allow-list and 1-20 UUIDs. Errors never echo the input."""
+    if (not isinstance(event, dict) or set(event) != {"action", "plan", "user_ids"} or event["action"] != "set_plan"
+            or event["plan"] not in ("free", "premium") or not isinstance(event["user_ids"], list)
+            or not 1 <= len(event["user_ids"]) <= MAX_SET_PLAN_IDS
+            or not all(isinstance(raw, str) for raw in event["user_ids"])):
+        raise ValueError("Invalid set_plan request")
+    try:
+        ids = [str(uuid.UUID(raw)) for raw in event["user_ids"]]
+    except ValueError:
+        raise ValueError("Invalid set_plan request") from None
+    return event["plan"], list(dict.fromkeys(ids))
+
+
+def set_plan(connection, plan, user_ids):
+    # users has FORCE RLS keyed on app.user_id and the migrator does not bypass it, so
+    # UPDATE ... WHERE id = ANY(:ids) would match nothing. Set each tenant's context the
+    # way adapters/database.py does; one fixed, parameterised statement per id, one transaction.
+    not_found = []
+    for user_id in user_ids:
+        connection.execute(text("SELECT set_config('app.user_id', :user_id, true)"), {"user_id": user_id})
+        if connection.scalar(text("UPDATE users SET plan = :plan WHERE id = CAST(:user_id AS uuid) RETURNING id"),
+                             {"plan": plan, "user_id": user_id}) is None:
+            not_found.append(user_id)
+    connection.execute(text("SELECT set_config('app.user_id', '', true)"))
+    return {"status": "ok", "updated": len(user_ids) - len(not_found), "not_found": not_found}
+
+
 def handler(event, context):
     host, database = os.environ["DATABASE_HOST"], os.environ["DATABASE_NAME"]
     username = os.environ["DATABASE_USERNAME"]
     if username != "jobhunter_migrator":
         raise ValueError("Unexpected migration role")
     action = event.get("action", "migrate")
-    if action not in {"migrate", "check", "bootstrap"}:
+    if action not in {"migrate", "check", "bootstrap", "set_plan"}:
         raise ValueError("Unknown migration action")
+    if action == "set_plan":
+        plan, ids = validate_set_plan(event)
     if action == "bootstrap":
         # Operator retrieves the AWS-managed master secret outside the VPC and
         # invokes over TLS. Never log the event or its credentials.
@@ -48,6 +85,13 @@ def handler(event, context):
             with engine.connect() as connection:
                 connection.execute(text("SELECT 1"))
             return {"status": "ready"}
+        if action == "set_plan":
+            with engine.begin() as connection:
+                result = set_plan(connection, plan, ids)
+            logging.getLogger().setLevel(logging.INFO)
+            logger.info("set_plan plan=%s requested=%d updated=%d not_found=%d",
+                        plan, len(ids), result["updated"], len(result["not_found"]))
+            return result
         with engine.begin() as connection:
             connection.execute(text("SELECT pg_advisory_xact_lock(5224001)"))
             if action == "bootstrap":

@@ -107,6 +107,21 @@ The final **Checks passed** job fails if any selected dependency fails or is can
 
 **GitHub → Actions → Pull jobs → Run workflow**, branch `main`, with the number of new jobs to add (default 10). It invokes the Discovery Lambda and prints in the run summary how many jobs were fetched, added, refreshed and left for the next pull. It needs the repository variable `DISCOVERY_FUNCTION` (published by `scripts/configure_github_deploy.py`) and refuses to run while staging is paused. Details and the first-time rollout are in [JOB-PULL-ROLLOUT.md](JOB-PULL-ROLLOUT.md).
 
+## Changing a user's plan
+
+A user's plan sets how many jobs per Singapore calendar month they can use AI tailoring and fit analysis on: **free** 5, **premium** 50 (`backend/src/job_hunter/preparation/allowance.py`). Everyone starts on free. To change it, from the repository root:
+
+```sh
+AWS_PROFILE=nus python scripts/set_plan.py --plan premium alice@example.com bob@example.com
+```
+
+Add `--yes` to skip the confirmation prompt. The script resolves each email to its Cognito `sub` with `cognito-idp:AdminGetUser` on the operator's machine, derives the internal user id using the same rule as `backend/src/job_hunter/adapters/auth.py`, then invokes `jobhunter-staging-migrate` synchronously with action `set_plan` (a fixed parameterised `UPDATE`, at most 20 ids, plan allow-list). The VPC has no internet route, so the Lambda cannot call Cognito itself; the lookup must happen outside it.
+
+- **Who can run it:** anyone with AWS access allowed `cognito-idp:AdminGetUser` on the user pool and `lambda:InvokeFunction` on `jobhunter-staging-migrate` (team members with the `nus` profile). It is not exposed through API Gateway, so app users cannot change their own plan.
+- Users must have signed in at least once: their `users` row is created on their first API call. The script names any email that is not in Cognito or has not signed in yet; ask them to sign in once and re-run.
+- **Availability:** the action ships with the next **Deploy staging** run, which updates the migrate Lambda's image; no Terraform change.
+- Aurora may be paused; the first invoke can take a while because the migration Lambda retries the connection for about 3 minutes.
+
 ## Changing the website's security headers
 
 The Amplify headers are in `aws_amplify_app.web` in `infra/aws/main.tf`. Amplify's UpdateApp accepts them only as YAML with a top-level `customHeaders` key, but stores and returns them as compact JSON. So Terraform would show a change on every plan, and the resource ignores `custom_headers`. Writing the JSON form in Terraform makes plans clean, but UpdateApp rejects it ("top level must be key value pairs"). This was checked on 25 October 2026.
