@@ -1,24 +1,26 @@
 # Job Hunter
 
-Job Hunter helps job seekers in Singapore discover openings, shortlist them against their profile, check how well they fit, prepare a tailored resume and track applications. This repository holds the application (React + FastAPI + PostgreSQL), the local Docker stack, and the Terraform and GitHub Actions setup for the staging deployment on AWS.
+Job Hunter helps job seekers in Singapore discover openings, shortlist them against their profile, check how well they fit, prepare a tailored resume and cover letter, and track applications. This repository holds the application (React + FastAPI + PostgreSQL), the local Docker stack, and the Terraform and GitHub Actions setup for the staging deployment on AWS. It was built for the NUS CS5224 Cloud Computing project (Group 15).
 
-> **Status:** the application runs end to end locally. A **staging deployment is live on AWS** (Amplify, Cognito, API Gateway + Lambda, Aurora Serverless v2, S3, an SQS-triggered embedding Lambda and a shared LLM worker Lambda for job fit and the AI resume rewrite), invite-only. It was built with a serverless design that differs from the original proposal, so read [Deploying to AWS](#deploying-to-aws) for what actually runs. Staging currently holds no job listings: discovery is a manual local command and no scheduled cloud discovery exists yet.
+> **Status:** the application runs end to end locally and a **staging deployment is live on AWS** at **https://main.d3u7qeowlfzmzj.amplifyapp.com**. It is fully serverless: Amplify, Cognito, API Gateway + Lambda, Aurora Serverless v2, S3, an SQS-triggered embedding Lambda, a shared LLM worker Lambda, and a job pull that loads new listings twice a day. Sign-up is invite-only; graders' login details are in the final report (Section 6). The design differs from the original proposal, so read [Deploying to AWS](#deploying-to-aws) for what actually runs.
 
 ## Features
 
-- Singapore job discovery from public employer feeds (Greenhouse, Lever), with search, save and pass. The Discover page has For you, All jobs, Saved and Passed tabs
+- Singapore job discovery from four sources (MyCareersFuture, Adzuna, and public Greenhouse and Lever employer feeds), pulled twice a day with cross-source duplicate detection. Search, save and pass; the Discover page has For you, All jobs, Saved and Passed tabs, a Posted filter and a "Hide expired listings" box
 - Profiles and preferences. The profile is built from an uploaded PDF or Word resume (reviewed by the user before it is applied) or entered by hand, kept as a structured profile bank, and confirmed explicitly
 - Recommendations: an explainable keyword/skill/role ranker, and a semantic "For you" list built on an embedding model
 - **Job fit analysis:** a language model extracts the posting's requirements, judges each one against the confirmed profile with cited evidence, and the app re-checks every answer and computes a coverage percentage in code, plus suggestions. See [design brief 12](docs/design/12-FIT-ANALYSIS.md)
 - Resume Studio: structured editor, autosave, undo/redo, two templates, build from the profile bank, server-rendered PDF export
 - Resume tailoring: a rule-based reorder (always available) and an optional AI rewrite
+- Cover letters: an AI-written draft for a job from the confirmed profile, an editor with checks, and delete with Undo
+- My documents: resumes, uploaded files and cover letters in one library, with rename
 - Application tracker with an attached reviewed resume PDF and cover letter
 - Every page, job list, opened listing and resume has its own address (`/discover/saved`, `/jobs/<id>`, `/resumes/<id>`, ...), so a refresh, the Back button and a pasted link land where you were; signing in returns you to the page you opened (`apps/web/src/routes.ts`)
-- Sign-in with Amazon Cognito in the deployed app; free and premium plans with a monthly AI allowance (5 or 50 jobs per Singapore month, one use per job shared by fit analysis and AI tailoring)
+- Sign-in with Amazon Cognito in the deployed app; free and premium plans with a monthly AI allowance (5 or 50 jobs per Singapore month, one use per job shared by fit analysis, AI tailoring and cover letters)
 
-Built, waiting for the next Terraform apply and deploy: the job pull (GitHub Actions "Pull jobs" loads 10 new public postings into staging) and cross-source duplicate detection (see [docs/deployment/JOB-PULL-ROLLOUT.md](docs/deployment/JOB-PULL-ROLLOUT.md)). Not built: AI cover-letter generation, swipe gestures (Save and Pass are buttons), a job schedule that is switched on by default, payments. The full list and its gaps are in [docs/status/FEATURES.md](docs/status/FEATURES.md) and [docs/status/PENDING.md](docs/status/PENDING.md).
+Not built: payments (Premium is a demonstration entitlement), swipe gestures (Save and Pass are buttons), public sign-up. The full list and its gaps are in [docs/status/FEATURES.md](docs/status/FEATURES.md) and [docs/status/PENDING.md](docs/status/PENDING.md).
 
-Fit analysis and the AI resume rewrite use the school's SoCLaaS model gateway (`gemma4:26b`). Locally it runs inside the API process (`MODEL_BACKEND=hosted` plus `LLM_*` settings in a git-ignored `.env`, see `.env.example`). In AWS the API writes a request file to S3 and the shared LLM worker Lambda outside the VPC calls the model. Locally the fit button stays disabled until a model is configured; in AWS it is enabled whenever the S3 worker route is configured, even if the worker has no key yet.
+Fit analysis, the AI resume rewrite and cover letters use the school's SoCLaaS model gateway (`ornith1.5:35b` since 8 November 2026, when `gemma4:26b` was withdrawn; figures measured earlier on gemma are labelled as such). Locally it runs inside the API process (`MODEL_BACKEND=hosted` plus `LLM_*` settings in a git-ignored `.env`, see `.env.example`). In AWS the API writes a request file to S3 and the shared LLM worker Lambda outside the VPC calls the model. Locally the fit button stays disabled until a model is configured; in AWS it is enabled whenever the S3 worker route is configured, even if the worker has no key yet.
 
 A standalone embedder service in `services/embedder/` starts with the stack (`make up`). The backend embeds the confirmed
 profile after "Update my matches" and after saving preferences (best effort: a failed embed never fails the save), and
@@ -77,7 +79,9 @@ services/embedder/ Standalone embedding service and its Lambda packaging
 infra/local/       Local PostgreSQL role setup
 infra/aws/         Terraform for the staging deployment (infra/state bootstraps the remote state bucket)
 scripts/           Smoke tests, demo-workspace reset, release and deployment scripts
-.github/workflows/ Checks, Deploy staging, pause/resume of the backend, Terraform validation
+eval/              System evaluation: load tests, AI-task timing, dedup accuracy, acceptance, cost model, raw results
+contracts/         Generated OpenAPI contract (openapi.json)
+.github/workflows/ Local POC checks, Deploy staging, Pull jobs, pause/resume of the backend, Terraform validation
 docs/              Design, deployment and status (see docs/README.md)
 compose.yaml       Local stack: PostgreSQL/pgvector, API, embedder, web
 Makefile           Shortcuts for common tasks (run `make`)
@@ -91,13 +95,13 @@ make test        # frontend tests + build, backend tests, HTTP smoke (stack must
 
 Or run them separately with `make test-web`, `make test-backend` and `make smoke`.
 
-GitHub Actions runs the same checks on every push and pull request ([.github/workflows/checks.yml](.github/workflows/checks.yml)).
+GitHub Actions runs the same checks on every push and pull request, choosing the jobs by which files changed: the *Local POC checks* workflow ([.github/workflows/checks.yml](.github/workflows/checks.yml)), whose *Checks passed* job is the overall result. It covers about 690 backend tests, about 350 frontend tests, 65 script and embedder tests and the Lambda image builds; *Terraform validation* runs the 4 Terraform test files.
 
 ## Deploying to AWS
 
-The staging stack is defined in Terraform (`infra/aws`) and released by GitHub Actions. **Merging to `main` does not deploy**: run **Actions → Deploy staging → Run workflow** on `main`. Terraform changes are applied by hand by an operator with AWS access; CI only validates them.
+The staging stack is defined in Terraform (`infra/aws`) and released by GitHub Actions. **Merging to `main` does not deploy**: run **Actions → Deploy staging → Run workflow** on `main`. The release requires the commit's *Checks passed* result, pushes content-addressed images to ECR, runs migrations, then updates each Lambda and the Amplify site, restoring the previous API image if the health check fails (`scripts/deploy_aws.py`). GitHub signs in to AWS through OIDC, so no AWS keys are stored. Terraform changes are applied by hand by an operator with AWS access; CI only validates them.
 
-What runs in `ap-southeast-1`: Amplify Hosting (React build), Cognito (invite-only sign-in), API Gateway HTTP API with a JWT authorizer, the API as a container-image Lambda in a VPC, Aurora PostgreSQL Serverless v2 (0–1 ACU, auto-pause, row-level security), a private S3 documents bucket, an S3 → SQS → Lambda embedding worker, and the shared LLM worker Lambda (fit analysis, AI resume rewrite) outside the VPC. The job pull adds a Discovery Lambda outside the VPC and an Import Lambda inside it (an EventBridge schedule exists but is off). There is no NAT gateway, ALB, Fargate or Bedrock: the proposal's design was replaced by this serverless one. The architecture page is [docs/architecture/aws-overview.html](docs/architecture/aws-overview.html).
+What runs in `ap-southeast-1`: Amplify Hosting (React build), Cognito (invite-only sign-in), API Gateway HTTP API with a JWT authorizer, the API as a container-image Lambda in a VPC, Aurora PostgreSQL Serverless v2 (0–1 ACU, auto-pause, row-level security), a private S3 documents bucket, an S3 → SQS → Lambda embedding worker, and the shared LLM worker Lambda (fit analysis, AI resume rewrite, cover letters) outside the VPC. The job pull adds a Discovery Lambda outside the VPC and an Import Lambda inside it, started twice a day (06:00 and 20:00 Singapore time) by an EventBridge schedule or by hand with the *Pull jobs* workflow; the pause workflow also stops scheduled pulls. There is no NAT gateway, ALB, Fargate or Bedrock: the proposal's design was replaced by this serverless one. The architecture page is [docs/architecture/aws-overview.html](docs/architecture/aws-overview.html).
 
 Start here:
 
